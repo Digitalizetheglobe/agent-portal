@@ -1,0 +1,140 @@
+{
+  "theme": "Auto Dark/Light",
+  "archetype": "4 (Swiss & High-Contrast) with Soft Utility twist",
+  "colors": {
+    "primary": {
+      "light": "#4F46E5",
+      "dark": "#6366F1",
+      "hover": "#4338CA",
+      "description": "Indigo/Blue - Use only for Primary CTAs (Login button, Create Agent, Create Event)."
+    },
+    "background": {
+      "light": "#F9FAFB",
+      "dark": "#0A0A0A",
+      "description": "Clean, neutral background. Not pure white or pure black."
+    },
+    "surface": {
+      "light": "#FFFFFF",
+      "dark": "#121212",
+      "description": "Card, table, and sidebar backgrounds."
+    },
+    "border": {
+      "light": "#E5E7EB",
+      "dark": "#27272A",
+      "description": "Subtle 1px borders for structure."
+    },
+    "text": {
+      "light": {
+        "primary": "#111827",
+        "secondary": "#4B5563"
+      },
+      "dark": {
+        "primary": "#F9FAFB",
+        "secondary": "#9CA3AF"
+      }
+    },
+    "accents": {
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "destructive": "#EF4444"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "'Outfit', sans-serif",
+      "body": "'Inter', sans-serif",
+      "fallback": "sans-serif"
+    },
+    "scales": {
+      "h1": "text-3xl sm:text-4xl tracking-tight font-semibold",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-medium",
+      "h3": "text-xl font-medium",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "label": "text-xs uppercase tracking-[0.2em] font-medium text-muted-foreground"
+    }
+  },
+  "spacing_and_layout": {
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+    "padding": {
+      "container": "p-6 md:p-8",
+      "card": "p-5 md:p-6"
+    },
+    "radius": {
+      "outer": "rounded-xl",
+      "inner": "rounded-lg",
+      "button": "rounded-md"
+    }
+  },
+  "components": {
+    "sidebar": {
+      "style": "fixed left-0 top-0 h-full w-64 bg-surface border-r border-border transition-transform z-50",
+      "links": "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium hover:bg-secondary/10 hover:text-primary transition-colors"
+    },
+    "topbar": {
+      "style": "sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-border bg-surface/80 backdrop-blur-xl px-6"
+    },
+    "cards": {
+      "style": "bg-surface border border-border rounded-xl shadow-sm hover:shadow-md transition-shadow",
+      "header": "flex flex-row items-center justify-between pb-2 space-y-0"
+    },
+    "tables": {
+      "style": "w-full text-sm text-left border-collapse",
+      "header": "bg-muted/50 border-y border-border px-4 py-3 font-medium",
+      "cell": "px-4 py-3 border-b border-border"
+    },
+    "buttons": {
+      "primary": "bg-primary text-white hover:bg-primary/90 shadow-sm transition-all focus:ring-2 focus:ring-primary/50",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border"
+    },
+    "forms": {
+      "input": "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+    }
+  },
+  "icons": {
+    "library": "lucide-react",
+    "usage": "Use stroke-width 1.5 or 2 for a clean, sharp look. Size generally 16px (w-4 h-4) or 20px (w-5 h-5)."
+  },
+  "images": {
+    "login_background": {
+      "url": "https://images.pexels.com/photos/12843342/pexels-photo-12843342.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Abstract blue geometric pattern. Overlay with bg-black/50 or bg-white/20 based on theme for the login screen."
+    },
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1762522926157-bcc04bf0b10a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHBvcnRyYWl0fGVufDB8fHx8MTc3NTIwOTY3NXww&ixlib=rb-4.1.0&q=85",
+        "role": "Admin Avatar"
+      },
+      {
+        "url": "https://images.pexels.com/photos/30004324/pexels-photo-30004324.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "role": "Agent Avatar 1"
+      }
+    ]
+  },
+  "screens": {
+    "login": {
+      "layout": "Two-column split on desktop (Image left, Form right), Single column on mobile.",
+      "behavior": "Separate forms or toggle for Admin vs Agent login."
+    },
+    "dashboard": {
+      "layout": "Sidebar (left) + Topbar + Main Content area.",
+      "overview": "Bento grid or row of 3-4 metric cards.",
+      "tables": "Full width with inline actions (Edit/Delete). Badge components for status (Active/Inactive)."
+    }
+  },
+  "state_and_auth": {
+    "mock_auth": "Use React Context or Zustand with LocalStorage to simulate login state and current user (role: admin | agent).",
+    "persistence": "Store Agents, Events, and Students in LocalStorage. Hydrate on initial load."
+  },
+  "testing": {
+    "rules": "All interactive elements MUST have a data-testid attribute in kebab-case (e.g., data-testid='login-submit-button', data-testid='agent-table-row-1')."
+  },
+  "instructions_to_main_agent": [
+    "Use Shadcn UI for structured components like Dialogs, Selects, Tables, Inputs, and Forms.",
+    "Ensure dark/light mode uses Tailwind's 'dark:' variant class strategy.",
+    "Use 'Outfit' for headings and 'Inter' for body text. Do not use Inter for headings.",
+    "Implement the UI focusing on clarity and dense data scanning (Archetype 4 - Swiss/High-Contrast).",
+    "Forms must use proper accessible labels.",
+    "Implement routing with react-router-dom.",
+    "Include local storage logic for data persistence as requested."
+  ]
+}
