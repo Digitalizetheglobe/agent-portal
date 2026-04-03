@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Outlet, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
@@ -9,6 +9,12 @@ const DashboardLayout = ({ requiredRole }) => {
   const { user, loading, isAuthenticated } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   if (loading) {
     return (
@@ -58,14 +64,14 @@ const DashboardLayout = ({ requiredRole }) => {
 
       {/* Main Content */}
       <div className={cn(
-        'transition-all duration-300',
+        'flex flex-col min-h-screen transition-all duration-300',
         sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'
       )}>
         <Topbar 
           sidebarCollapsed={sidebarCollapsed}
           onMobileMenuClick={() => setMobileMenuOpen(true)}
         />
-        <main className="p-4 md:p-6 lg:p-8">
+        <main className="flex-1 p-4 md:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

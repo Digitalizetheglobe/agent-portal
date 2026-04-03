@@ -38,14 +38,7 @@ const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
   return (
     <header
       data-testid="topbar"
-      className={cn(
-        'sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-border bg-card/80 backdrop-blur-xl px-4 md:px-6 transition-all duration-300',
-        sidebarCollapsed ? 'md:pl-20' : 'md:pl-68'
-      )}
-      style={{ 
-        marginLeft: sidebarCollapsed ? '64px' : '256px',
-        width: `calc(100% - ${sidebarCollapsed ? '64px' : '256px'})` 
-      }}
+      className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-border bg-card/80 backdrop-blur-xl px-4 md:px-6"
     >
       {/* Mobile Menu Button */}
       <button
