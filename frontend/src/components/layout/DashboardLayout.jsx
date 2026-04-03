@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useData } from '../../context/DataContext';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import { cn } from '../../lib/utils';
 
 const DashboardLayout = ({ requiredRole }) => {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const { refreshData, clearData, initialized, loading: dataLoading } = useData();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
@@ -16,7 +18,23 @@ const DashboardLayout = ({ requiredRole }) => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
-  if (loading) {
+  // Fetch data when authenticated and not yet initialized
+  useEffect(() => {
+    if (isAuthenticated && !initialized) {
+      refreshData();
+    }
+  }, [isAuthenticated, initialized, refreshData]);
+
+  // Clear data when component unmounts (user logs out)
+  useEffect(() => {
+    return () => {
+      if (!isAuthenticated) {
+        clearData();
+      }
+    };
+  }, [isAuthenticated, clearData]);
+
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -72,7 +90,13 @@ const DashboardLayout = ({ requiredRole }) => {
           onMobileMenuClick={() => setMobileMenuOpen(true)}
         />
         <main className="flex-1 p-4 md:p-6 lg:p-8">
-          <Outlet />
+          {dataLoading && !initialized ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
     </div>

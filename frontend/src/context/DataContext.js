@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { agentAPI, eventAPI, studentAPI, statsAPI, formatApiError } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -17,15 +17,18 @@ export const DataProvider = ({ children }) => {
   const [events, setEvents] = useState([]);
   const [students, setStudents] = useState([]);
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   // Fetch all data
   const fetchAgents = useCallback(async () => {
     try {
       const response = await agentAPI.getAll();
       setAgents(response.data);
+      return response.data;
     } catch (error) {
       console.error('Error fetching agents:', error);
+      return [];
     }
   }, []);
 
@@ -33,8 +36,10 @@ export const DataProvider = ({ children }) => {
     try {
       const response = await eventAPI.getAll();
       setEvents(response.data);
+      return response.data;
     } catch (error) {
       console.error('Error fetching events:', error);
+      return [];
     }
   }, []);
 
@@ -42,8 +47,10 @@ export const DataProvider = ({ children }) => {
     try {
       const response = await studentAPI.getAll(filters);
       setStudents(response.data);
+      return response.data;
     } catch (error) {
       console.error('Error fetching students:', error);
+      return [];
     }
   }, []);
 
@@ -51,21 +58,34 @@ export const DataProvider = ({ children }) => {
     try {
       const response = await statsAPI.get();
       setStats(response.data);
+      return response.data;
     } catch (error) {
       console.error('Error fetching stats:', error);
+      return null;
     }
   }, []);
 
+  // Initialize/refresh all data - called after login
   const refreshData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([fetchAgents(), fetchEvents(), fetchStudents(), fetchStats()]);
-    setLoading(false);
+    try {
+      await Promise.all([fetchAgents(), fetchEvents(), fetchStudents(), fetchStats()]);
+      setInitialized(true);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [fetchAgents, fetchEvents, fetchStudents, fetchStats]);
 
-  // Initialize data on mount
-  useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+  // Clear all data - called on logout
+  const clearData = useCallback(() => {
+    setAgents([]);
+    setEvents([]);
+    setStudents([]);
+    setStats(null);
+    setInitialized(false);
+  }, []);
 
   // Agent CRUD operations
   const createAgent = async (agentData) => {
@@ -171,7 +191,6 @@ export const DataProvider = ({ children }) => {
   const uploadStudentDocument = async (studentId, file) => {
     try {
       const response = await studentAPI.uploadDocument(studentId, file);
-      // Refresh students to get updated document list
       await fetchStudents();
       return response.data;
     } catch (error) {
@@ -194,7 +213,9 @@ export const DataProvider = ({ children }) => {
     events,
     students,
     loading,
+    initialized,
     refreshData,
+    clearData,
     // Agent operations
     createAgent,
     updateAgent,

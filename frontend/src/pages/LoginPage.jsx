@@ -15,7 +15,7 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    userId: '',
+    email: '',
     password: ''
   });
 
@@ -29,10 +29,7 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
 
-    // Simulate loading
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const result = login(formData.userId, formData.password);
+    const result = await login(formData.email, formData.password);
 
     if (result.success) {
       toast.success(`Welcome back!`, {
@@ -56,19 +53,19 @@ const LoginPage = () => {
   const LoginForm = ({ role }) => (
     <form onSubmit={(e) => handleSubmit(e, role)} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor={`${role}-userId`} className="text-sm font-medium">
-          User ID
+        <Label htmlFor={`${role}-email`} className="text-sm font-medium">
+          Email
         </Label>
         <div className="relative">
           <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            id={`${role}-userId`}
-            name="userId"
-            type="text"
-            placeholder="Enter your user ID"
-            value={formData.userId}
+            id={`${role}-email`}
+            name="email"
+            type="email"
+            placeholder="Enter your email"
+            value={formData.email}
             onChange={handleInputChange}
-            data-testid={`${role}-userid-input`}
+            data-testid={`${role}-email-input`}
             className="pl-10"
             required
           />
@@ -120,12 +117,12 @@ const LoginPage = () => {
 
       {role === 'admin' && (
         <p className="text-xs text-center text-muted-foreground mt-4">
-          Demo credentials: <span className="font-mono">admin / admin123</span>
+          Demo: <span className="font-mono">admin@example.com / admin123</span>
         </p>
       )}
       {role === 'agent' && (
         <p className="text-xs text-center text-muted-foreground mt-4">
-          Demo credentials: <span className="font-mono">john.smith / agent123</span>
+          Demo: <span className="font-mono">john.smith@example.com / agent123</span>
         </p>
       )}
     </form>

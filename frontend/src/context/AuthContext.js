@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authAPI, formatApiError } from '../utils/api';
 
 const AuthContext = createContext(null);
@@ -14,6 +14,14 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null); // null = checking, false = not authenticated
   const [loading, setLoading] = useState(true);
+  const [onLoginCallback, setOnLoginCallback] = useState(null);
+  const [onLogoutCallback, setOnLogoutCallback] = useState(null);
+
+  // Register callbacks for data operations
+  const registerCallbacks = useCallback((onLogin, onLogout) => {
+    setOnLoginCallback(() => onLogin);
+    setOnLogoutCallback(() => onLogout);
+  }, []);
 
   // Check authentication status on mount
   useEffect(() => {
@@ -21,6 +29,10 @@ export const AuthProvider = ({ children }) => {
       try {
         const response = await authAPI.me();
         setUser(response.data);
+        // Trigger data load on successful auth check
+        if (onLoginCallback) {
+          onLoginCallback();
+        }
       } catch (error) {
         setUser(false);
       } finally {
@@ -28,12 +40,16 @@ export const AuthProvider = ({ children }) => {
       }
     };
     checkAuth();
-  }, []);
+  }, [onLoginCallback]);
 
   const login = async (email, password) => {
     try {
       const response = await authAPI.login(email, password);
       setUser(response.data);
+      // Trigger data refresh after login
+      if (onLoginCallback) {
+        await onLoginCallback();
+      }
       return { success: true, role: response.data.role };
     } catch (error) {
       return { success: false, error: formatApiError(error) };
@@ -47,6 +63,10 @@ export const AuthProvider = ({ children }) => {
       console.error('Logout error:', error);
     } finally {
       setUser(false);
+      // Clear data on logout
+      if (onLogoutCallback) {
+        onLogoutCallback();
+      }
     }
   };
 
@@ -60,7 +80,8 @@ export const AuthProvider = ({ children }) => {
     logout,
     isAdmin,
     isAgent,
-    isAuthenticated: !!user && user !== false
+    isAuthenticated: !!user && user !== false,
+    registerCallbacks
   };
 
   return (
