@@ -1,11 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  INITIAL_ADMIN, 
-  INITIAL_AGENTS, 
-  STORAGE_KEYS, 
-  getStoredData, 
-  setStoredData 
-} from '../utils/mockData';
+import { authAPI, formatApiError } from '../utils/api';
 
 const AuthContext = createContext(null);
 
@@ -18,59 +12,42 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null); // null = checking, false = not authenticated
   const [loading, setLoading] = useState(true);
 
+  // Check authentication status on mount
   useEffect(() => {
-    // Check for existing session on mount
-    const storedAuth = getStoredData(STORAGE_KEYS.AUTH, null);
-    if (storedAuth) {
-      setUser(storedAuth);
-    }
-    setLoading(false);
+    const checkAuth = async () => {
+      try {
+        const response = await authAPI.me();
+        setUser(response.data);
+      } catch (error) {
+        setUser(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkAuth();
   }, []);
 
-  const login = (userId, password) => {
-    // Check admin credentials
-    if (userId === INITIAL_ADMIN.userId && password === INITIAL_ADMIN.password) {
-      const userData = {
-        id: INITIAL_ADMIN.id,
-        userId: INITIAL_ADMIN.userId,
-        name: INITIAL_ADMIN.name,
-        role: 'admin',
-        avatar: INITIAL_ADMIN.avatar
-      };
-      setUser(userData);
-      setStoredData(STORAGE_KEYS.AUTH, userData);
-      return { success: true, role: 'admin' };
+  const login = async (email, password) => {
+    try {
+      const response = await authAPI.login(email, password);
+      setUser(response.data);
+      return { success: true, role: response.data.role };
+    } catch (error) {
+      return { success: false, error: formatApiError(error) };
     }
-
-    // Check agent credentials
-    const agents = getStoredData(STORAGE_KEYS.AGENTS, INITIAL_AGENTS);
-    const agent = agents.find(a => a.userId === userId && a.password === password);
-    
-    if (agent) {
-      if (agent.status === 'inactive') {
-        return { success: false, error: 'Your account is inactive. Please contact admin.' };
-      }
-      const userData = {
-        id: agent.id,
-        userId: agent.userId,
-        name: agent.name,
-        role: 'agent',
-        avatar: agent.avatar
-      };
-      setUser(userData);
-      setStoredData(STORAGE_KEYS.AUTH, userData);
-      return { success: true, role: 'agent' };
-    }
-
-    return { success: false, error: 'Invalid credentials' };
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem(STORAGE_KEYS.AUTH);
+  const logout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setUser(false);
+    }
   };
 
   const isAdmin = () => user?.role === 'admin';
@@ -83,7 +60,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     isAdmin,
     isAgent,
-    isAuthenticated: !!user
+    isAuthenticated: !!user && user !== false
   };
 
   return (

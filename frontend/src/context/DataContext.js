@@ -1,13 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  INITIAL_AGENTS, 
-  INITIAL_EVENTS, 
-  INITIAL_STUDENTS,
-  STORAGE_KEYS, 
-  getStoredData, 
-  setStoredData,
-  generateId 
-} from '../utils/mockData';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { agentAPI, eventAPI, studentAPI, statsAPI, formatApiError } from '../utils/api';
+import { toast } from 'sonner';
 
 const DataContext = createContext(null);
 
@@ -23,108 +16,147 @@ export const DataProvider = ({ children }) => {
   const [agents, setAgents] = useState([]);
   const [events, setEvents] = useState([]);
   const [students, setStudents] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize data from localStorage or defaults
-  useEffect(() => {
-    const storedAgents = getStoredData(STORAGE_KEYS.AGENTS, INITIAL_AGENTS);
-    const storedEvents = getStoredData(STORAGE_KEYS.EVENTS, INITIAL_EVENTS);
-    const storedStudents = getStoredData(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
-    
-    setAgents(storedAgents);
-    setEvents(storedEvents);
-    setStudents(storedStudents);
-    setLoading(false);
+  // Fetch all data
+  const fetchAgents = useCallback(async () => {
+    try {
+      const response = await agentAPI.getAll();
+      setAgents(response.data);
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+    }
   }, []);
 
-  // Persist agents to localStorage
-  useEffect(() => {
-    if (!loading) {
-      setStoredData(STORAGE_KEYS.AGENTS, agents);
+  const fetchEvents = useCallback(async () => {
+    try {
+      const response = await eventAPI.getAll();
+      setEvents(response.data);
+    } catch (error) {
+      console.error('Error fetching events:', error);
     }
-  }, [agents, loading]);
+  }, []);
 
-  // Persist events to localStorage
-  useEffect(() => {
-    if (!loading) {
-      setStoredData(STORAGE_KEYS.EVENTS, events);
+  const fetchStudents = useCallback(async (filters = {}) => {
+    try {
+      const response = await studentAPI.getAll(filters);
+      setStudents(response.data);
+    } catch (error) {
+      console.error('Error fetching students:', error);
     }
-  }, [events, loading]);
+  }, []);
 
-  // Persist students to localStorage
-  useEffect(() => {
-    if (!loading) {
-      setStoredData(STORAGE_KEYS.STUDENTS, students);
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await statsAPI.get();
+      setStats(response.data);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
     }
-  }, [students, loading]);
+  }, []);
+
+  const refreshData = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([fetchAgents(), fetchEvents(), fetchStudents(), fetchStats()]);
+    setLoading(false);
+  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats]);
+
+  // Initialize data on mount
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
 
   // Agent CRUD operations
-  const createAgent = (agentData) => {
-    const newAgent = {
-      ...agentData,
-      id: generateId('agent'),
-      role: 'agent',
-      avatar: null
-    };
-    setAgents(prev => [...prev, newAgent]);
-    return newAgent;
+  const createAgent = async (agentData) => {
+    try {
+      const response = await agentAPI.create(agentData);
+      setAgents(prev => [...prev, response.data]);
+      await fetchStats();
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to create agent', { description: formatApiError(error) });
+      throw error;
+    }
   };
 
-  const updateAgent = (id, agentData) => {
-    setAgents(prev => prev.map(agent => 
-      agent.id === id ? { ...agent, ...agentData } : agent
-    ));
+  const updateAgent = async (id, agentData) => {
+    try {
+      const response = await agentAPI.update(id, agentData);
+      setAgents(prev => prev.map(agent => agent.id === id ? response.data : agent));
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update agent', { description: formatApiError(error) });
+      throw error;
+    }
   };
 
-  const deleteAgent = (id) => {
-    setAgents(prev => prev.filter(agent => agent.id !== id));
-    // Also remove agent from events
-    setEvents(prev => prev.map(event => ({
-      ...event,
-      assignedAgents: event.assignedAgents.filter(agentId => agentId !== id)
-    })));
+  const deleteAgent = async (id) => {
+    try {
+      await agentAPI.delete(id);
+      setAgents(prev => prev.filter(agent => agent.id !== id));
+      await fetchStats();
+    } catch (error) {
+      toast.error('Failed to delete agent', { description: formatApiError(error) });
+      throw error;
+    }
   };
 
   const getAgentById = (id) => agents.find(agent => agent.id === id);
 
   // Event CRUD operations
-  const createEvent = (eventData) => {
-    const newEvent = {
-      ...eventData,
-      id: generateId('event'),
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-    setEvents(prev => [...prev, newEvent]);
-    return newEvent;
+  const createEvent = async (eventData) => {
+    try {
+      const response = await eventAPI.create(eventData);
+      setEvents(prev => [...prev, response.data]);
+      await fetchStats();
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to create event', { description: formatApiError(error) });
+      throw error;
+    }
   };
 
-  const updateEvent = (id, eventData) => {
-    setEvents(prev => prev.map(event => 
-      event.id === id ? { ...event, ...eventData } : event
-    ));
+  const updateEvent = async (id, eventData) => {
+    try {
+      const response = await eventAPI.update(id, eventData);
+      setEvents(prev => prev.map(event => event.id === id ? response.data : event));
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update event', { description: formatApiError(error) });
+      throw error;
+    }
   };
 
-  const deleteEvent = (id) => {
-    setEvents(prev => prev.filter(event => event.id !== id));
-    // Also remove students linked to this event
-    setStudents(prev => prev.filter(student => student.eventId !== id));
+  const deleteEvent = async (id) => {
+    try {
+      await eventAPI.delete(id);
+      setEvents(prev => prev.filter(event => event.id !== id));
+      setStudents(prev => prev.filter(student => student.eventId !== id));
+      await fetchStats();
+    } catch (error) {
+      toast.error('Failed to delete event', { description: formatApiError(error) });
+      throw error;
+    }
   };
 
   const getEventById = (id) => events.find(event => event.id === id);
 
   const getEventsForAgent = (agentId) => {
-    return events.filter(event => event.assignedAgents.includes(agentId));
+    return events.filter(event => event.assignedAgents?.includes(agentId));
   };
 
   // Student operations
-  const addStudent = (studentData) => {
-    const newStudent = {
-      ...studentData,
-      id: generateId('student'),
-      submittedAt: new Date().toISOString().split('T')[0]
-    };
-    setStudents(prev => [...prev, newStudent]);
-    return newStudent;
+  const addStudent = async (studentData) => {
+    try {
+      const response = await studentAPI.create(studentData);
+      setStudents(prev => [...prev, response.data]);
+      await fetchStats();
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to register student', { description: formatApiError(error) });
+      throw error;
+    }
   };
 
   const getStudentsByEvent = (eventId) => {
@@ -135,20 +167,34 @@ export const DataProvider = ({ children }) => {
     return students.filter(student => student.agentId === agentId);
   };
 
+  // Upload document
+  const uploadStudentDocument = async (studentId, file) => {
+    try {
+      const response = await studentAPI.uploadDocument(studentId, file);
+      // Refresh students to get updated document list
+      await fetchStudents();
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to upload document', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
   // Statistics
-  const getStats = () => ({
+  const getStats = () => stats || {
     totalAgents: agents.length,
     activeAgents: agents.filter(a => a.status === 'active').length,
     totalEvents: events.length,
     upcomingEvents: events.filter(e => new Date(e.date) >= new Date()).length,
     totalStudents: students.length
-  });
+  };
 
   const value = {
     agents,
     events,
     students,
     loading,
+    refreshData,
     // Agent operations
     createAgent,
     updateAgent,
@@ -164,6 +210,7 @@ export const DataProvider = ({ children }) => {
     addStudent,
     getStudentsByEvent,
     getStudentsByAgent,
+    uploadStudentDocument,
     // Statistics
     getStats
   };
