@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 
-const AgentDashboard = () => {
+const AgentEventsPage = () => {
   const { user } = useAuth();
   const { getEventsForAgent, getStudentsByAgent, agents } = useData();
 
@@ -32,15 +32,15 @@ const AgentDashboard = () => {
   };
 
   return (
-    <div className="space-y-6" data-testid="agent-dashboard">
+    <div className="space-y-6" data-testid="agent-events-page">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground font-['Outfit']">
-            Dashboard
+            My Events
           </h1>
           <p className="text-muted-foreground mt-1">
-            Here's an overview of your assigned events and registrations.
+            Events assigned to you for student registration.
           </p>
         </div>
       </div>
@@ -94,7 +94,7 @@ const AgentDashboard = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
-                  My Registrations
+                  Total Registrations
                 </p>
                 <p className="text-3xl font-bold text-foreground mt-1 font-['Outfit']">
                   {myStudents.length}
@@ -111,10 +111,10 @@ const AgentDashboard = () => {
         </Card>
       </div>
 
-      {/* Assigned Events */}
-      <Card data-testid="assigned-events-card">
+      {/* All Events */}
+      <Card data-testid="all-events-card">
         <CardHeader>
-          <CardTitle className="text-lg font-['Outfit']">My Assigned Events</CardTitle>
+          <CardTitle className="text-lg font-['Outfit']">All Assigned Events</CardTitle>
           <CardDescription>
             Click on an event to register students
           </CardDescription>
@@ -196,51 +196,8 @@ const AgentDashboard = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Recent Registrations */}
-      {myStudents.length > 0 && (
-        <Card data-testid="my-registrations-card">
-          <CardHeader>
-            <CardTitle className="text-lg font-['Outfit']">Recent Registrations</CardTitle>
-            <CardDescription>
-              Students you've registered recently
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {myStudents.slice(-5).reverse().map((student) => (
-                <div 
-                  key={student.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                  data-testid={`my-student-${student.id}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium text-sm">
-                        {student.name.charAt(0)}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{student.name}</p>
-                      <p className="text-xs text-muted-foreground">{student.email}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant="outline" className="text-xs">
-                      {student.country}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(student.submittedAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };
 
-export default AgentDashboard;
+export default AgentEventsPage;

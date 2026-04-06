@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Filter, Trash2, MoreHorizontal, Edit2, Eye } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -20,12 +21,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
+import { toast } from 'sonner';
 
 const StudentsPage = () => {
-  const { students, events, agents } = useData();
+  const { students, events, agents, deleteStudent } = useData();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [eventFilter, setEventFilter] = useState('all');
   const [agentFilter, setAgentFilter] = useState('all');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState(null);
 
   // Filter students based on search and filters
   const filteredStudents = students.filter(student => {
@@ -57,6 +78,30 @@ const StudentsPage = () => {
   };
 
   const hasActiveFilters = searchQuery || eventFilter !== 'all' || agentFilter !== 'all';
+
+  const handleDeleteStudent = (student) => {
+    setStudentToDelete(student);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteStudent = () => {
+    if (studentToDelete) {
+      deleteStudent(studentToDelete.id);
+      toast.success(`Student ${studentToDelete.name} has been deleted successfully.`);
+      setDeleteDialogOpen(false);
+      setStudentToDelete(null);
+    }
+  };
+
+  const handleViewStudent = (student) => {
+    // Navigate to student details page or open modal
+    navigate(`/admin/students/${student.id}`);
+  };
+
+  const handleEditStudent = (student) => {
+    // Navigate to edit student page or open modal
+    navigate(`/admin/students/${student.id}/edit`);
+  };
 
   return (
     <div className="space-y-6" data-testid="students-page">
@@ -153,12 +198,13 @@ const StudentsPage = () => {
                   <TableHead className="font-medium">Agent</TableHead>
                   <TableHead className="font-medium">Course Interest</TableHead>
                   <TableHead className="font-medium">Registered</TableHead>
+                  <TableHead className="font-medium w-[80px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredStudents.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <p className="text-muted-foreground">
                         {hasActiveFilters 
                           ? 'No students found matching your filters.' 
@@ -209,6 +255,39 @@ const StudentsPage = () => {
                           year: 'numeric'
                         })}
                       </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={() => handleViewStudent(student)}
+                              data-testid={`view-student-${student.id}`}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleEditStudent(student)}
+                              data-testid={`edit-student-${student.id}`}
+                            >
+                              <Edit2 className="w-4 h-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteStudent(student)}
+                              className="text-destructive focus:text-destructive"
+                              data-testid={`delete-student-${student.id}`}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -217,6 +296,28 @@ const StudentsPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Student Registration</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the registration for <strong>{studentToDelete?.name}</strong>? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteStudent}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

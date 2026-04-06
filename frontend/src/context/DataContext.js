@@ -187,6 +187,38 @@ export const DataProvider = ({ children }) => {
     return students.filter(student => student.agentId === agentId);
   };
 
+  const deleteStudent = async (id) => {
+    try {
+      await studentAPI.delete(id);
+      setStudents(prev => prev.filter(student => student.id !== id));
+      await fetchStats();
+    } catch (error) {
+      toast.error('Failed to delete student', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateStudent = async (id, studentData) => {
+    try {
+      const response = await studentAPI.update(id, studentData);
+      setStudents(prev => prev.map(student => student.id === id ? response.data : student));
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update student', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const getStudentById = async (id) => {
+    try {
+      const response = await studentAPI.getById(id);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching student:', error);
+      throw error;
+    }
+  };
+
   // Upload document
   const uploadStudentDocument = async (studentId, file) => {
     try {
@@ -231,6 +263,9 @@ export const DataProvider = ({ children }) => {
     addStudent,
     getStudentsByEvent,
     getStudentsByAgent,
+    deleteStudent,
+    updateStudent,
+    getStudentById,
     uploadStudentDocument,
     // Statistics
     getStats

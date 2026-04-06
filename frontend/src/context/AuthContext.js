@@ -42,9 +42,9 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, [onLoginCallback]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, role) => {
     try {
-      const response = await authAPI.login(email, password);
+      const response = await authAPI.login(email, password, role);
       setUser(response.data);
       // Trigger data refresh after login
       if (onLoginCallback) {

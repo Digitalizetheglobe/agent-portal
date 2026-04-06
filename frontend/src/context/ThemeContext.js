@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { STORAGE_KEYS, getStoredData, setStoredData } from '../utils/mockData';
+import { STORAGE_KEYS, getStoredData, setStoredData } from '../utils/storage';
 
 const ThemeContext = createContext(null);
 

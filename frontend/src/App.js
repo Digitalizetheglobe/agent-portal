@@ -11,8 +11,11 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AgentsPage from "./pages/admin/AgentsPage";
 import EventsPage from "./pages/admin/EventsPage";
 import StudentsPage from "./pages/admin/StudentsPage";
+import StudentDetailsPage from "./pages/admin/StudentDetailsPage";
+import StudentEditPage from "./pages/admin/StudentEditPage";
 import EventDetailsPage from "./pages/admin/EventDetailsPage";
 import AgentDashboard from "./pages/agent/AgentDashboard";
+import AgentEventsPage from "./pages/agent/AgentEventsPage";
 
 // Layouts
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -36,12 +39,15 @@ function App() {
                   <Route path="events" element={<EventsPage />} />
                   <Route path="events/:eventId" element={<EventDetailsPage />} />
                   <Route path="students" element={<StudentsPage />} />
+                  <Route path="students/:studentId" element={<StudentDetailsPage />} />
+                  <Route path="students/:studentId/edit" element={<StudentEditPage />} />
                 </Route>
 
                 {/* Agent Routes */}
                 <Route path="/agent" element={<DashboardLayout requiredRole="agent" />}>
                   <Route index element={<Navigate to="/agent/dashboard" replace />} />
                   <Route path="dashboard" element={<AgentDashboard />} />
+                  <Route path="events" element={<AgentEventsPage />} />
                   <Route path="events/:eventId" element={<EventDetailsPage />} />
                 </Route>
 

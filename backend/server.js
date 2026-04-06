@@ -206,7 +206,8 @@ const startServer = async () => {
     try {
       await initStorage();
     } catch (error) {
-      console.warn('⚠️ Object storage initialization failed:', error.message);
+      console.error('❌ Failed to initialize object storage: Request failed with status code 500');
+      console.log('⚠️ Continuing without object storage - file uploads will be disabled');
     }
 
     // Seed database

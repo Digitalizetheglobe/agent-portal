@@ -12,7 +12,7 @@ import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const location = useLocation();
 
   const adminLinks = [
@@ -24,6 +24,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
   const agentLinks = [
     { to: '/agent/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/agent/events', icon: Calendar, label: 'Events' },
   ];
 
   const links = isAdmin() ? adminLinks : agentLinks;
@@ -33,26 +34,27 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       data-testid="sidebar"
       className={cn(
         'fixed left-0 top-0 h-full bg-card border-r border-border z-50 transition-all duration-300 ease-in-out flex flex-col',
-        collapsed ? 'w-16' : 'w-64'
+        collapsed ? 'w-18' : 'w-64'
       )}
     >
       {/* Logo */}
       <div className={cn(
-        'h-16 flex items-center border-b border-border px-4',
-        collapsed ? 'justify-center' : 'justify-between'
+        'h-20 flex items-center border-b border-border px-4',
+        collapsed ? 'justify-center' : 'justify-center'
       )}>
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">AP</span>
-            </div>
-            <span className="font-semibold text-foreground font-['Outfit']">Admin Portal</span>
-          </div>
+          <img 
+            src="/assets/QStudylogo(blue).png" 
+            alt="QStudy Logo" 
+            className="h-10 w-auto"
+          />
         )}
         {collapsed && (
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">AP</span>
-          </div>
+          <img 
+            src="/assets/QStudylogo(blue).png" 
+            alt="QStudy Logo" 
+            className="h-10 w-auto"
+          />
         )}
       </div>
 

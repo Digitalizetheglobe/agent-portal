@@ -10,7 +10,7 @@ const { sendEmail, templates } = require('../utils/email');
 // @access  Public
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, role } = req.body;
 
     // Validate input
     if (!email || !password) {
@@ -27,6 +27,14 @@ exports.login = async (req, res) => {
       return res.status(401).json({
         success: false,
         detail: 'Invalid credentials'
+      });
+    }
+
+    // Check if role matches user's role (if role is provided)
+    if (role && user.role !== role) {
+      return res.status(401).json({
+        success: false,
+        detail: `Invalid credentials for ${role} account`
       });
     }
 

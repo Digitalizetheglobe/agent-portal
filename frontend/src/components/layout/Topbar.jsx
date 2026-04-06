@@ -38,21 +38,28 @@ const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
   return (
     <header
       data-testid="topbar"
-      className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-border bg-card/80 backdrop-blur-xl px-4 md:px-6"
+      className="sticky top-0 z-40 flex h-20 w-full items-center justify-between border-b border-border bg-card/80 backdrop-blur-xl px-4 md:px-6"
     >
-      {/* Mobile Menu Button */}
-      <button
-        onClick={onMobileMenuClick}
-        data-testid="mobile-menu-btn"
-        className="md:hidden p-2 rounded-lg hover:bg-accent"
-      >
-        <Menu className="w-5 h-5" />
-      </button>
 
-      {/* Page Title / Breadcrumb Area */}
-      <div className="hidden md:block">
-        <h1 className="text-lg font-semibold text-foreground font-['Outfit']">
-          {user?.role === 'admin' ? 'Admin Dashboard' : 'Agent Dashboard'}
+
+      {/* Mobile Menu Button */}
+      <div className="flex items-center gap-2 md:hidden">
+        <div className="text-sm font-medium text-foreground font-['Outfit']">
+          {user?.role === 'admin' ? 'Admin' : 'Agent'}
+        </div>
+        <button
+          onClick={onMobileMenuClick}
+          data-testid="mobile-menu-btn"
+          className="p-2 rounded-lg hover:bg-accent"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Page Title / Breadcrumb Area - Desktop Only */}
+      <div className="hidden lg:block flex-1">
+        <h1 className="text-lg font-semibold text-muted-foreground font-['Outfit']">
+          {user?.role === 'admin' ? 'Admin Dashboard' : `Welcome, ${user?.name}`}
         </h1>
       </div>
 

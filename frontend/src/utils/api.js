@@ -25,7 +25,7 @@ export const formatApiError = (error) => {
 
 // Auth APIs
 export const authAPI = {
-  login: (email, password) => api.post('/auth/login', { email, password }),
+  login: (email, password, role) => api.post('/auth/login', { email, password, role }),
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me'),
   refresh: () => api.post('/auth/refresh'),
@@ -56,6 +56,8 @@ export const studentAPI = {
   getAll: (params = {}) => api.get('/students', { params }),
   getById: (id) => api.get(`/students/${id}`),
   create: (data) => api.post('/students', data),
+  update: (id, data) => api.put(`/students/${id}`, data),
+  delete: (id) => api.delete(`/students/${id}`),
   uploadDocument: (studentId, file) => {
     const formData = new FormData();
     formData.append('file', file);
