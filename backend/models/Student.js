@@ -30,35 +30,35 @@ const documentSchema = new mongoose.Schema({
 const studentSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Student name is required'],
+    required: false, // Made optional for flexibility
     trim: true,
     maxlength: [100, 'Name cannot exceed 100 characters']
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
+    required: false, // Made optional for flexibility
     lowercase: true,
     trim: true,
     match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
   },
   phone: {
     type: String,
-    required: [true, 'Phone number is required'],
+    required: false, // Made optional for flexibility
     trim: true
   },
   country: {
     type: String,
-    required: [true, 'Country is required'],
+    required: false, // Made optional for flexibility
     trim: true
   },
   education: {
     type: String,
-    required: [true, 'Education is required'],
+    required: false, // Made optional for flexibility
     trim: true
   },
   courseInterested: {
     type: String,
-    required: [true, 'Course interest is required'],
+    required: false, // Made optional for flexibility
     trim: true
   },
   notes: {
@@ -76,7 +76,13 @@ const studentSchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'Agent ID is required']
   },
-  documents: [documentSchema]
+  documents: [documentSchema],
+  // Custom form fields for flexible registration
+  customFields: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: new Map()
+  }
 }, {
   timestamps: true,
   toJSON: {
@@ -85,6 +91,12 @@ const studentSchema = new mongoose.Schema({
       ret.eventId = ret.eventId.toString();
       ret.agentId = ret.agentId.toString();
       ret.submittedAt = ret.createdAt;
+      
+      // Convert customFields Map to plain object
+      if (ret.customFields && ret.customFields instanceof Map) {
+        ret.customFields = Object.fromEntries(ret.customFields);
+      }
+      
       delete ret._id;
       delete ret.__v;
       return ret;

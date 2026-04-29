@@ -77,6 +77,8 @@ app.use((err, req, res, next) => {
 
 // 404 handler
 app.use((req, res) => {
+  console.log('404 - Route not found:', req.method, req.url);
+  console.log('Headers:', req.headers);
   res.status(404).json({
     success: false,
     detail: 'Route not found'

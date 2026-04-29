@@ -46,9 +46,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authAPI.login(email, password, role);
       setUser(response.data);
-      // Trigger data refresh after login
+      // Trigger data refresh in background - don't await so navigation is instant
       if (onLoginCallback) {
-        await onLoginCallback();
+        onLoginCallback();
       }
       return { success: true, role: response.data.role };
     } catch (error) {

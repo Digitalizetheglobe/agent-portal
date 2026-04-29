@@ -12,6 +12,85 @@ const api = axios.create({
   }
 });
 
+// Flag to prevent multiple refresh attempts
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  
+  failedQueue = [];
+};
+
+// Add request interceptor to include auth token
+api.interceptors.request.use(
+  (config) => {
+    // Token is handled via cookies, so no need to manually add Authorization header
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor to handle token refresh
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If error is 401 and we haven't tried refreshing yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // If already refreshing, add this request to the queue
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(() => {
+          return api(originalRequest);
+        }).catch((err) => {
+          return Promise.reject(err);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        // Attempt to refresh the token
+        await api.post('/auth/refresh');
+        
+        // Process the queue with the new token
+        processQueue(null);
+        
+        // Retry the original request
+        return api(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed, process queue with error
+        processQueue(refreshError);
+        
+        // If refresh fails, redirect to login
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 // Format API error for display
 export const formatApiError = (error) => {
   const detail = error.response?.data?.detail;
@@ -56,7 +135,11 @@ export const studentAPI = {
   getAll: (params = {}) => api.get('/students', { params }),
   getById: (id) => api.get(`/students/${id}`),
   create: (data) => api.post('/students', data),
-  update: (id, data) => api.put(`/students/${id}`, data),
+  update: (id, data) => {
+    console.log(`Making PUT request to: /students/${id}`);
+    console.log('Update data:', data);
+    return api.put(`/students/${id}`, data);
+  },
   delete: (id) => api.delete(`/students/${id}`),
   uploadDocument: (studentId, file) => {
     const formData = new FormData();

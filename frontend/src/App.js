@@ -16,6 +16,7 @@ import StudentEditPage from "./pages/admin/StudentEditPage";
 import EventDetailsPage from "./pages/admin/EventDetailsPage";
 import AgentDashboard from "./pages/agent/AgentDashboard";
 import AgentEventsPage from "./pages/agent/AgentEventsPage";
+import AgentEventsManagementPage from "./pages/agent/AgentEventsManagementPage";
 
 // Layouts
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -48,6 +49,7 @@ function App() {
                   <Route index element={<Navigate to="/agent/dashboard" replace />} />
                   <Route path="dashboard" element={<AgentDashboard />} />
                   <Route path="events" element={<AgentEventsPage />} />
+                  <Route path="events-management" element={<AgentEventsManagementPage />} />
                   <Route path="events/:eventId" element={<EventDetailsPage />} />
                 </Route>
 

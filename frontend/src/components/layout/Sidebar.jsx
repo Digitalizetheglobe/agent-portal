@@ -5,6 +5,7 @@ import {
   Users, 
   Calendar, 
   GraduationCap, 
+  CalendarCheck,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -24,7 +25,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
   const agentLinks = [
     { to: '/agent/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/agent/events', icon: Calendar, label: 'Events' },
+    { to: '/agent/events-management', icon: CalendarCheck, label: 'Events Management' },
   ];
 
   const links = isAdmin() ? adminLinks : agentLinks;
@@ -73,7 +74,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 isActive 
                   ? 'bg-primary text-primary-foreground shadow-sm' 
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                 collapsed && 'justify-center px-2'
               )}
             >
@@ -90,7 +91,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
           onClick={() => setCollapsed(!collapsed)}
           data-testid="sidebar-toggle"
           className={cn(
-            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors',
+            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors',
             collapsed && 'justify-center px-2'
           )}
         >

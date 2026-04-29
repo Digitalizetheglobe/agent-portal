@@ -9,7 +9,7 @@ const {
 } = require('../controllers/eventController');
 const { protect, restrictTo } = require('../middleware/auth');
 
-// All routes are protected
+// All routes are Update the student's information
 router.use(protect);
 
 // Routes accessible by all authenticated users

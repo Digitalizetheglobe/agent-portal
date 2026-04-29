@@ -5,6 +5,8 @@ const {
   getStudents, 
   getStudent, 
   createStudent, 
+  updateStudent,
+  deleteStudent,
   uploadDocument, 
   downloadDocument 
 } = require('../controllers/studentController');
@@ -41,11 +43,32 @@ const upload = multer({
 router.use(protect);
 
 // Student routes
-router.get('/', getStudents);
-router.get('/:id', getStudent);
-router.post('/', createStudent);
+router.get('/', (req, res, next) => {
+  console.log('GET /students');
+  next();
+}, getStudents);
 
-// Document routes
+router.post('/', (req, res, next) => {
+  console.log('POST /students');
+  next();
+}, createStudent);
+
+router.get('/:id', (req, res, next) => {
+  console.log('GET /students/:id', req.params.id);
+  next();
+}, getStudent);
+
+router.put('/:id', (req, res, next) => {
+  console.log('PUT /students/:id', req.params.id);
+  next();
+}, updateStudent);
+
+router.delete('/:id', (req, res, next) => {
+  console.log('DELETE /students/:id', req.params.id);
+  next();
+}, deleteStudent);
+
+// Document routes (must come after student routes to avoid conflicts)
 router.post('/:id/documents', upload.single('file'), uploadDocument);
 router.get('/:id/documents/:docId', downloadDocument);
 

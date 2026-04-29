@@ -67,19 +67,23 @@ const StudentForm = ({ eventId }) => {
   const education = watch('education');
 
   const onSubmit = async (data) => {
-    const studentData = {
-      ...data,
-      eventId,
-      agentId: user?.id
-    };
+    try {
+      const studentData = {
+        ...data,
+        eventId,
+        agentId: user?.id
+      };
 
-    addStudent(studentData);
-    
-    toast.success('Student registered', {
-      description: `${data.name} has been registered successfully.`
-    });
+      await addStudent(studentData);
+      
+      toast.success('Student registered', {
+        description: `${data.name} has been registered successfully.`
+      });
 
-    reset();
+      reset();
+    } catch (error) {
+      console.error('Failed to register student:', error);
+    }
   };
 
   return (

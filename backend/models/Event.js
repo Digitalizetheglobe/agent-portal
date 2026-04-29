@@ -17,6 +17,23 @@ const eventSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Event date is required']
   },
+  location: {
+    type: String,
+    required: false,
+    trim: true,
+    maxlength: [500, 'Location cannot exceed 500 characters']
+  },
+  seatCapacity: {
+    type: Number,
+    required: false,
+    min: [1, 'Seat capacity must be at least 1'],
+    default: 50
+  },
+  filledSeats: {
+    type: Number,
+    default: 0,
+    min: [0, 'Filled seats cannot be negative']
+  },
   assignedAgents: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -24,6 +41,51 @@ const eventSchema = new mongoose.Schema({
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
+  },
+  // Custom form fields for student registration
+  formFields: [{
+    id: {
+      type: String,
+      required: true
+    },
+    label: {
+      type: String,
+      required: true
+    },
+    type: {
+      type: String,
+      required: true,
+      enum: ['text', 'paragraph', 'radio', 'date', 'select']
+    },
+    required: {
+      type: Boolean,
+      default: false
+    },
+    options: [{
+      type: String
+    }], // For radio and select types
+    placeholder: String,
+    order: {
+      type: Number,
+      default: 0
+    },
+    regex: {
+      type: String,
+      default: ''
+    },
+    regexError: {
+      type: String,
+      default: 'Invalid format'
+    }
+  }],
+  // Notification settings
+  notifyAgents: {
+    type: Boolean,
+    default: true
+  },
+  notificationMessage: {
+    type: String,
+    default: ''
   }
 }, {
   timestamps: true,

@@ -68,22 +68,38 @@ exports.getEvent = async (req, res) => {
 // @access  Private (Admin only)
 exports.createEvent = async (req, res) => {
   try {
-    const { title, description, date, assignedAgents } = req.body;
+    const { 
+      title, 
+      description, 
+      date, 
+      location, 
+      seatCapacity, 
+      assignedAgents, 
+      formFields, 
+      notifyAgents, 
+      notificationMessage 
+    } = req.body;
 
     const event = await Event.create({
       title,
       description,
       date,
+      location,
+      seatCapacity,
       assignedAgents: assignedAgents || [],
+      formFields: formFields || [],
+      notifyAgents: notifyAgents !== false,
+      notificationMessage: notificationMessage || '',
       createdBy: req.user._id
     });
 
     // Notify assigned agents
-    if (assignedAgents && assignedAgents.length > 0) {
+    if (notifyAgents !== false && assignedAgents && assignedAgents.length > 0) {
       for (const agentId of assignedAgents) {
         const agent = await User.findById(agentId);
         if (agent) {
-          const emailTemplate = templates.eventAssignment(agent.name, title, date);
+          const messageText = notificationMessage || `You have been assigned to the event "${title}" scheduled for ${date}.`;
+          const emailTemplate = templates.eventAssignment(agent.name, title, date, messageText);
           await sendEmail(agent.email, emailTemplate.subject, emailTemplate.html);
         }
       }
@@ -104,7 +120,17 @@ exports.createEvent = async (req, res) => {
 // @access  Private (Admin only)
 exports.updateEvent = async (req, res) => {
   try {
-    const { title, description, date, assignedAgents } = req.body;
+    const { 
+      title, 
+      description, 
+      date, 
+      location, 
+      seatCapacity, 
+      assignedAgents, 
+      formFields, 
+      notifyAgents, 
+      notificationMessage 
+    } = req.body;
 
     const event = await Event.findById(req.params.id);
 
@@ -119,20 +145,26 @@ exports.updateEvent = async (req, res) => {
     const oldAgentIds = event.assignedAgents.map(id => id.toString());
 
     // Update fields
-    if (title) event.title = title;
-    if (description) event.description = description;
-    if (date) event.date = date;
-    if (assignedAgents) event.assignedAgents = assignedAgents;
+    if (title !== undefined) event.title = title;
+    if (description !== undefined) event.description = description;
+    if (date !== undefined) event.date = date;
+    if (location !== undefined) event.location = location;
+    if (seatCapacity !== undefined) event.seatCapacity = seatCapacity;
+    if (assignedAgents !== undefined) event.assignedAgents = assignedAgents;
+    if (formFields !== undefined) event.formFields = formFields;
+    if (notifyAgents !== undefined) event.notifyAgents = notifyAgents;
+    if (notificationMessage !== undefined) event.notificationMessage = notificationMessage;
 
     await event.save();
 
     // Notify newly assigned agents
-    if (assignedAgents) {
+    if (notifyAgents !== false && assignedAgents) {
       const newAgentIds = assignedAgents.filter(id => !oldAgentIds.includes(id));
       for (const agentId of newAgentIds) {
         const agent = await User.findById(agentId);
         if (agent) {
-          const emailTemplate = templates.eventAssignment(agent.name, event.title, event.date);
+          const messageText = notificationMessage || `You have been assigned to the event "${event.title}" scheduled for ${event.date}.`;
+          const emailTemplate = templates.eventAssignment(agent.name, event.title, event.date, messageText);
           await sendEmail(agent.email, emailTemplate.subject, emailTemplate.html);
         }
       }

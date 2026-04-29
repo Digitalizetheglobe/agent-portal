@@ -16,8 +16,8 @@ const AdminDashboard = () => {
       value: stats.totalAgents,
       subtext: `${stats.activeAgents} active`,
       icon: Users,
-      color: 'text-blue-600 dark:text-blue-400',
-      bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       link: '/admin/agents'
     },
     {
@@ -25,8 +25,8 @@ const AdminDashboard = () => {
       value: stats.totalEvents,
       subtext: `${stats.upcomingEvents} upcoming`,
       icon: Calendar,
-      color: 'text-purple-600 dark:text-purple-400',
-      bgColor: 'bg-purple-100 dark:bg-purple-900/30',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       link: '/admin/events'
     },
     {
@@ -34,8 +34,8 @@ const AdminDashboard = () => {
       value: stats.totalStudents,
       subtext: 'Registered',
       icon: GraduationCap,
-      color: 'text-emerald-600 dark:text-emerald-400',
-      bgColor: 'bg-emerald-100 dark:bg-emerald-900/30',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       link: '/admin/students'
     },
     {
@@ -43,8 +43,8 @@ const AdminDashboard = () => {
       value: '72%',
       subtext: '+5% this month',
       icon: TrendingUp,
-      color: 'text-amber-600 dark:text-amber-400',
-      bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       link: null
     }
   ];
@@ -220,11 +220,11 @@ const AdminDashboard = () => {
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                         <span className="text-emerald-600 dark:text-emerald-400 font-medium text-sm">
-                          {student.name.charAt(0)}
+                          {student.name?.charAt(0) || 'S'}
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium text-sm">{student.name}</p>
+                        <p className="font-medium text-sm">{student.name || 'Unknown Student'}</p>
                         <p className="text-xs text-muted-foreground">
                           {getEventName(student.eventId)}
                         </p>
@@ -268,11 +268,11 @@ const AdminDashboard = () => {
                 >
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                     <span className="text-primary font-medium text-sm">
-                      {agent.name.charAt(0)}
+                      {agent.name?.charAt(0) || 'A'}
                     </span>
                   </div>
                   <div>
-                    <p className="font-medium text-sm">{agent.name}</p>
+                    <p className="font-medium text-sm">{agent.name || 'Unknown Agent'}</p>
                     <p className="text-xs text-muted-foreground">{agent.email}</p>
                   </div>
                 </div>
