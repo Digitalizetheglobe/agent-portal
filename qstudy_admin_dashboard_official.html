@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QStudy Admin Dashboard — Official</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-primary: #042C53;
+      --color-primary-light: #E6F1FB;
+      --color-text-primary: #111827;
+      --color-text-secondary: #6B7280;
+      --color-border: #E5E7EB;
+      --color-bg-page: #F9FAFB;
+      --color-bg-card: #FFFFFF;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --border-radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-body); background-color: var(--color-bg-page); color: var(--color-text-primary); -webkit-font-smoothing: antialiased; }
+
+    .layout { display: flex; min-height: 100vh; }
+    
+    /* Sidebar */
+    .sidebar { width: 260px; background: var(--color-bg-card); border-right: 1px solid var(--color-border); padding: 24px; display: flex; flex-direction: column; }
+    .logo-wrap { margin-bottom: 40px; }
+    .logo-img { width: 140px; height: auto; }
+    
+    .nav-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all 0.2s; }
+    .nav-item:hover { background: var(--color-primary-light); color: var(--color-primary); }
+    .nav-item.active { background: var(--color-primary); color: #fff; }
+    .nav-item svg { width: 18px; height: 18px; }
+
+    /* Main Content */
+    .main { flex: 1; padding: 32px 40px; overflow-y: auto; }
+    
+    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+    .topbar-left h1 { font-family: var(--font-heading); font-size: 28px; font-weight: 600; }
+    .topbar-left p { font-size: 14px; color: var(--color-text-secondary); margin-top: 4px; }
+    
+    .topbar-right { display: flex; align-items: center; gap: 20px; }
+    .admin-badge { font-size: 11px; padding: 4px 12px; border-radius: 20px; background: #EEEDFE; color: #3C3489; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .user-profile { display: flex; align-items: center; gap: 12px; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--color-primary); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; font-size: 14px; }
+
+    /* KPI Grid */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 32px; }
+    .kpi-card { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 24px; transition: transform 0.2s, box-shadow 0.2s; }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
+    .kpi-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .kpi-label { font-size: 13px; color: var(--color-text-secondary); font-weight: 500; }
+    .kpi-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .kpi-value { font-family: var(--font-heading); font-size: 32px; font-weight: 600; margin-bottom: 8px; }
+    .kpi-trend { font-size: 12px; display: flex; align-items: center; gap: 4px; }
+    .trend-up { color: #10B981; }
+    .trend-down { color: #EF4444; }
+
+    /* Panels */
+    .dashboard-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; margin-bottom: 24px; }
+    .panel { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius); padding: 24px; }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .panel-title { font-family: var(--font-heading); font-size: 18px; font-weight: 600; }
+    .panel-link { font-size: 13px; color: var(--color-primary); font-weight: 500; text-decoration: none; cursor: pointer; }
+    .panel-link:hover { text-decoration: underline; }
+
+    /* Charts */
+    .chart-container { height: 250px; position: relative; }
+    
+    /* Tables */
+    .data-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .data-table th { text-align: left; font-size: 12px; color: var(--color-text-secondary); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--color-border); background: #F9FAFB; }
+    .data-table td { padding: 14px 16px; border-bottom: 1px solid var(--color-border); font-size: 14px; }
+    .data-table tr:last-child td { border-bottom: none; }
+    
+    .agent-cell { display: flex; align-items: center; gap: 12px; }
+    .agent-av { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+    
+    .status-pill { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .status-active { background: #DCFCE7; color: #166534; }
+    .status-pending { background: #FEF3C7; color: #92400E; }
+    .status-inactive { background: #F3F4F6; color: #374151; }
+
+    /* Lists */
+    .item-list { display: flex; flex-direction: column; gap: 12px; }
+    .item-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; border: 1px solid transparent; transition: all 0.2s; }
+    .item-row:hover { background: #F9FAFB; border-color: var(--color-border); }
+    .item-icon { width: 40px; height: 40px; border-radius: 8px; background: var(--color-primary-light); display: flex; align-items: center; justify-content: center; color: var(--color-primary); }
+    .item-info { flex: 1; }
+    .item-title { font-size: 14px; font-weight: 600; }
+    .item-meta { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+    
+    /* Buttons */
+    .btn-group { display: flex; gap: 12px; margin-top: 20px; }
+    .btn { padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+    .btn-primary { background: var(--color-primary); color: #fff; }
+    .btn-primary:hover { background: #064077; }
+    .btn-outline { background: #fff; border-color: var(--color-border); color: var(--color-text-primary); }
+    .btn-outline:hover { background: #F9FAFB; }
+
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo-wrap">
+        <img src="frontend/public/assets/QStudylogo(blue).png" alt="QStudy Official Logo" class="logo-img">
+      </div>
+      <nav>
+        <ul class="nav-list">
+          <li class="nav-item active">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+            Dashboard
+          </li>
+          <li class="nav-item">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+            Agents
+          </li>
+          <li class="nav-item">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+            Events
+          </li>
+          <li class="nav-item">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Students
+          </li>
+          <li class="nav-item">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            Invoices
+          </li>
+          <li class="nav-item">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            Settings
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1>Admin Command Centre</h1>
+          <p>Thursday, 30 April 2026 · Platform Overview</p>
+        </div>
+        <div class="topbar-right">
+          <span class="admin-badge">Super Admin</span>
+          <div class="user-profile">
+            <div class="avatar">QS</div>
+            <span style="font-size: 14px; font-weight: 500;">QStudy Admin</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Total Agents</span>
+            <div class="kpi-icon" style="background: #EEEDFE; color: #534AB7;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            </div>
+          </div>
+          <div class="kpi-value">84</div>
+          <div class="kpi-trend trend-up">
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+            71 active · 13 pending
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Total Students</span>
+            <div class="kpi-icon" style="background: #E6F1FB; color: #185FA5;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"></path></svg>
+            </div>
+          </div>
+          <div class="kpi-value">2,341</div>
+          <div class="kpi-trend trend-up">
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+            +312 this month
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Revenue (MTD)</span>
+            <div class="kpi-icon" style="background: #EAF3DE; color: #3B6D11;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+          </div>
+          <div class="kpi-value">₹8.4L</div>
+          <div class="kpi-trend trend-up">
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+            +22% vs last month
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Avg Fill Rate</span>
+            <div class="kpi-icon" style="background: #FAEEDA; color: #854F0B;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+            </div>
+          </div>
+          <div class="kpi-value">73%</div>
+          <div class="kpi-trend trend-down">
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+            -4% from target
+          </div>
+        </div>
+      </section>
+
+      <div class="dashboard-grid">
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Monthly Registrations vs Conversions</h2>
+            <a class="panel-link">View Detailed Breakdown ↗</a>
+          </div>
+          <div class="chart-container">
+            <canvas id="regConvChart"></canvas>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Student Status Split</h2>
+            <a class="panel-link">Flag Stale ↗</a>
+          </div>
+          <div class="chart-container" style="height: 200px;">
+            <canvas id="statusDonut"></canvas>
+          </div>
+          <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+             <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-secondary);">
+               <span style="width: 8px; height: 8px; border-radius: 2px; background: #85B7EB;"></span> Registered (18%)
+             </div>
+             <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-secondary);">
+               <span style="width: 8px; height: 8px; border-radius: 2px; background: #7F77DD;"></span> Contacted (26%)
+             </div>
+             <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-secondary);">
+               <span style="width: 8px; height: 8px; border-radius: 2px; background: #5DCAA5;"></span> Confirmed (22%)
+             </div>
+             <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-secondary);">
+               <span style="width: 8px; height: 8px; border-radius: 2px; background: #97C459;"></span> Attended (18%)
+             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom: 24px;">
+        <div class="panel-header">
+          <h2 class="panel-title">Top Performing Agents</h2>
+          <a class="panel-link">View All Agents ↗</a>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Registrations</th>
+              <th>Converted</th>
+              <th>Conv. Rate</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="agent-cell">
+                  <div class="agent-av" style="background: #E6F1FB; color: #0C447C;">RJ</div>
+                  <div>
+                    <div style="font-weight: 600;">Rahul Joshi</div>
+                    <div style="font-size: 11px; color: var(--color-text-secondary);">rahul.j@qstudy.com</div>
+                  </div>
+                </div>
+              </td>
+              <td>247</td>
+              <td>54</td>
+              <td><span style="color: #166534; font-weight: 600;">21.9%</span></td>
+              <td><span class="status-pill status-active">Active</span></td>
+              <td><a class="panel-link">View ↗</a></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="agent-cell">
+                  <div class="agent-av" style="background: #E1F5EE; color: #085041;">PM</div>
+                  <div>
+                    <div style="font-weight: 600;">Priya Mehta</div>
+                    <div style="font-size: 11px; color: var(--color-text-secondary);">priya.m@qstudy.com</div>
+                  </div>
+                </div>
+              </td>
+              <td>193</td>
+              <td>41</td>
+              <td><span style="color: #166534; font-weight: 600;">21.2%</span></td>
+              <td><span class="status-pill status-active">Active</span></td>
+              <td><a class="panel-link">View ↗</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Invoice Queue</h2>
+            <a class="panel-link">Review All ↗</a>
+          </div>
+          <div class="item-list">
+            <div class="item-row">
+              <div class="item-icon">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              </div>
+              <div class="item-info">
+                <div class="item-title">INV-051 — Rahul Joshi</div>
+                <div class="item-meta">₹22,500 · Pending Review</div>
+              </div>
+              <span class="status-pill status-pending">Review</span>
+            </div>
+            <div class="item-row">
+              <div class="item-icon">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              </div>
+              <div class="item-info">
+                <div class="item-title">INV-050 — Priya Mehta</div>
+                <div class="item-meta">₹18,000 · Pending Review</div>
+              </div>
+              <span class="status-pill status-pending">Review</span>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary">Approve Pending ↗</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Support Tickets</h2>
+            <a class="panel-link">Escalate Old ↗</a>
+          </div>
+          <div class="item-list">
+            <div class="item-row">
+              <div style="width: 8px; height: 8px; border-radius: 50%; background: #EF4444;"></div>
+              <div class="item-info">
+                <div class="item-title">Passport upload error</div>
+                <div class="item-meta">Rahul Joshi · 2h ago</div>
+              </div>
+              <span class="status-pill status-pending" style="background: #FCEBEB; color: #791F1F;">Open</span>
+            </div>
+            <div class="item-row">
+              <div style="width: 8px; height: 8px; border-radius: 50%; background: #F59E0B;"></div>
+              <div class="item-info">
+                <div class="item-title">Invoice amount dispute</div>
+                <div class="item-meta">Studylink Asia · 5h ago</div>
+              </div>
+              <span class="status-pill status-pending">In Progress</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script>
+    const ctx = document.getElementById('regConvChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Nov','Dec','Jan','Feb','Mar','Apr'],
+        datasets: [
+          { label: 'Registrations', data: [180,210,260,310,390,340], backgroundColor: '#378ADD', borderRadius: 4, barPercentage: 0.6 },
+          { label: 'Conversions', data: [72,88,104,130,168,152], backgroundColor: '#10B981', borderRadius: 4, barPercentage: 0.6 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { grid: { color: '#F3F4F6' }, border: { display: false } }
+        }
+      }
+    });
+
+    const ctx2 = document.getElementById('statusDonut').getContext('2d');
+    new Chart(ctx2, {
+      type: 'doughnut',
+      data: {
+        labels: ['Registered','Contacted','Confirmed','Attended','Converted'],
+        datasets: [{ data: [18,26,22,18,16], backgroundColor: ['#85B7EB','#7F77DD','#5DCAA5','#97C459','#EF9F27'], borderWidth: 0, hoverOffset: 4 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '75%',
+        plugins: { legend: { display: false } }
+      }
+    });
+  </script>
+</body>
+</html>

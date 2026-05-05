@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, Users, GraduationCap, ClipboardList, MapPin, Armchair, Edit, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, Users, GraduationCap, ClipboardList, MapPin, Armchair, Edit, Trash2, Plus, Eye } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/button';
@@ -9,6 +9,7 @@ import { Label } from '../../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Separator } from '../../components/ui/separator';
+import { cn } from '../../lib/utils';
 import {
   Table,
   TableBody,
@@ -45,7 +46,7 @@ import { toast } from 'sonner';
 
 const EventDetailsPage = () => {
   const { eventId } = useParams();
-  const { getEventById, agents, getStudentsByEvent, updateEvent, deleteEvent, deleteStudent, fetchStudentsForEvent } = useData();
+  const { getEventById, agents, getStudentsByEvent, updateEvent, deleteEvent, deleteStudent, fetchStudentsForEvent, updateStudentStatus } = useData();
   const { isAdmin, user } = useAuth();
   const navigate = useNavigate();
   const [formBuilderOpen, setFormBuilderOpen] = useState(false);
@@ -58,18 +59,15 @@ const EventDetailsPage = () => {
   const [isStudentEditModalOpen, setIsStudentEditModalOpen] = useState(false);
   const [deletingStudentId, setDeletingStudentId] = useState(null);
   const [isStudentDeleteAlertOpen, setIsStudentDeleteAlertOpen] = useState(false);
-  
+  const [updatingStatus, setUpdatingStatus] = useState(null);
+
   const event = getEventById(eventId);
   const students = getStudentsByEvent(eventId);
   const [filledSeats, setFilledSeats] = useState(0);
   const [availableSeats, setAvailableSeats] = useState(0);
   const [seatUtilization, setSeatUtilization] = useState(0);
-  
-  if (!event) {
-    return <Navigate to={isAdmin() ? '/admin/events' : '/agent/dashboard'} replace />;
-  }
-  
-  const seatCapacity = event.seatCapacity || 0;
+
+  const seatCapacity = event?.seatCapacity || 0;
 
   // Initial data load for this specific event
   React.useEffect(() => {
@@ -84,14 +82,24 @@ const EventDetailsPage = () => {
     const newFilledSeats = students.length;
     const newAvailableSeats = seatCapacity - newFilledSeats;
     const newSeatUtilization = seatCapacity > 0 ? (newFilledSeats / seatCapacity) * 100 : 0;
-    
+
     setFilledSeats(newFilledSeats);
     setAvailableSeats(newAvailableSeats);
     setSeatUtilization(newSeatUtilization);
   }, [students, seatCapacity]);
 
-  
-  const assignedAgents = event.assignedAgents.map(id => 
+  // Initialize form fields when event loads
+  React.useEffect(() => {
+    if (event?.formFields) {
+      setFormFields(event.formFields);
+    }
+  }, [event]);
+
+  if (!event) {
+    return <Navigate to={isAdmin() ? '/admin/events' : '/agent/dashboard'} replace />;
+  }
+
+  const assignedAgents = event.assignedAgents.map(id =>
     agents.find(a => a.id === id)
   ).filter(Boolean);
 
@@ -106,13 +114,6 @@ const EventDetailsPage = () => {
 
   const isUpcoming = new Date(event.date) >= new Date();
 
-  // Initialize form fields when event loads
-  React.useEffect(() => {
-    if (event?.formFields) {
-      setFormFields(event.formFields);
-    }
-  }, [event]);
-
   const handleSaveFormFields = () => {
     updateEvent(event.id, { formFields });
     setFormBuilderOpen(false);
@@ -124,7 +125,7 @@ const EventDetailsPage = () => {
   };
 
   const handleSaveFieldEdit = () => {
-    const updatedFields = formFields.map(f => 
+    const updatedFields = formFields.map(f =>
       f.id === editingField.id ? editingField : f
     );
     setFormFields(updatedFields);
@@ -176,85 +177,120 @@ const EventDetailsPage = () => {
     }
   };
 
+  const handleStatusChange = async (studentId, newStatus) => {
+    setUpdatingStatus(studentId);
+    try {
+      await updateStudentStatus(studentId, newStatus);
+      toast.success('Student status updated successfully');
+    } catch (error) {
+      console.error('Error updating status:', error);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Registered': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+      case 'Contacted': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+      case 'Confirmed': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400';
+      case 'Attended': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+      case 'Converted': return 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400';
+      default: return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
+    }
+  };
+
   return (
-    <div className="space-y-6" data-testid="event-details-page">
+    <div className="space-y-8 p-4 md:p-8 bg-[#F9FAFB] min-h-screen" data-testid="event-details-page">
       {/* Back Button */}
-      <div>
-        <Button variant="ghost" asChild className="mb-4">
+      {/* <div>
+        <Button variant="ghost" asChild className="mb-6 hover:bg-gray-100 text-[#042C53] font-bold text-xs uppercase tracking-widest">
           <Link to={isAdmin() ? '/admin/events' : '/agent/dashboard'}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to {isAdmin() ? 'Events' : 'Dashboard'}
+            Back to {isAdmin() ? 'Registry' : 'Dashboard'}
           </Link>
         </Button>
-      </div>
+      </div> */}
 
       {/* Event Header */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground font-['Outfit']">
+          <div className="flex flex-wrap items-center gap-4 mb-3">
+            <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
               {event.title}
             </h1>
-            <Badge 
-              variant={isUpcoming ? 'default' : 'secondary'}
-              className={isUpcoming 
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
-                : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
-              }
+            <Badge
+              variant="outline"
+              className={`text-[10px] px-3 py-1 border-none font-bold uppercase tracking-widest ${isUpcoming
+                ? 'bg-[#E0E7FF] text-[#3730A3]'
+                : 'bg-gray-100 text-gray-500'
+                }`}
             >
-              {isUpcoming ? 'Upcoming' : 'Past'}
+              {isUpcoming ? 'Active Campaign' : 'Concluded'}
             </Badge>
           </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Calendar className="w-4 h-4" />
-            <span>{formatDate(event.date)}</span>
-          </div>
-          {event.location && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <MapPin className="w-4 h-4" />
-              <span>{event.location}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-sm font-medium text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#042C53]">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <span>{formatDate(event.date)}</span>
             </div>
-          )}
+            {event.location && (
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-[#042C53]">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <span>{event.location}</span>
+              </div>
+            )}
+          </div>
         </div>
-
       </div>
 
       {/* Seat Tracking */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-['Outfit'] flex items-center gap-2">
-            <Armchair className="w-5 h-5" />
-            Overall Event Capacity
-          </CardTitle>
-          <CardDescription>
-            Shared capacity across all assigned agents
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Overall Utilization</span>
-              <span className="text-sm text-muted-foreground">
-                {filledSeats} of {seatCapacity} total seats filled
+      <Card className="border border-gray-200 shadow-sm overflow-hidden">
+        <CardHeader className="pb-4 px-7 pt-7 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-bold text-[#111827] font-['Outfit'] flex items-center gap-2">
+                <Armchair className="w-5 h-5 text-[#042C53]" />
+                Institutional Capacity
+              </CardTitle>
+              <CardDescription className="text-sm font-medium mt-1">
+                Real-time seat utilization across all collaborative agency partners.
+              </CardDescription>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-bold text-[#042C53] bg-[#F0F7FF] px-3 py-1 rounded-full border border-[#D0E7FF]">
+                {Math.round(seatUtilization)}% Occupancy
               </span>
             </div>
-            <Progress value={seatUtilization} className="h-2" />
-            <div className="text-xs text-muted-foreground text-center">
-              This capacity is shared across all {assignedAgents.length} assigned agent(s)
+          </div>
+        </CardHeader>
+        <CardContent className="p-7">
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Utilization Progress</span>
+                <span className="text-[11px] font-bold text-[#111827]">
+                  {filledSeats} / {seatCapacity} Seats Allocated
+                </span>
+              </div>
+              <Progress value={seatUtilization} className="h-2.5 bg-gray-100" indicatorClassName="bg-[#042C53]" />
             </div>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-2xl font-bold text-emerald-600">{filledSeats}</p>
-                <p className="text-xs text-muted-foreground">Filled</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-blue-600">{availableSeats}</p>
-                <p className="text-xs text-muted-foreground">Available</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-purple-600">{seatCapacity}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
+
+            <div className="grid grid-cols-3 gap-6">
+              {[
+                { label: 'Seats Filled', value: filledSeats, color: 'text-[#059669]', bgColor: 'bg-[#ECFDF5]' },
+                { label: 'Available', value: availableSeats, color: 'text-[#185FA5]', bgColor: 'bg-[#E6F1FB]' },
+                { label: 'Total Budget', value: seatCapacity, color: 'text-[#534AB7]', bgColor: 'bg-[#EEEDFE]' }
+              ].map((item, idx) => (
+                <div key={idx} className={`p-4 rounded-2xl ${item.bgColor} border border-white shadow-sm`}>
+                  <p className={`text-2xl font-bold ${item.color} font-['Outfit']`}>{item.value}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">{item.label}</p>
+                </div>
+              ))}
             </div>
           </div>
         </CardContent>
@@ -272,9 +308,9 @@ const EventDetailsPage = () => {
               <p className="text-muted-foreground leading-relaxed">
                 {event.description}
               </p>
-              
+
               <Separator className="my-4" />
-              
+
               {/* Assigned Agents */}
               <div>
                 <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
@@ -286,16 +322,16 @@ const EventDetailsPage = () => {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {assignedAgents.map(agent => (
-                      <div 
+                      <div
                         key={agent.id}
                         className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted"
                       >
                         <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
                           <span className="text-primary text-xs font-medium">
-                            {agent.name.charAt(0)}
+                            {agent.name?.charAt(0) || 'A'}
                           </span>
                         </div>
-                        <span className="text-sm">{agent.name}</span>
+                        <span className="text-sm">{agent.name || 'Agency Partner'}</span>
                       </div>
                     ))}
                   </div>
@@ -324,8 +360,8 @@ const EventDetailsPage = () => {
                           Create custom fields for student registration
                         </DialogDescription>
                       </DialogHeader>
-                      <FormFieldBuilder 
-                        value={formFields} 
+                      <FormFieldBuilder
+                        value={formFields}
                         onChange={setFormFields}
                       />
                       <DialogFooter>
@@ -405,100 +441,133 @@ const EventDetailsPage = () => {
           )}
 
           {/* Registered Students */}
-            <Card data-testid="event-students-card">
-              <CardHeader>
-                <CardTitle className="text-lg font-['Outfit'] flex items-center gap-2">
-                  <GraduationCap className="w-5 h-5" />
-                  Registered Students ({students.length})
-                </CardTitle>
-                <CardDescription>
-                  Students who have registered for this event
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                {students.length === 0 ? (
-                  <div className="p-6 text-center text-muted-foreground">
-                    No students registered yet
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/50">
-                          <TableHead className="font-medium">Event Title</TableHead>
-                          {event.formFields && event.formFields.length > 0 ? (
-                            <TableHead className="font-medium">
-                              {event.formFields
-                                .sort((a, b) => a.order - b.order)[0]?.label || 'Name'}
-                            </TableHead>
-                          ) : (
-                            <TableHead className="font-medium">Name</TableHead>
-                          )}
-                          <TableHead className="font-medium">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {students.map((student) => (
-                          <TableRow key={student.id} data-testid={`event-student-${student.id}`}>
-                            <TableCell className="font-medium">{event.title}</TableCell>
-                            {event.formFields && event.formFields.length > 0 ? (
-                              <TableCell>
-                                {(() => {
-                                  const firstField = event.formFields.sort((a, b) => a.order - b.order)[0];
-                                  return student.customFields?.[firstField.id] || 
-                                        (firstField.id === 'name' ? student.name : 
-                                          firstField.id === 'email' ? student.email : 
-                                          firstField.id === 'country' ? student.country : 
-                                          firstField.id === 'courseInterested' ? student.courseInterested : 
-                                          '-');
-                                })()}
-                              </TableCell>
-                            ) : (
-                              <TableCell className="font-medium">{student.name}</TableCell>
-                            )}
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => handleEditStudent(student)}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                  onClick={() => handleDeleteStudent(student.id)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+          <Card className="border border-gray-200 shadow-sm overflow-hidden" data-testid="event-students-card">
+            <CardHeader className="pb-4 px-7 pt-7 border-b border-gray-100 bg-white">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-xl font-bold text-[#111827] font-['Outfit'] flex items-center gap-2">
+                    <GraduationCap className="w-6 h-6 text-[#042C53]" />
+                    Candidate Roster ({students.length})
+                  </CardTitle>
+                  <CardDescription className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">Institutional log of all registered campaign participants.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {students.length === 0 ? (
+                <div className="p-16 text-center bg-white">
+                  <Users className="w-10 h-10 text-muted-foreground/20 mx-auto mb-4" />
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">No active registrations recorded.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-[#F9FAFB] border-b border-gray-100">
+                        <TableHead className="py-4 px-7 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Candidate</TableHead>
+                        <TableHead className="py-4 px-6 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Status Management</TableHead>
+                        <TableHead className="py-4 px-7 text-[10px] font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {students.map((student) => (
+                        <TableRow
+                          key={student.id}
+                          data-testid={`event-student-${student.id}`}
+                          className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-0 bg-white"
+                        >
+                          <TableCell className="py-5 px-7">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                                <span className="text-slate-500 font-bold text-xs uppercase">
+                                  {student.name?.charAt(0) || 'S'}
+                                </span>
                               </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                              <div className="min-w-0">
+                                <span className="text-sm font-bold text-[#111827] block truncate">{student.name || 'Candidate'}</span>
+                                <p className="text-[10px] text-muted-foreground font-semibold  tracking-widest mt-0.5 opacity-80">
+                                  {(() => {
+                                    const firstField = event.formFields?.sort((a, b) => a.order - b.order)[0];
+                                    return firstField ? (student.customFields?.[firstField.id] || student.email) : student.email;
+                                  })()}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-5 px-6">
+                            <select
+                              value={student.status || 'Registered'}
+                              onChange={(e) => handleStatusChange(student.id, e.target.value)}
+                              disabled={updatingStatus === student.id}
+                              className={cn(
+                                "text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border-none focus:ring-0 cursor-pointer transition-all",
+                                student.status === 'Converted' ? "bg-emerald-100 text-emerald-700" :
+                                  student.status === 'Confirmed' ? "bg-purple-100 text-purple-700" :
+                                    student.status === 'Attended' ? "bg-blue-100 text-blue-700" :
+                                      "bg-gray-100 text-gray-600"
+                              )}
+                            >
+                              <option value="Registered">Registered</option>
+                              <option value="Contacted">Contacted</option>
+                              <option value="Confirmed">Confirmed</option>
+                              <option value="Attended">Attended</option>
+                              <option value="Converted">Converted</option>
+                            </select>
+                          </TableCell>
+                          <TableCell className="py-5 px-7 text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-400 hover:text-[#042C53] hover:bg-[#F0F7FF] rounded-lg"
+                                onClick={() => navigate(`${isAdmin() ? '/admin' : '/agent'}/students/${student.id}`)}
+                                title="View Details"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-400 hover:text-[#042C53] hover:bg-[#F0F7FF] rounded-lg"
+                                onClick={() => handleEditStudent(student)}
+                                title="Edit"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                                onClick={() => handleDeleteStudent(student.id)}
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right Column - Student Registration Form */}
         <div className="lg:col-span-1">
-          <Card data-testid="student-form-card">
-            <CardHeader>
-              <CardTitle className="text-lg font-['Outfit'] flex items-center gap-2">
-                <ClipboardList className="w-5 h-5" />
-                Register Student
+          <Card className="border border-gray-200 shadow-sm overflow-hidden bg-white sticky top-8" data-testid="student-form-card">
+            <CardHeader className="pb-4 px-7 pt-7 border-b border-gray-100">
+              <CardTitle className="text-lg font-bold text-[#111827] font-['Outfit'] flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-[#042C53]" />
+                Direct Onboarding
               </CardTitle>
-              <CardDescription>
-                Fill in the details to register a new student for this event
+              <CardDescription className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
+                Manually register a new candidate for this campaign.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-7">
               <DynamicStudentForm eventId={eventId} />
             </CardContent>
           </Card>
@@ -525,7 +594,7 @@ const EventDetailsPage = () => {
                   placeholder="Enter field label"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="field-placeholder">Placeholder</Label>
                 <Input
@@ -558,8 +627,8 @@ const EventDetailsPage = () => {
                   <Input
                     id="field-options"
                     value={editingField.options ? editingField.options.join(', ') : ''}
-                    onChange={(e) => setEditingField({ 
-                      ...editingField, 
+                    onChange={(e) => setEditingField({
+                      ...editingField,
                       options: e.target.value.split(',').map(opt => opt.trim()).filter(Boolean)
                     })}
                     placeholder="Option 1, Option 2, Option 3"
@@ -619,14 +688,14 @@ const EventDetailsPage = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Event</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the event <strong>{event?.title}</strong>? 
-              This will also remove all student registrations associated with this event. 
+              Are you sure you want to delete the event <strong>{event?.title}</strong>?
+              This will also remove all student registrations associated with this event.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmDeleteEvent}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -635,7 +704,7 @@ const EventDetailsPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
       {/* Student Edit Dialog */}
       <Dialog open={isStudentEditModalOpen} onOpenChange={setIsStudentEditModalOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -646,8 +715,8 @@ const EventDetailsPage = () => {
             </DialogDescription>
           </DialogHeader>
           {editingStudent && (
-            <DynamicStudentForm 
-              eventId={eventId} 
+            <DynamicStudentForm
+              eventId={eventId}
               studentData={editingStudent}
               onSuccess={() => {
                 setIsStudentEditModalOpen(false);
@@ -665,13 +734,13 @@ const EventDetailsPage = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Student</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this student? 
+              Are you sure you want to delete this student?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmDeleteStudent}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

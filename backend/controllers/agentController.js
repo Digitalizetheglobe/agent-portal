@@ -1,6 +1,9 @@
 const User = require('../models/User');
 const Event = require('../models/Event');
 const { sendEmail, templates } = require('../utils/email');
+const { putObject, generateStoragePath } = require('../utils/storage');
+const { v4: uuidv4 } = require('uuid');
+const { createNotification } = require('./notificationController');
 
 // @desc    Get all agents
 // @route   GET /api/agents
@@ -53,7 +56,7 @@ exports.createAgent = async (req, res) => {
     const existingUser = await User.findOne({
       $or: [
         { email: email.toLowerCase() },
-        { userId: userId }
+        ...(userId ? [{ userId }] : [])
       ]
     });
 
@@ -64,7 +67,7 @@ exports.createAgent = async (req, res) => {
       });
     }
 
-    // Create agent
+    // Create agent — agents start unverified and require admin approval
     const agent = await User.create({
       name,
       email: email.toLowerCase(),
@@ -72,7 +75,8 @@ exports.createAgent = async (req, res) => {
       password,
       phone,
       status: status || 'active',
-      role: 'agent'
+      role: 'agent',
+      isVerified: false
     });
 
     // Send welcome email
@@ -94,6 +98,49 @@ exports.createAgent = async (req, res) => {
       success: false,
       detail: error.message || 'Server error'
     });
+  }
+};
+
+// @desc    Create a new admin user
+// @route   POST /api/agents/admin
+// @access  Private (Admin only)
+exports.createAdmin = async (req, res) => {
+  try {
+    const { name, email, password, phone } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        detail: 'Name, email, and password are required'
+      });
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        detail: 'An account with this email already exists'
+      });
+    }
+
+    // Admins are always verified — no approval workflow needed
+    const admin = await User.create({
+      name,
+      email: email.toLowerCase(),
+      password,
+      phone,
+      role: 'admin',
+      status: 'active',
+      isVerified: true
+    });
+
+    res.status(201).json(admin.toJSON());
+  } catch (error) {
+    console.error('Create admin error:', error);
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, detail: 'Email already exists' });
+    }
+    res.status(500).json({ success: false, detail: error.message || 'Server error' });
   }
 };
 
@@ -178,3 +225,118 @@ exports.deleteAgent = async (req, res) => {
     });
   }
 };
+
+// @desc    Upload verification document
+// @route   POST /api/agents/me/documents
+// @access  Private (Agent only)
+exports.uploadVerificationDocument = async (req, res) => {
+  try {
+    const { docType } = req.body;
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        detail: 'No file uploaded'
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    
+    if (!user || user.role !== 'agent') {
+      return res.status(403).json({
+        success: false,
+        detail: 'Only agents can upload verification documents'
+      });
+    }
+
+    // Generate storage path
+    const storagePath = generateStoragePath(`agents/${user.id}/verification`, req.file.originalname);
+
+    // Upload to storage
+    const result = await putObject(storagePath, req.file.buffer, req.file.mimetype);
+
+    // Add to verificationDocuments
+    user.verificationDocuments.push({
+      docType: docType || 'Other',
+      fileUrl: result.path,
+      fileName: req.file.originalname,
+      status: 'pending',
+      uploadedAt: new Date()
+    });
+
+    await user.save();
+
+    res.status(200).json(user.toJSON());
+  } catch (error) {
+    console.error('Upload verification document error:', error);
+    res.status(500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Verify agent
+// @route   PATCH /api/agents/:id/verify
+// @access  Private (Admin only)
+exports.verifyAgent = async (req, res) => {
+  try {
+    const { isVerified, remarks, documentId, documentStatus } = req.body;
+    
+    const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
+    
+    if (!agent) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Agent not found'
+      });
+    }
+
+    if (isVerified !== undefined) {
+      agent.isVerified = isVerified;
+    }
+
+    if (documentId && documentStatus) {
+      const doc = agent.verificationDocuments.id(documentId);
+      if (doc) {
+        doc.status = documentStatus;
+        if (remarks) doc.remarks = remarks;
+      }
+    }
+
+    await agent.save();
+
+    // Notify agent about verification/document status change
+    if (isVerified !== undefined) {
+      await createNotification({
+        recipient: agent._id,
+        title: isVerified ? 'Account Verified' : 'Account Unverified',
+        message: isVerified 
+          ? 'Congratulations! Your agency account has been verified.' 
+          : 'Your account verification status has been updated.',
+        type: isVerified ? 'success' : 'info',
+        relatedId: agent._id,
+        relatedModel: 'Agent'
+      });
+    } else if (documentId && documentStatus) {
+       const doc = agent.verificationDocuments.id(documentId);
+       await createNotification({
+        recipient: agent._id,
+        title: documentStatus === 'approved' ? 'Compliance Document Approved' : 'Compliance Document Rejected',
+        message: `Your ${doc?.docType || 'document'} has been ${documentStatus}.`,
+        type: documentStatus === 'approved' ? 'success' : 'warning',
+        relatedId: agent._id,
+        relatedModel: 'Agent'
+      });
+    }
+
+    res.status(200).json(agent.toJSON());
+  } catch (error) {
+    console.error('Verify agent error:', error);
+    res.status(500).json({
+      success: false,
+      detail: 'Server error'
+    });
+  }
+};
+

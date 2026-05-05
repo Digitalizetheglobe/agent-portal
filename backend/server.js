@@ -12,6 +12,9 @@ const agentRoutes = require('./routes/agentRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const studentRoutes = require('./routes/studentRoutes');
 const statsRoutes = require('./routes/statsRoutes');
+const invoiceRoutes = require('./routes/invoiceRoutes');
+const ticketRoutes = require('./routes/ticketRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 // Import models for seeding
 const User = require('./models/User');
@@ -30,7 +33,7 @@ const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 app.use(cors({
   origin: [frontendUrl, 'http://localhost:3000'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -49,6 +52,9 @@ app.use('/api/agents', agentRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

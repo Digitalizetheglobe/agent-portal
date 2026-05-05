@@ -42,6 +42,7 @@ const eventSchema = z.object({
   description: z.string().min(10, 'Description must be at least 10 characters'),
   date: z.date({ required_error: 'Please select a date' }),
   location: z.string().optional(),
+  type: z.enum(['physical', 'virtual']).default('physical'),
   seatCapacity: z.number().min(1, 'Seat capacity must be at least 1').optional(),
   assignedAgents: z.array(z.string()).min(0),
   formFields: z.array(z.object({
@@ -82,6 +83,7 @@ const EventModal = ({ open, onOpenChange, event }) => {
       description: '',
       date: undefined,
       location: '',
+      type: 'physical',
       seatCapacity: 50,
       assignedAgents: [],
       formFields: [],
@@ -98,6 +100,7 @@ const EventModal = ({ open, onOpenChange, event }) => {
         description: event.description,
         date: new Date(event.date),
         location: event.location || '',
+        type: event.type || 'physical',
         seatCapacity: event.seatCapacity || 50,
         assignedAgents: event.assignedAgents,
         formFields: event.formFields || [],
@@ -114,6 +117,7 @@ const EventModal = ({ open, onOpenChange, event }) => {
         description: '',
         date: undefined,
         location: '',
+        type: 'physical',
         seatCapacity: 50,
         assignedAgents: [],
         formFields: [],
@@ -231,6 +235,34 @@ const EventModal = ({ open, onOpenChange, event }) => {
                 {errors.location && (
                   <p className="text-sm text-destructive">{errors.location.message}</p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Event Type</Label>
+                <Controller
+                  name="type"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={field.value === 'physical' ? 'default' : 'outline'}
+                        className={cn("flex-1 gap-2", field.value === 'physical' && "bg-[#042C53]")}
+                        onClick={() => field.onChange('physical')}
+                      >
+                        <MapPin className="w-4 h-4" /> Physical
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={field.value === 'virtual' ? 'default' : 'outline'}
+                        className={cn("flex-1 gap-2", field.value === 'virtual' && "bg-[#042C53]")}
+                        onClick={() => field.onChange('virtual')}
+                      >
+                        <CalendarIcon className="w-4 h-4" /> Virtual
+                      </Button>
+                    </div>
+                  )}
+                />
               </div>
 
               <div className="space-y-2">

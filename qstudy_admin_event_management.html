@@ -1,0 +1,429 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font-sans);}
+.pg{padding:24px;}
+.toprow{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.toprow h2{font-size:18px;font-weight:500;color:var(--color-text-primary);}
+.toprow p{font-size:13px;color:var(--color-text-secondary);margin-top:2px;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;font-size:13px;font-weight:500;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;}
+.btn:hover{background:var(--color-background-secondary);}
+.btn-primary{background:#042C53;color:#B5D4F4;border-color:#042C53;}
+.btn-primary:hover{background:#0C447C;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-danger{background:#FCEBEB;color:#791F1F;border-color:#F7C1C1;}
+.btn-danger:hover{background:#F7C1C1;}
+.btn-success{background:#EAF3DE;color:#27500A;border-color:#C0DD97;}
+.btn-success:hover{background:#C0DD97;}
+.kpi-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:20px;}
+.kpi{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:14px 16px;}
+.kpi-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:6px;}
+.kpi-val{font-size:22px;font-weight:500;color:var(--color-text-primary);}
+.kpi-sub{font-size:11px;margin-top:4px;}
+.controls{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.search-wrap{position:relative;flex:1;min-width:140px;}
+.search-wrap input{width:100%;padding-left:32px;font-size:13px;}
+.si{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-secondary);}
+.ftabs{display:flex;gap:4px;}
+.ftab{padding:6px 12px;font-size:12px;font-weight:500;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;}
+.ftab.on{background:#E6F1FB;color:#0C447C;border-color:#85B7EB;}
+.ftab:hover:not(.on){background:var(--color-background-secondary);}
+.view-toggle{display:flex;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden;}
+.vt-btn{padding:6px 10px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary);border:none;cursor:pointer;}
+.vt-btn.on{background:var(--color-background-secondary);color:var(--color-text-primary);}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-bottom:20px;}
+.ev-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;cursor:default;}
+.ev-card:hover{border-color:var(--color-border-secondary);}
+.ev-card-top{padding:16px 16px 12px;}
+.ev-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;}
+.ev-name{font-size:14px;font-weight:500;color:var(--color-text-primary);line-height:1.3;}
+.pill{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:500;white-space:nowrap;}
+.p-live{background:#EAF3DE;color:#27500A;}
+.p-upcoming{background:#E6F1FB;color:#0C447C;}
+.p-draft{background:#F1EFE8;color:#5F5E5A;}
+.p-completed{background:#EEEDFE;color:#3C3489;}
+.p-physical{background:#FAEEDA;color:#633806;}
+.p-virtual{background:#E1F5EE;color:#085041;}
+.ev-meta{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+.ev-meta-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);}
+.ev-meta-row svg{flex-shrink:0;}
+.seat-bar-bg{height:5px;background:var(--color-background-secondary);border-radius:4px;overflow:hidden;margin-bottom:4px;}
+.seat-bar-fill{height:100%;border-radius:4px;}
+.seat-label{display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-secondary);}
+.seat-pct{font-weight:500;}
+.ev-card-bot{padding:10px 16px;border-top:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:flex;align-items:center;gap:6px;}
+.uni-chips{display:flex;gap:5px;flex-wrap:wrap;flex:1;min-width:0;}
+.uni-chip{font-size:11px;padding:2px 7px;border-radius:12px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);white-space:nowrap;}
+.card-actions{display:flex;gap:5px;margin-left:auto;flex-shrink:0;}
+.icon-btn{width:28px;height:28px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.icon-btn:hover{background:var(--color-background-secondary);}
+.panel{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;margin-bottom:20px;}
+.tbl{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;}
+.tbl th{font-size:11px;color:var(--color-text-secondary);font-weight:500;padding:10px 14px;text-align:left;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);}
+.tbl td{padding:11px 14px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-primary);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:var(--color-background-secondary);}
+.occ-inline{display:flex;align-items:center;gap:8px;}
+.occ-bar{flex:1;height:5px;background:var(--color-background-secondary);border-radius:4px;overflow:hidden;}
+.occ-fill{height:100%;border-radius:4px;}
+.modal-overlay{background:rgba(0,0,0,0.32);border-radius:var(--border-radius-lg);padding:24px;display:flex;align-items:flex-start;justify-content:center;}
+.modal{background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);width:100%;max-width:560px;padding:24px;}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.modal-title{font-size:16px;font-weight:500;color:var(--color-text-primary);}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+.form-full{grid-column:1/-1;}
+.form-group label{display:block;font-size:12px;color:var(--color-text-secondary);margin-bottom:5px;}
+.form-group input,.form-group select,.form-group textarea{width:100%;font-size:13px;}
+.form-group textarea{resize:vertical;min-height:64px;}
+.type-toggle{display:flex;gap:8px;}
+.type-btn{flex:1;padding:8px;font-size:13px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;text-align:center;}
+.type-btn.sel{background:#E6F1FB;color:#0C447C;border-color:#85B7EB;font-weight:500;}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;padding-top:16px;border-top:0.5px solid var(--color-border-tertiary);}
+.detail-overlay{background:rgba(0,0,0,0.32);border-radius:var(--border-radius-lg);padding:24px;}
+.detail-panel{background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);padding:22px;}
+.dp-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;padding-bottom:16px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.dp-title{font-size:16px;font-weight:500;color:var(--color-text-primary);}
+.dp-sub{font-size:12px;color:var(--color-text-secondary);margin-top:4px;}
+.dp-stat-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px;}
+.dp-stat{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px;}
+.dp-sv{font-size:20px;font-weight:500;color:var(--color-text-primary);}
+.dp-sl{font-size:11px;color:var(--color-text-secondary);margin-top:3px;}
+.dp-section{margin-bottom:16px;}
+.dp-section-title{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:10px;letter-spacing:0.03em;}
+.agent-assign-list{display:flex;flex-direction:column;gap:8px;}
+.aa-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);}
+.aa-av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;flex-shrink:0;}
+.aa-name{font-size:13px;font-weight:500;color:var(--color-text-primary);flex:1;}
+.aa-regs{font-size:12px;color:var(--color-text-secondary);}
+.dp-actions{display:flex;gap:8px;padding-top:14px;border-top:0.5px solid var(--color-border-tertiary);}
+</style>
+
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">QStudy admin event management page with event cards, table view, create event form, and event detail panel.</h2>
+
+<div class="pg">
+  <div class="toprow">
+    <div>
+      <h2>Event management</h2>
+      <p>12 events · 5 upcoming · 2 live now</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-sm" onclick="sendPrompt('Send a bulk notification to all agents about upcoming events')">Notify agents ↗</button>
+      <button class="btn btn-primary btn-sm" onclick="showModal()">+ Create event</button>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Total events</div>
+      <div class="kpi-val">12</div>
+      <div class="kpi-sub" style="color:#0C447C;">5 upcoming</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total seats</div>
+      <div class="kpi-val">3,400</div>
+      <div class="kpi-sub" style="color:#27500A;">2,482 filled · 73%</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Students registered</div>
+      <div class="kpi-val">2,341</div>
+      <div class="kpi-sub" style="color:#27500A;">+312 this month</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Avg fill rate</div>
+      <div class="kpi-val">73%</div>
+      <div class="kpi-sub" style="color:#633806;">Target: 85%</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="search-wrap">
+      <svg class="si" width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M10 10l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <input type="text" placeholder="Search events…" id="searchInput" oninput="renderCards()">
+    </div>
+    <div class="ftabs">
+      <div class="ftab on" onclick="setFilter('all',this)">All</div>
+      <div class="ftab" onclick="setFilter('live',this)">Live</div>
+      <div class="ftab" onclick="setFilter('upcoming',this)">Upcoming</div>
+      <div class="ftab" onclick="setFilter('completed',this)">Completed</div>
+      <div class="ftab" onclick="setFilter('draft',this)">Draft</div>
+    </div>
+    <select style="font-size:13px;padding:6px 10px;" onchange="renderCards()">
+      <option>All types</option>
+      <option>Physical</option>
+      <option>Virtual</option>
+    </select>
+    <div class="view-toggle">
+      <button class="vt-btn on" id="vt-card" onclick="setView('card')">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button class="vt-btn" id="vt-list" onclick="setView('list')">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M3 8h10M3 12h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="cardView" class="card-grid"></div>
+  <div id="listView" style="display:none;" class="panel">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th style="width:28%;">Event</th>
+          <th style="width:10%;">Type</th>
+          <th style="width:12%;">Date</th>
+          <th style="width:10%;">Status</th>
+          <th style="width:18%;">Occupancy</th>
+          <th style="width:10%;">Agents</th>
+          <th style="width:12%;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="listBody"></tbody>
+    </table>
+  </div>
+
+  <div id="detailSection" style="display:none;">
+    <div class="detail-overlay">
+      <div class="detail-panel">
+        <div class="dp-head">
+          <div>
+            <div class="dp-title" id="dp-title">UK University Expo</div>
+            <div class="dp-sub" id="dp-sub">Physical · ExCeL Centre, London · 8 May 2026</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="pill p-live" id="dp-status-pill">Live</span>
+            <button class="btn btn-sm" onclick="closeDetail()">Close</button>
+          </div>
+        </div>
+        <div class="dp-stat-row">
+          <div class="dp-stat"><div class="dp-sv" id="dp-seats">300</div><div class="dp-sl">Total seats</div></div>
+          <div class="dp-stat"><div class="dp-sv" id="dp-filled">264</div><div class="dp-sl">Filled</div></div>
+          <div class="dp-stat"><div class="dp-sv" id="dp-agents">6</div><div class="dp-sl">Agents assigned</div></div>
+          <div class="dp-stat"><div class="dp-sv" id="dp-conv">38</div><div class="dp-sl">Conversions</div></div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-text-secondary);margin-bottom:6px;">
+            <span>Seat fill rate</span><span id="dp-pct" style="font-weight:500;color:var(--color-text-primary);">88%</span>
+          </div>
+          <div style="height:7px;background:var(--color-background-secondary);border-radius:4px;overflow:hidden;">
+            <div id="dp-bar" style="height:100%;border-radius:4px;background:#378ADD;width:88%;"></div>
+          </div>
+        </div>
+        <div class="dp-section">
+          <div class="dp-section-title">Assigned agents</div>
+          <div class="agent-assign-list">
+            <div class="aa-row"><div class="aa-av" style="background:#E6F1FB;color:#0C447C;">RJ</div><div class="aa-name">Rahul Joshi</div><div class="aa-regs">84 registrations</div><button class="btn btn-sm btn-danger" style="margin-left:auto;">Remove</button></div>
+            <div class="aa-row"><div class="aa-av" style="background:#E1F5EE;color:#085041;">PM</div><div class="aa-name">Priya Mehta</div><div class="aa-regs">71 registrations</div><button class="btn btn-sm btn-danger" style="margin-left:auto;">Remove</button></div>
+            <div class="aa-row"><div class="aa-av" style="background:#FAEEDA;color:#633806;">SK</div><div class="aa-name">Sameer Khan</div><div class="aa-regs">52 registrations</div><button class="btn btn-sm btn-danger" style="margin-left:auto;">Remove</button></div>
+          </div>
+        </div>
+        <div class="dp-actions">
+          <button class="btn btn-sm" onclick="sendPrompt('Assign more agents to event: '+document.getElementById(\'dp-title\').textContent)">+ Assign agent ↗</button>
+          <button class="btn btn-sm" onclick="sendPrompt('Send notification to all agents about event: '+document.getElementById(\'dp-title\').textContent)">Notify agents ↗</button>
+          <button class="btn btn-sm" onclick="sendPrompt('Show all students registered for event: '+document.getElementById(\'dp-title\').textContent)">View students ↗</button>
+          <button class="btn btn-sm btn-danger" onclick="sendPrompt('Cancel event: '+document.getElementById(\'dp-title\').textContent)">Cancel event</button>
+          <button class="btn btn-sm btn-primary" onclick="showEditModal()">Edit event</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalSection" style="display:none;">
+    <div class="modal-overlay">
+      <div class="modal">
+        <div class="modal-head">
+          <span class="modal-title" id="modal-title">Create new event</span>
+          <button class="btn btn-sm" onclick="hideModal()">Cancel</button>
+        </div>
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label>Event name</label>
+            <input type="text" placeholder="e.g. UK University Expo — London 2026">
+          </div>
+          <div class="form-group form-full">
+            <label>Event type</label>
+            <div class="type-toggle">
+              <div class="type-btn sel" onclick="selectType(this,'Physical')">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><path d="M8 1C5.24 1 3 3.24 3 6c0 4 5 9 5 9s5-5 5-9c0-2.76-2.24-5-5-5z" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="6" r="1.5" stroke="currentColor" stroke-width="1.2"/></svg>Physical
+              </div>
+              <div class="type-btn" onclick="selectType(this,'Virtual')">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="1" y="3" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M5 13l1-2h4l1 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Virtual
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Event date</label>
+            <input type="date" value="2026-05-08">
+          </div>
+          <div class="form-group">
+            <label>Event time</label>
+            <input type="time" value="10:00">
+          </div>
+          <div class="form-group form-full" id="venue-group">
+            <label>Venue / location</label>
+            <input type="text" placeholder="e.g. ExCeL Centre, London">
+          </div>
+          <div class="form-group">
+            <label>Total seats</label>
+            <input type="number" placeholder="e.g. 300" min="1">
+          </div>
+          <div class="form-group">
+            <label>Target country</label>
+            <select>
+              <option>United Kingdom</option>
+              <option>Canada</option>
+              <option>Germany</option>
+              <option>Australia</option>
+              <option>USA</option>
+            </select>
+          </div>
+          <div class="form-group form-full">
+            <label>Participating universities (comma separated)</label>
+            <input type="text" placeholder="e.g. University of Manchester, King's College London">
+          </div>
+          <div class="form-group form-full">
+            <label>Description</label>
+            <textarea placeholder="Brief description of the event for agents…"></textarea>
+          </div>
+          <div class="form-group form-full">
+            <label>Assign agents</label>
+            <select multiple style="height:72px;font-size:13px;">
+              <option>Rahul Joshi — StudyLink Asia</option>
+              <option>Priya Mehta — GlobalEdu India</option>
+              <option>Sameer Khan — BrightPath Dubai</option>
+              <option>Sneha More — UniPath Pune</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-sm" onclick="hideModal()">Discard</button>
+          <button class="btn btn-sm btn-success" onclick="hideModal()">Save as draft</button>
+          <button class="btn btn-sm btn-primary" onclick="hideModal()">Publish event</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const events=[
+  {id:0,name:'UK University Expo',loc:'ExCeL Centre, London',date:'8 May 2026',type:'physical',status:'live',seats:300,filled:264,agents:6,conv:38,unis:['Manchester','King\'s College','Leeds']},
+  {id:1,name:'Canada Study Fair',loc:'Virtual — Zoom',date:'15 May 2026',type:'virtual',status:'upcoming',seats:500,filled:305,agents:8,conv:0,unis:['UBC','Toronto','McGill']},
+  {id:2,name:'Germany Seminar',loc:'Taj Lands End, Mumbai',date:'22 May 2026',type:'physical',status:'upcoming',seats:200,filled:148,agents:4,conv:0,unis:['TU Munich','Heidelberg']},
+  {id:3,name:'Australia Intake Expo',loc:'Le Meridien, Delhi',date:'3 Jun 2026',type:'physical',status:'upcoming',seats:250,filled:105,agents:5,conv:0,unis:['UNSW','Melbourne','ANU']},
+  {id:4,name:'US University Webinar',loc:'Virtual — Webex',date:'10 Jun 2026',type:'virtual',status:'upcoming',seats:400,filled:116,agents:3,conv:0,unis:['NYU','USC','Purdue']},
+  {id:5,name:'UK Winter Intake',loc:'Hyatt Pune',date:'12 Mar 2026',type:'physical',status:'completed',seats:200,filled:194,agents:5,conv:62,unis:['Oxford Brookes','Coventry']},
+  {id:6,name:'Ireland Info Session',loc:'Virtual — Teams',date:'1 Apr 2026',type:'virtual',status:'completed',seats:150,filled:138,agents:3,conv:41,unis:['UCD','TCD']},
+  {id:7,name:'New Zealand Preview',loc:'Draft',date:'TBD',type:'virtual',status:'draft',seats:200,filled:0,agents:0,conv:0,unis:[]},
+];
+
+let curFilter='all';
+let curView='card';
+
+function pct(e){return Math.round(e.seats>0?(e.filled/e.seats)*100:0);}
+function barColor(p){return p>=75?'#378ADD':p>=50?'#EF9F27':'#E24B4A';}
+function statusPill(s){
+  if(s==='live') return '<span class="pill p-live">Live</span>';
+  if(s==='upcoming') return '<span class="pill p-upcoming">Upcoming</span>';
+  if(s==='completed') return '<span class="pill p-completed">Completed</span>';
+  return '<span class="pill p-draft">Draft</span>';
+}
+function typePill(t){return t==='physical'?'<span class="pill p-physical">Physical</span>':'<span class="pill p-virtual">Virtual</span>';}
+
+function filtered(){
+  const q=(document.getElementById('searchInput').value||'').toLowerCase();
+  return events.filter(e=>{
+    const ms=curFilter==='all'||e.status===curFilter;
+    const mq=!q||e.name.toLowerCase().includes(q)||e.loc.toLowerCase().includes(q);
+    return ms&&mq;
+  });
+}
+
+function renderCards(){
+  const list=filtered();
+  const cv=document.getElementById('cardView');
+  cv.innerHTML=list.map(e=>{
+    const p=pct(e);
+    const bc=barColor(p);
+    return `<div class="ev-card" onclick="openDetail(${e.id})">
+      <div class="ev-card-top">
+        <div class="ev-header">
+          <div class="ev-name">${e.name}</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">${statusPill(e.status)}${typePill(e.type)}</div>
+        </div>
+        <div class="ev-meta">
+          <div class="ev-meta-row"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 1C5.24 1 3 3.24 3 6c0 4 5 9 5 9s5-5 5-9c0-2.76-2.24-5-5-5z" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="6" r="1.5" stroke="currentColor" stroke-width="1.2"/></svg>${e.loc}</div>
+          <div class="ev-meta-row"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M1 6h14M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>${e.date}</div>
+          <div class="ev-meta-row"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>${e.agents} agents assigned</div>
+        </div>
+        <div class="seat-bar-bg"><div class="seat-bar-fill" style="width:${p}%;background:${bc};"></div></div>
+        <div class="seat-label"><span>${e.filled} / ${e.seats} seats</span><span class="seat-pct">${p}%</span></div>
+      </div>
+      <div class="ev-card-bot">
+        <div class="uni-chips">${e.unis.slice(0,3).map(u=>`<div class="uni-chip">${u}</div>`).join('')}</div>
+        <div class="card-actions">
+          <div class="icon-btn" title="Edit" onclick="event.stopPropagation();showEditModal()"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="var(--color-text-secondary)" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          <div class="icon-btn" title="Notify agents" onclick="event.stopPropagation();sendPrompt('Notify all agents assigned to: ${e.name}')"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 1a5 5 0 00-5 5v2.5L1.5 11h13L13 8.5V6a5 5 0 00-5-5z" stroke="var(--color-text-secondary)" stroke-width="1.2" fill="none"/><path d="M6.5 13a1.5 1.5 0 003 0" stroke="var(--color-text-secondary)" stroke-width="1.2" fill="none"/></svg></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const lb=document.getElementById('listBody');
+  lb.innerHTML=list.map(e=>{
+    const p=pct(e);
+    const bc=barColor(p);
+    return `<tr onclick="openDetail(${e.id})" style="cursor:pointer;">
+      <td><div style="font-weight:500;font-size:13px;">${e.name}</div><div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px;">${e.loc}</div></td>
+      <td>${typePill(e.type)}</td>
+      <td style="font-size:12px;">${e.date}</td>
+      <td>${statusPill(e.status)}</td>
+      <td><div class="occ-inline"><div class="occ-bar"><div class="occ-fill" style="width:${p}%;background:${bc};"></div></div><span style="font-size:12px;font-weight:500;min-width:28px;">${p}%</span></div></td>
+      <td style="font-size:13px;">${e.agents}</td>
+      <td><div style="display:flex;gap:5px;">
+        <div class="icon-btn" title="Edit" onclick="event.stopPropagation();showEditModal()"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="var(--color-text-secondary)" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+        <div class="icon-btn" title="Notify" onclick="event.stopPropagation();sendPrompt('Notify agents for: ${e.name}')"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 1a5 5 0 00-5 5v2.5L1.5 11h13L13 8.5V6a5 5 0 00-5-5z" stroke="var(--color-text-secondary)" stroke-width="1.2" fill="none"/><path d="M6.5 13a1.5 1.5 0 003 0" stroke="var(--color-text-secondary)" stroke-width="1.2" fill="none"/></svg></div>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function setFilter(f,el){
+  curFilter=f;
+  document.querySelectorAll('.ftab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  renderCards();
+}
+
+function setView(v){
+  curView=v;
+  document.getElementById('cardView').style.display=v==='card'?'grid':'none';
+  document.getElementById('listView').style.display=v==='list'?'block':'none';
+  document.getElementById('vt-card').classList.toggle('on',v==='card');
+  document.getElementById('vt-list').classList.toggle('on',v==='list');
+}
+
+function openDetail(id){
+  const e=events[id];
+  const p=pct(e);
+  document.getElementById('dp-title').textContent=e.name;
+  document.getElementById('dp-sub').textContent=(e.type==='physical'?'Physical':'Virtual')+' · '+e.loc+' · '+e.date;
+  document.getElementById('dp-status-pill').textContent=e.status.charAt(0).toUpperCase()+e.status.slice(1);
+  document.getElementById('dp-status-pill').className='pill p-'+e.status;
+  document.getElementById('dp-seats').textContent=e.seats;
+  document.getElementById('dp-filled').textContent=e.filled;
+  document.getElementById('dp-agents').textContent=e.agents;
+  document.getElementById('dp-conv').textContent=e.conv;
+  document.getElementById('dp-pct').textContent=p+'%';
+  document.getElementById('dp-bar').style.width=p+'%';
+  document.getElementById('dp-bar').style.background=barColor(p);
+  document.getElementById('detailSection').style.display='block';
+  document.getElementById('modalSection').style.display='none';
+}
+function closeDetail(){document.getElementById('detailSection').style.display='none';}
+function showModal(){document.getElementById('modal-title').textContent='Create new event';document.getElementById('modalSection').style.display='block';document.getElementById('detailSection').style.display='none';}
+function showEditModal(){document.getElementById('modal-title').textContent='Edit event';document.getElementById('modalSection').style.display='block';document.getElementById('detailSection').style.display='none';}
+function hideModal(){document.getElementById('modalSection').style.display='none';}
+function selectType(el,t){document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');document.getElementById('venue-group').style.display=t==='Virtual'?'none':'block';}
+
+renderCards();
+</script>

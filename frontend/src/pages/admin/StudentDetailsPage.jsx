@@ -1,48 +1,52 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, MapPin, Phone, Mail, User, BookOpen, Globe, Clock, Upload, FileText, Download, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Phone, Mail, User, BookOpen, Globe, Clock, Upload, FileText, Download, Trash2, Plus, Check, X, Shield, AlertCircle, Edit, Eye } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Separator } from '../../components/ui/separator';
 import { Progress } from '../../components/ui/progress';
 import { toast } from 'sonner';
+import { cn } from '../../lib/utils';
 import { studentAPI, formatApiError } from '../../utils/api';
 
 const StudentDetailsPage = () => {
-  const { id } = useParams();
+  const { studentId: id } = useParams();
   const navigate = useNavigate();
-  const { students, events, agents, getStudentById, uploadStudentDocument } = useData();
+  const { students, events, agents, getStudentById, uploadStudentDocument, updateStudentStatus, verifyStudentDocument } = useData();
+  const { isAdmin, isAgent } = useAuth();
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState('Other');
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     const fetchStudent = async () => {
       if (!id) return;
-      
+
       try {
         setLoading(true);
         setError(null);
-        
+
         let foundStudent = null;
-        
+
         // Always try to fetch from API first for fresh data
         try {
           foundStudent = await getStudentById(id);
         } catch (apiError) {
           // Fallback to local state if API fails
           foundStudent = students.find(s => s.id === id);
-          
+
           if (apiError.response?.status !== 404) {
             throw apiError;
           }
         }
-        
+
         if (foundStudent) {
           setStudent(foundStudent);
         } else {
@@ -63,7 +67,7 @@ const StudentDetailsPage = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/admin/students')}>
+          <Button variant="ghost" onClick={() => navigate(isAdmin() ? '/admin/students' : '/agent/students')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Students
           </Button>
@@ -82,7 +86,7 @@ const StudentDetailsPage = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/admin/students')}>
+          <Button variant="ghost" onClick={() => navigate(isAdmin() ? '/admin/students' : '/agent/students')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Students
           </Button>
@@ -123,24 +127,24 @@ const StudentDetailsPage = () => {
     if (student.customFields && student.customFields[fieldKey]) {
       return student.customFields[fieldKey];
     }
-    
+
     // Try legacy fields as fallback
     if (fallbackKey && student[fallbackKey]) {
       return student[fallbackKey];
     }
-    
+
     return 'Not specified';
   };
 
   // Get all custom fields and format them for display
   const getFormattedCustomFields = () => {
     if (!student.customFields) return [];
-    
+
     const fields = [];
-    
+
     // Add standard fields from customFields if they exist
     const standardFields = ['name', 'email', 'phone', 'country', 'education', 'courseInterested', 'notes'];
-    
+
     Object.entries(student.customFields).forEach(([key, value]) => {
       if (!standardFields.includes(key) && value) {
         fields.push({
@@ -149,7 +153,7 @@ const StudentDetailsPage = () => {
         });
       }
     });
-    
+
     return fields;
   };
 
@@ -184,15 +188,15 @@ const StudentDetailsPage = () => {
     try {
       setUploading(true);
       setUploadProgress(0);
-      
-      const result = await uploadStudentDocument(student.id, file);
-      
+
+      const result = await uploadStudentDocument(student.id, file, selectedCategory);
+
       // Update student data with new document
       const updatedStudent = await getStudentById(student.id);
       setStudent(updatedStudent);
-      
+
       toast.success('Document uploaded successfully');
-      
+
       // Clear file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -209,11 +213,11 @@ const StudentDetailsPage = () => {
   const handleDownloadDocument = async (docId, filename) => {
     try {
       const response = await studentAPI.downloadDocument(student.id, docId);
-      
+
       // Create blob from response
-      const blob = new Blob([response.data]);
+      const blob = new Blob([response.data], { type: response.headers['content-type'] });
       const url = window.URL.createObjectURL(blob);
-      
+
       // Create temporary link and trigger download
       const link = document.createElement('a');
       link.href = url;
@@ -221,11 +225,31 @@ const StudentDetailsPage = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       // Clean up URL
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => window.URL.revokeObjectURL(url), 100);
     } catch (error) {
       toast.error('Failed to download document', { description: formatApiError(error) });
+    }
+  };
+
+  // Handle document preview
+  const handleViewDocument = async (docId, filename) => {
+    try {
+      const response = await studentAPI.downloadDocument(student.id, docId, { inline: 'true' });
+
+      // Create blob from response with the correct MIME type
+      const contentType = response.headers['content-type'];
+      const blob = new Blob([response.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+
+      // Open in new tab
+      window.open(url, '_blank');
+
+      // Note: We don't revokeObjectURL immediately because the new tab needs it
+      // In a real app, you might want to track these and revoke them later
+    } catch (error) {
+      toast.error('Failed to view document', { description: formatApiError(error) });
     }
   };
 
@@ -238,80 +262,125 @@ const StudentDetailsPage = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const handleVerifyDocument = async (docId, status) => {
+    const remarks = status === 'rejected' ? prompt('Enter reason for rejection:') : '';
+    if (status === 'rejected' && remarks === null) return;
+
+    try {
+      const updatedStudent = await verifyStudentDocument(student.id, docId, { status, remarks });
+      setStudent(updatedStudent);
+      toast.success(`Document ${status}`);
+    } catch (error) {
+      console.error('Error verifying document:', error);
+    }
+  };
+
+  const getDocStatusBadge = (status) => {
+    switch (status) {
+      case 'approved': return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 gap-1"><Check className="w-3 h-3" /> Approved</Badge>;
+      case 'rejected': return <Badge variant="destructive" className="gap-1"><X className="w-3 h-3" /> Rejected</Badge>;
+      default: return <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1"><Clock className="w-3 h-3" /> Pending</Badge>;
+    }
+  };
+
   return (
-    <div className="space-y-6" data-testid="student-details-page">
+    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-8" data-testid="student-details-page">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/admin/students')}>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-start gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-1 h-9 border-[#E5E7EB] bg-white hover:bg-gray-50"
+            onClick={() => navigate(isAdmin() ? '/admin/students' : '/agent/students')}
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Students
+            Back
           </Button>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground font-['Outfit']">
-              Student Details
+            <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
+              Student Profile
             </h1>
-            <p className="text-muted-foreground">View student registration information</p>
+            <div className="flex items-center gap-3 mt-1.5">
+              <Badge className={cn(
+                "text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border-none",
+                student.status === 'Registered' ? 'bg-blue-100 text-blue-700' :
+                  student.status === 'Contacted' ? 'bg-yellow-100 text-yellow-700' :
+                    student.status === 'Confirmed' ? 'bg-purple-100 text-purple-700' :
+                      student.status === 'Attended' ? 'bg-emerald-100 text-emerald-700' :
+                        'bg-pink-100 text-pink-700'
+              )}>
+                {student.status || 'Registered'}
+              </Badge>
+              <span className="text-xs font-medium text-[#6B7280]">
+                ID: {student.id?.slice(-8).toUpperCase()} · Joined {formatDate(student.submittedAt)}
+              </span>
+            </div>
           </div>
         </div>
-        <Button onClick={() => navigate(`/admin/students/${student.id}/edit`)}>
-          Edit Student
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            className="h-10 px-6 bg-[#042C53] hover:bg-[#0C447C] font-bold rounded-lg shadow-sm"
+            onClick={() => navigate(isAdmin() ? `/admin/students/${student.id}/edit` : `/agent/events/${student.eventId}`)}
+          >
+            {isAdmin() ? <Edit className="w-4 h-4 mr-2" /> : null}
+            {isAdmin() ? 'Edit Student' : 'Back to Event'}
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content - 2 columns */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-8">
           {/* Personal Information Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-['Outfit'] flex items-center gap-2">
-                <User className="w-5 h-5" />
-                Personal Information
+          <Card className="border-[#E5E7EB] shadow-sm">
+            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
+              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
+                <User className="w-4 h-4 text-[#042C53]" />
+                Personal Details
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Full Name</label>
-                  <p className="text-foreground font-medium">{getStudentFieldValue('name', 'name')}</p>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Full Name</label>
+                  <p className="text-sm font-semibold text-[#111827]">{getStudentFieldValue('name', 'name')}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Email Address</label>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Email Address</label>
                   <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                    <p className="text-foreground">{getStudentFieldValue('email', 'email')}</p>
+                    <Mail className="w-3.5 h-3.5 text-[#9CA3AF]" />
+                    <p className="text-sm font-medium text-[#111827]">{getStudentFieldValue('email', 'email')}</p>
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Phone Number</label>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Phone Number</label>
                   <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    <p className="text-foreground">{getStudentFieldValue('phone', 'phone')}</p>
+                    <Phone className="w-3.5 h-3.5 text-[#9CA3AF]" />
+                    <p className="text-sm font-medium text-[#111827]">{getStudentFieldValue('phone', 'phone')}</p>
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Country</label>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Country of Interest</label>
                   <div className="flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-muted-foreground" />
-                    <Badge variant="outline">{getStudentFieldValue('country', 'country')}</Badge>
+                    <Globe className="w-3.5 h-3.5 text-[#9CA3AF]" />
+                    <span className="text-sm font-medium text-[#111827]">{getStudentFieldValue('country', 'country')}</span>
                   </div>
                 </div>
               </div>
-              
+
               {/* Display additional custom fields */}
               {getFormattedCustomFields().length > 0 && (
                 <>
-                  <Separator />
+                  <Separator className="my-6 bg-[#F3F4F6]" />
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground mb-3 block">Additional Information</label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                       {getFormattedCustomFields().map((field, index) => (
-                        <div key={index}>
-                          <label className="text-sm font-medium text-muted-foreground capitalize">
+                        <div key={index} className="space-y-1">
+                          <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider capitalize">
                             {field.key}
                           </label>
-                          <p className="text-foreground mt-1">{field.value}</p>
+                          <p className="text-sm font-medium text-[#111827]">{field.value}</p>
                         </div>
                       ))}
                     </div>
@@ -322,134 +391,177 @@ const StudentDetailsPage = () => {
           </Card>
 
           {/* Academic Information Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-['Outfit'] flex items-center gap-2">
-                <BookOpen className="w-5 h-5" />
-                Academic Information
+          <Card className="border-[#E5E7EB] shadow-sm">
+            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
+              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
+                <BookOpen className="w-4 h-4 text-[#042C53]" />
+                Academic Background
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Course Interest</label>
-                  <p className="text-foreground">{getStudentFieldValue('courseInterested', 'courseInterested')}</p>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Target Course</label>
+                  <p className="text-sm font-semibold text-[#111827]">{getStudentFieldValue('courseInterested', 'courseInterested')}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Current Education</label>
-                  <p className="text-foreground">{getStudentFieldValue('education', 'education')}</p>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Education Level</label>
+                  <p className="text-sm font-medium text-[#111827]">{getStudentFieldValue('education', 'education')}</p>
                 </div>
               </div>
               {(getStudentFieldValue('notes', 'notes') && getStudentFieldValue('notes', 'notes') !== 'Not specified') && (
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Additional Notes</label>
-                  <p className="text-foreground mt-1">{getStudentFieldValue('notes', 'notes')}</p>
+                <div className="mt-6 p-4 bg-[#F9FAFB] rounded-lg border border-[#F3F4F6]">
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block mb-2">Internal Notes</label>
+                  <p className="text-sm text-[#4B5563] leading-relaxed">{getStudentFieldValue('notes', 'notes')}</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          {/* Registration Details Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-['Outfit'] flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                Registration Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Registration Date</label>
-                  <p className="text-foreground">{formatDateTime(student.submittedAt)}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Assigned Agent</label>
-                  <p className="text-foreground">{agent?.name || 'Unknown'}</p>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Sidebar - 1 column */}
-        <div className="space-y-6">
-          {/* Event Details Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-['Outfit'] flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                Event Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {event ? (
-                <>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Event Name</label>
-                    <p className="text-foreground font-medium">{event.title}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Event Date</label>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <p className="text-foreground">{formatDate(event.date)}</p>
+        <div className="space-y-8">
+          {/* Event & Agent Context */}
+          <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
+            <div className="h-2 bg-[#042C53]" />
+            <CardContent className="p-6 space-y-6">
+              {event && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[#E6F1FB] flex items-center justify-center shrink-0">
+                      <Calendar className="w-5 h-5 text-[#042C53]" />
                     </div>
-                  </div>
-                  {event.location && (
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Location</label>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-muted-foreground" />
-                        <p className="text-foreground">{event.location}</p>
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
-                    <p className="text-foreground text-sm mt-1">{event.description}</p>
-                  </div>
-                  <Separator />
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Assigned Agents</label>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {event.assignedAgents.map(agentId => {
-                        const assignedAgent = agents.find(a => a.id === agentId);
-                        return assignedAgent ? (
-                          <Badge key={agentId} variant="secondary">
-                            {assignedAgent.name}
-                          </Badge>
-                        ) : null;
-                      })}
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Registered For</p>
+                      <p className="text-sm font-bold text-[#111827] leading-tight mt-0.5">{event.title}</p>
                     </div>
                   </div>
-                </>
-              ) : (
-                <p className="text-muted-foreground">Event information not available</p>
+                  <div className="grid grid-cols-2 gap-4 pl-13">
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] font-bold text-[#9CA3AF] uppercase">Event Date</p>
+                      <p className="text-xs font-semibold text-[#4B5563]">{formatDate(event.date)}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] font-bold text-[#9CA3AF] uppercase">Location</p>
+                      <p className="text-xs font-semibold text-[#4B5563] truncate">{event.location || 'Online'}</p>
+                    </div>
+                  </div>
+                </div>
               )}
+
+              <Separator className="bg-[#F3F4F6]" />
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[#EEEDFE] flex items-center justify-center shrink-0">
+                  <Shield className="w-5 h-5 text-[#3C3489]" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Referring Agency</p>
+                  <p className="text-sm font-bold text-[#111827] mt-0.5">{agent?.agencyName || 'Direct Registration'}</p>
+                  <p className="text-[11px] text-[#6B7280]">{agent?.name}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Documents Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-['Outfit'] flex items-center gap-2">
-                <FileText className="w-5 h-5" />
+          {/* Documents Section */}
+          <Card className="border-[#E5E7EB] shadow-sm">
+            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base font-semibold font-['Outfit'] text-[#111827]">
                 Documents
               </CardTitle>
-              <CardDescription>
-                Upload and manage student documents
-              </CardDescription>
+              <Badge variant="outline" className="text-[10px] font-bold bg-[#F9FAFB]">
+                {student.documents?.length || 0} Total
+              </Badge>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="p-6 space-y-6">
+              {/* Documents List */}
+              <div className="space-y-3">
+                {student.documents && student.documents.length > 0 ? (
+                  student.documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="group p-3 border border-[#F3F4F6] rounded-xl hover:border-[#042C53] hover:bg-[#F9FAFB] transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 group-hover:bg-white transition-colors">
+                            <FileText className="w-4 h-4 text-[#6B7280]" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-[#111827] truncate" title={doc.originalFilename}>
+                              {doc.originalFilename}
+                            </p>
+                            <p className="text-[10px] text-[#9CA3AF] font-medium mt-0.5 uppercase">
+                              {doc.category} · {formatFileSize(doc.size)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-[#042C53]"
+                            onClick={() => handleViewDocument(doc.id, doc.originalFilename)}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-[#042C53]"
+                            onClick={() => handleDownloadDocument(doc.id, doc.originalFilename)}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between">
+                        {getDocStatusBadge(doc.status)}
+                        {isAdmin() && doc.status === 'pending' && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              className="h-6 text-[9px] font-bold bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:bg-[#DCEFC0]"
+                              onClick={() => handleVerifyDocument(doc.id, 'approved')}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-6 text-[9px] font-bold bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] hover:bg-[#FADADA]"
+                              onClick={() => handleVerifyDocument(doc.id, 'rejected')}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+                    <FileText className="w-8 h-8 mx-auto mb-2 text-[#9CA3AF] opacity-40" />
+                    <p className="text-xs font-semibold text-[#6B7280]">No documents yet</p>
+                  </div>
+                )}
+              </div>
+
               {/* Upload Section */}
-              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6">
-                <div className="text-center">
-                  <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                  <h3 className="text-sm font-medium mb-1">Upload Document</h3>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    PDF, Word, Images (Max 10MB)
-                  </p>
+              <div className="pt-2">
+                <div className="flex flex-col gap-3">
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg border border-[#E5E7EB] bg-white focus:ring-1 focus:ring-[#042C53] outline-none"
+                  >
+                    <option value="Passport">Passport</option>
+                    <option value="Transcript">Transcript</option>
+                    <option value="LanguageTest">Language Test</option>
+                    <option value="Other">Other Category</option>
+                  </select>
+
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -458,95 +570,65 @@ const StudentDetailsPage = () => {
                     className="hidden"
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt,.csv"
                   />
+
                   <Button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
-                    size="sm"
+                    className="w-full h-10 bg-white border border-[#042C53] text-[#042C53] hover:bg-[#F0F7FF] font-bold text-xs"
                   >
                     {uploading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
-                        Uploading...
-                      </>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#042C53]" />
                     ) : (
                       <>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Choose File
+                        <Upload className="w-3.5 h-3.5 mr-2" />
+                        Upload Document
                       </>
                     )}
                   </Button>
                 </div>
-                
+
                 {uploading && (
-                  <div className="mt-3">
-                    <Progress value={uploadProgress} className="h-2" />
-                    <p className="text-xs text-muted-foreground mt-1">Uploading document...</p>
+                  <div className="mt-4">
+                    <div className="flex justify-between text-[10px] font-bold text-[#6B7280] mb-1 uppercase tracking-wider">
+                      <span>Uploading...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-1.5 bg-[#F3F4F6]" indicatorClassName="bg-[#042C53]" />
                   </div>
                 )}
               </div>
-
-              {/* Documents List */}
-              {student.documents && student.documents.length > 0 ? (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Uploaded Documents ({student.documents.length})
-                  </label>
-                  {student.documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-4 h-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">{doc.originalFilename}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatFileSize(doc.size)} • {formatDateTime(doc.uploadedAt)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDownloadDocument(doc.id, doc.originalFilename)}
-                        >
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <FileText className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-50" />
-                  <p className="text-sm text-muted-foreground">No documents uploaded yet</p>
-                </div>
-              )}
             </CardContent>
           </Card>
 
-          {/* Quick Actions Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-['Outfit']">Quick Actions</CardTitle>
+          {/* Lifecycle Status */}
+          <Card className="border-[#E5E7EB] shadow-sm overflow-hidden">
+            <CardHeader className="bg-[#F9FAFB] border-b border-[#F3F4F6] px-6 py-4">
+              <CardTitle className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Update Pipeline Status</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={() => navigate(`/admin/events/${student.eventId}`)}
+            <CardContent className="p-6">
+              <select
+                value={student.status || 'Registered'}
+                onChange={(e) => {
+                  updateStudentStatus(student.id, e.target.value).then(res => setStudent(res));
+                }}
+                className={cn(
+                  "w-full text-sm font-bold px-4 py-3 rounded-xl border appearance-none cursor-pointer focus:ring-2 focus:ring-[#042C53]/10 outline-none transition-all",
+                  student.status === 'Registered' ? 'bg-[#E6F1FB] text-[#0C447C] border-[#B5D4F4]' :
+                    student.status === 'Contacted' ? 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]' :
+                      student.status === 'Confirmed' ? 'bg-[#F5F3FF] text-[#5B21B6] border-[#DDD6FE]' :
+                        student.status === 'Attended' ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]' :
+                          'bg-[#FDF2F8] text-[#9D174D] border-[#FBCFE8]'
+                )}
               >
-                <Calendar className="w-4 h-4 mr-2" />
-                View Event
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={() => navigate(`/admin/students/${student.id}/edit`)}
-              >
-                Edit Student
-              </Button>
+                <option value="Registered">Status: Registered</option>
+                <option value="Contacted">Status: Contacted</option>
+                <option value="Confirmed">Status: Confirmed</option>
+                <option value="Attended">Status: Attended</option>
+                <option value="Converted">Status: Converted</option>
+              </select>
+              <p className="text-[10px] text-[#9CA3AF] mt-3 px-1">
+                Last activity: {formatDateTime(student.updatedAt || student.submittedAt)}
+              </p>
             </CardContent>
           </Card>
         </div>

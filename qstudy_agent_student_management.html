@@ -1,0 +1,413 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+.pg{padding:24px;font-family:var(--font-sans);}
+.toprow{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.toprow-left h2{font-size:18px;font-weight:500;color:var(--color-text-primary);}
+.toprow-left p{font-size:13px;color:var(--color-text-secondary);margin-top:2px;}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;font-size:13px;font-weight:500;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;}
+.btn:hover{background:var(--color-background-secondary);}
+.btn-primary{background:#042C53;color:#B5D4F4;border-color:#042C53;}
+.btn-primary:hover{background:#0C447C;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-success{background:#EAF3DE;color:#27500A;border-color:#C0DD97;}
+.btn-warn{background:#FAEEDA;color:#633806;border-color:#FAC775;}
+.btn-danger{background:#FCEBEB;color:#791F1F;border-color:#F7C1C1;}
+
+.kpi-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:20px;}
+.kpi{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:13px 15px;cursor:pointer;}
+.kpi:hover{outline:1.5px solid var(--color-border-secondary);}
+.kpi.active-kpi{outline:1.5px solid #378ADD;}
+.kpi-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:5px;}
+.kpi-val{font-size:20px;font-weight:500;color:var(--color-text-primary);}
+.kpi-sub{font-size:11px;margin-top:3px;}
+.kpi-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;}
+
+.controls{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.sw{position:relative;flex:1;min-width:140px;}
+.sw input{width:100%;padding-left:32px;font-size:13px;}
+.si{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-secondary);}
+
+.view-toggle{display:flex;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden;}
+.vt{padding:6px 10px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary);border:none;cursor:pointer;}
+.vt.on{background:var(--color-background-secondary);color:var(--color-text-primary);}
+
+.panel{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;margin-bottom:16px;}
+.tbl{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;}
+.tbl th{font-size:11px;color:var(--color-text-secondary);font-weight:500;padding:10px 14px;text-align:left;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);}
+.tbl td{padding:11px 14px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-primary);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:var(--color-background-secondary);cursor:pointer;}
+.pill{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:500;display:inline-block;white-space:nowrap;}
+.p-reg{background:#E6F1FB;color:#0C447C;}
+.p-con{background:#FAEEDA;color:#633806;}
+.p-conf{background:#EEEDFE;color:#3C3489;}
+.p-att{background:#EAF3DE;color:#27500A;}
+.p-conv{background:#E1F5EE;color:#085041;}
+.p-dok{background:#EAF3DE;color:#27500A;}
+.p-dmiss{background:#FCEBEB;color:#791F1F;}
+.p-dpend{background:#FAEEDA;color:#633806;}
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;flex-shrink:0;}
+.nc{display:flex;align-items:center;gap:8px;}
+.igrp{display:flex;gap:5px;}
+.ibtn{width:28px;height:28px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.ibtn:hover{background:var(--color-background-secondary);}
+
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:16px;}
+.sc{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;cursor:pointer;}
+.sc:hover{border-color:var(--color-border-secondary);}
+.sc-top{padding:14px 14px 10px;}
+.sc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.sc-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0;}
+.sc-name{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-top:1px;}
+.sc-email{font-size:11px;color:var(--color-text-secondary);}
+.sc-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);margin-top:5px;}
+.sc-bot{padding:9px 14px;border-top:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:flex;align-items:center;justify-content:space-between;}
+.warn-dot{width:8px;height:8px;border-radius:50%;background:#E24B4A;flex-shrink:0;}
+
+.modal-wrap{background:rgba(0,0,0,0.3);border-radius:var(--border-radius-lg);padding:20px;display:flex;align-items:flex-start;justify-content:center;margin-bottom:16px;}
+.modal{background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);width:100%;max-width:580px;padding:22px;}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding-bottom:14px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.modal-title{font-size:15px;font-weight:500;color:var(--color-text-primary);}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;}
+.fg-full{grid-column:1/-1;}
+.fg label{display:block;font-size:12px;color:var(--color-text-secondary);margin-bottom:4px;}
+.fg input,.fg select,.fg textarea{width:100%;font-size:13px;}
+.fg textarea{resize:vertical;min-height:60px;}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:0.5px solid var(--color-border-tertiary);margin-top:12px;}
+.section-lbl{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px;letter-spacing:0.03em;}
+
+.dp-overlay{background:rgba(0,0,0,0.28);border-radius:var(--border-radius-lg);padding:20px;margin-bottom:16px;}
+.dp{background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);padding:20px;}
+.dp-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding-bottom:14px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.dp-av{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;flex-shrink:0;}
+.dp-name{font-size:16px;font-weight:500;color:var(--color-text-primary);}
+.dp-sub{font-size:12px;color:var(--color-text-secondary);margin-top:3px;}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.mi label{font-size:11px;color:var(--color-text-secondary);display:block;margin-bottom:3px;}
+.mi span{font-size:13px;color:var(--color-text-primary);}
+.tracker{display:flex;align-items:center;margin-bottom:16px;}
+.tr-step{display:flex;flex-direction:column;align-items:center;flex:1;}
+.tr-circle{width:26px;height:26px;border-radius:50%;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;color:var(--color-text-secondary);}
+.tr-circle.done{background:#EAF3DE;border-color:#C0DD97;color:#27500A;}
+.tr-circle.cur{background:#E6F1FB;border-color:#85B7EB;color:#0C447C;}
+.tr-lbl{font-size:10px;color:var(--color-text-secondary);margin-top:4px;text-align:center;}
+.tr-lbl.done{color:#27500A;}
+.tr-lbl.cur{color:#0C447C;font-weight:500;}
+.tr-line{flex:1;height:1px;background:var(--color-border-tertiary);margin-top:-13px;}
+.tr-line.done{background:#97C459;}
+.doc-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+.doc-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);}
+.doc-icon{width:28px;height:28px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.doc-name{font-size:13px;font-weight:500;color:var(--color-text-primary);flex:1;min-width:0;}
+.doc-sub{font-size:11px;color:var(--color-text-secondary);margin-top:1px;}
+.flag-bar{display:flex;align-items:center;gap:8px;padding:10px 13px;background:#FAEEDA;border-radius:var(--border-radius-md);margin-bottom:14px;font-size:13px;color:#633806;}
+.dp-actions{display:flex;gap:8px;padding-top:14px;border-top:0.5px solid var(--color-border-tertiary);flex-wrap:wrap;}
+.empty{text-align:center;padding:32px;font-size:13px;color:var(--color-text-secondary);}
+</style>
+
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">QStudy agent student management page with pipeline KPIs, student table and card views, add student form, and detailed student profile panel.</h2>
+
+<div class="pg">
+
+  <div class="toprow">
+    <div class="toprow-left">
+      <h2>My students</h2>
+      <p>247 students registered across all events</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-sm" onclick="sendPrompt('Export my student list as a CSV with name, status, event, and document columns')">Export ↗</button>
+      <button class="btn btn-primary btn-sm" onclick="showAddModal()">+ Register student</button>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi" onclick="filterStage('all',this)" id="kpi-all">
+      <div class="kpi-label"><span class="kpi-dot" style="background:#888780;"></span>All students</div>
+      <div class="kpi-val">247</div>
+      <div class="kpi-sub" style="color:var(--color-text-secondary);">My registrations</div>
+    </div>
+    <div class="kpi" onclick="filterStage('Registered',this)" id="kpi-Registered">
+      <div class="kpi-label"><span class="kpi-dot" style="background:#378ADD;"></span>Registered</div>
+      <div class="kpi-val">82</div>
+      <div class="kpi-sub" style="color:#0C447C;">Awaiting contact</div>
+    </div>
+    <div class="kpi" onclick="filterStage('Contacted',this)" id="kpi-Contacted">
+      <div class="kpi-label"><span class="kpi-dot" style="background:#EF9F27;"></span>Contacted</div>
+      <div class="kpi-val">71</div>
+      <div class="kpi-sub" style="color:#633806;">Follow up needed</div>
+    </div>
+    <div class="kpi" onclick="filterStage('Confirmed',this)" id="kpi-Confirmed">
+      <div class="kpi-label"><span class="kpi-dot" style="background:#7F77DD;"></span>Confirmed</div>
+      <div class="kpi-val">54</div>
+      <div class="kpi-sub" style="color:#3C3489;">Attending events</div>
+    </div>
+    <div class="kpi" onclick="filterStage('Converted',this)" id="kpi-Converted">
+      <div class="kpi-label"><span class="kpi-dot" style="background:#1D9E75;"></span>Converted</div>
+      <div class="kpi-val">40</div>
+      <div class="kpi-sub" style="color:#085041;">Applied to uni</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="sw">
+      <svg class="si" width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M10 10l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <input type="text" id="searchInput" placeholder="Search by name, email or phone…" oninput="render()">
+    </div>
+    <select id="eventFilter" style="font-size:13px;padding:6px 10px;" onchange="render()">
+      <option value="">All events</option>
+      <option>UK University Expo</option>
+      <option>Canada Study Fair</option>
+      <option>Germany Seminar</option>
+      <option>Australia Intake Expo</option>
+    </select>
+    <select id="docFilter" style="font-size:13px;padding:6px 10px;" onchange="render()">
+      <option value="">All docs</option>
+      <option value="complete">Complete</option>
+      <option value="missing">Missing</option>
+      <option value="pending">Pending</option>
+    </select>
+    <div class="view-toggle">
+      <button class="vt on" id="vt-tbl" onclick="setView('table')">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 4h14M1 8h14M1 12h14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </button>
+      <button class="vt" id="vt-crd" onclick="setView('cards')">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="tableView" class="panel">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th style="width:24%;">Student</th>
+          <th style="width:18%;">Event</th>
+          <th style="width:10%;">Country</th>
+          <th style="width:13%;">Status</th>
+          <th style="width:11%;">Documents</th>
+          <th style="width:12%;">Registered</th>
+          <th style="width:12%;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tblBody"></tbody>
+    </table>
+  </div>
+
+  <div id="cardView" class="card-grid" style="display:none;"></div>
+
+  <div id="addModalSection" style="display:none;">
+    <div class="modal-wrap">
+      <div class="modal">
+        <div class="modal-head">
+          <span class="modal-title">Register new student</span>
+          <button class="btn btn-sm" onclick="hideAddModal()">Cancel</button>
+        </div>
+        <div class="form-grid">
+          <div class="fg fg-full"><label>Full name (as per ID)</label><input type="text" placeholder="e.g. Priya Sharma"></div>
+          <div class="fg"><label>Email address</label><input type="text" placeholder="student@email.com"></div>
+          <div class="fg"><label>Phone number</label><input type="text" placeholder="+91 98200 00000"></div>
+          <div class="fg"><label>Preferred country</label>
+            <select><option>United Kingdom</option><option>Canada</option><option>Germany</option><option>Australia</option><option>USA</option><option>Ireland</option><option>New Zealand</option></select>
+          </div>
+          <div class="fg"><label>Course interest</label><input type="text" placeholder="e.g. MBA, MS Computer Science"></div>
+          <div class="fg"><label>Highest education</label>
+            <select><option>HSC / 12th</option><option>Bachelor's degree</option><option>Master's degree</option><option>Diploma</option></select>
+          </div>
+          <div class="fg"><label>Current city</label><input type="text" placeholder="e.g. Pune"></div>
+          <div class="fg"><label>Select event</label>
+            <select><option>UK University Expo · 8 May 2026</option><option>Canada Study Fair · 15 May 2026</option><option>Germany Seminar · 22 May 2026</option><option>Australia Intake Expo · 3 Jun 2026</option></select>
+          </div>
+          <div class="fg fg-full"><label>Additional notes</label><textarea placeholder="Any specific requirements or notes about this student…"></textarea></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-sm" onclick="hideAddModal()">Discard</button>
+          <button class="btn btn-sm btn-primary" onclick="hideAddModal()">Register student</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="profileSection" style="display:none;">
+    <div class="dp-overlay">
+      <div class="dp">
+        <div class="dp-head">
+          <div class="dp-av" id="dp-av" style="background:#E6F1FB;color:#0C447C;">PS</div>
+          <div style="flex:1;">
+            <div class="dp-name" id="dp-name">Priya Sharma</div>
+            <div class="dp-sub" id="dp-sub">priya.sharma@email.com · +91 98200 11223</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="pill p-conf" id="dp-pill">Confirmed</span>
+            <button class="btn btn-sm" onclick="closeProfile()">Close</button>
+          </div>
+        </div>
+
+        <div class="flag-bar" id="dp-flag" style="display:none;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#854F0B" stroke-width="1.2"/><path d="M8 5v4" stroke="#854F0B" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11" r="0.8" fill="#854F0B"/></svg>
+          <span id="dp-flag-msg">Passport is missing — upload before the event date.</span>
+        </div>
+
+        <div class="section-lbl">Journey progress</div>
+        <div class="tracker" id="dp-tracker" style="margin-bottom:18px;"></div>
+
+        <div class="meta-grid">
+          <div class="mi"><label>Preferred country</label><span id="dp-country">United Kingdom</span></div>
+          <div class="mi"><label>Course interest</label><span id="dp-course">MBA — Business Management</span></div>
+          <div class="mi"><label>Education</label><span id="dp-edu">B.Com (Hons) — Pune University</span></div>
+          <div class="mi"><label>City</label><span id="dp-city">Pune, Maharashtra</span></div>
+          <div class="mi"><label>Event</label><span id="dp-event">UK University Expo · 8 May 2026</span></div>
+          <div class="mi"><label>Registered on</label><span id="dp-date">14 Apr 2026</span></div>
+        </div>
+
+        <div class="section-lbl">Documents</div>
+        <div class="doc-list" id="dp-docs"></div>
+
+        <div class="dp-actions">
+          <button class="btn btn-sm" onclick="sendPrompt('Help me draft a follow-up WhatsApp message for student '+document.getElementById(\'dp-name\').textContent+' to confirm their event attendance')">Draft follow-up ↗</button>
+          <button class="btn btn-sm" onclick="sendPrompt('What documents are still missing for student '+document.getElementById(\'dp-name\').textContent+' and how should I request them?')">Check docs ↗</button>
+          <button class="btn btn-sm btn-success" onclick="sendPrompt('Mark student '+document.getElementById(\'dp-name\').textContent+' as confirmed for their event')">Mark confirmed</button>
+          <button class="btn btn-sm btn-warn" onclick="sendPrompt('Raise a support ticket for student '+document.getElementById(\'dp-name\').textContent+' regarding missing documents')">Raise ticket ↗</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const STAGES=['Registered','Contacted','Confirmed','Attended','Converted'];
+const PILLS={Registered:'p-reg',Contacted:'p-con',Confirmed:'p-conf',Attended:'p-att',Converted:'p-conv'};
+const DOTS={Registered:'#378ADD',Contacted:'#EF9F27',Confirmed:'#7F77DD',Attended:'#639922',Converted:'#1D9E75'};
+
+const students=[
+  {id:0,init:'PS',bg:'#E6F1FB',tc:'#0C447C',name:'Priya Sharma',email:'priya.sharma@email.com',phone:'+91 98200 11223',country:'UK',course:'MBA — Business Mgmt',edu:'B.Com (Hons)',city:'Pune',event:'UK University Expo',eventDate:'8 May 2026',date:'14 Apr 2026',status:'Confirmed',docs:'missing',flag:true,flagMsg:'Passport is missing — upload before the event date.',docList:[{name:'Passport',sub:'Not uploaded',status:'missing'},{name:'Academic transcripts',sub:'Uploaded 15 Apr 2026',status:'complete'},{name:'IELTS score card',sub:'Under review · Band 7.0',status:'pending'}]},
+  {id:1,init:'AK',bg:'#FAEEDA',tc:'#633806',name:'Ayaan Khan',email:'ayaan.k@gmail.com',phone:'+91 90000 55678',country:'Canada',course:'MS Computer Science',edu:'B.Tech CSE',city:'Mumbai',event:'Canada Study Fair',eventDate:'15 May 2026',date:'16 Apr 2026',status:'Registered',docs:'missing',flag:true,flagMsg:'IELTS score card is missing for Canada event.',docList:[{name:'Passport',sub:'Uploaded 16 Apr 2026',status:'complete'},{name:'IELTS score card',sub:'Not uploaded',status:'missing'},{name:'Academic transcripts',sub:'Uploaded 16 Apr 2026',status:'complete'}]},
+  {id:2,init:'RS',bg:'#EEEDFE',tc:'#3C3489',name:'Rohan Singh',email:'rohan.singh@mail.com',phone:'+91 99110 22334',country:'Germany',course:'M.Sc Data Science',edu:'B.Sc Statistics',city:'Bangalore',event:'Germany Seminar',eventDate:'22 May 2026',date:'18 Apr 2026',status:'Contacted',docs:'pending',flag:false,flagMsg:'',docList:[{name:'Passport',sub:'Under review',status:'pending'},{name:'Academic transcripts',sub:'Under review',status:'pending'},{name:'IELTS score card',sub:'Not required for Germany',status:'complete'}]},
+  {id:3,init:'NP',bg:'#E1F5EE',tc:'#085041',name:'Neha Patil',email:'neha.patil@email.com',phone:'+91 87650 33221',country:'Australia',course:'Bachelor of Nursing',edu:'HSC',city:'Nashik',event:'Australia Intake Expo',eventDate:'3 Jun 2026',date:'19 Apr 2026',status:'Confirmed',docs:'complete',flag:false,flagMsg:'',docList:[{name:'Passport',sub:'Verified · 19 Apr 2026',status:'complete'},{name:'Academic transcripts',sub:'Verified · 19 Apr 2026',status:'complete'},{name:'IELTS score card',sub:'Verified · Band 6.5',status:'complete'}]},
+  {id:4,init:'VM',bg:'#FAECE7',tc:'#712B13',name:'Vikram Malhotra',email:'v.malhotra@inbox.com',phone:'+91 97800 44556',country:'UK',course:'LLM International Law',edu:'LLB',city:'Delhi',event:'UK University Expo',eventDate:'8 May 2026',date:'20 Apr 2026',status:'Attended',docs:'complete',flag:false,flagMsg:'',docList:[{name:'Passport',sub:'Verified · 20 Apr 2026',status:'complete'},{name:'Academic transcripts',sub:'Verified · 20 Apr 2026',status:'complete'},{name:'IELTS score card',sub:'Verified · Band 7.5',status:'complete'}]},
+  {id:5,init:'SC',bg:'#E1F5EE',tc:'#085041',name:'Sana Chaudhary',email:'sana.c@webmail.com',phone:'+91 93200 67890',country:'Canada',course:'MBA Finance',edu:'B.Com',city:'Hyderabad',event:'Canada Study Fair',eventDate:'15 May 2026',date:'21 Apr 2026',status:'Converted',docs:'complete',flag:false,flagMsg:'',docList:[{name:'Passport',sub:'Verified · 21 Apr 2026',status:'complete'},{name:'Academic transcripts',sub:'Verified · 21 Apr 2026',status:'complete'},{name:'IELTS score card',sub:'Verified · Band 7.0',status:'complete'}]},
+  {id:6,init:'AR',bg:'#FCEBEB',tc:'#791F1F',name:'Arjun Rao',email:'arjun.rao@mail.in',phone:'+91 88900 12345',country:'USA',course:'MS Electrical Eng.',edu:'B.Tech EE',city:'Chennai',event:'Canada Study Fair',eventDate:'15 May 2026',date:'22 Apr 2026',status:'Contacted',docs:'pending',flag:false,flagMsg:'',docList:[{name:'Passport',sub:'Under review',status:'pending'},{name:'Academic transcripts',sub:'Uploaded 22 Apr 2026',status:'complete'},{name:'TOEFL score',sub:'Not uploaded',status:'missing'}]},
+  {id:7,init:'KD',bg:'#EEEDFE',tc:'#3C3489',name:'Kavya Desai',email:'kavya.d@email.com',phone:'+91 91100 98765',country:'Germany',course:'M.Arch Architecture',edu:'B.Arch',city:'Ahmedabad',event:'Germany Seminar',eventDate:'22 May 2026',date:'23 Apr 2026',status:'Registered',docs:'complete',flag:false,flagMsg:'',docList:[{name:'Passport',sub:'Verified · 23 Apr 2026',status:'complete'},{name:'Academic transcripts',sub:'Verified · 23 Apr 2026',status:'complete'}]},
+];
+
+let curStage='all',curView='table';
+
+function docPill(d){if(d==='complete')return '<span class="pill p-dok">Complete</span>';if(d==='missing')return '<span class="pill p-dmiss">Missing</span>';return '<span class="pill p-dpend">Pending</span>';}
+function stagePill(s){return `<span class="pill ${PILLS[s]}">${s}</span>`;}
+function filtered(){
+  const q=(document.getElementById('searchInput').value||'').toLowerCase();
+  const ev=document.getElementById('eventFilter').value;
+  const dc=document.getElementById('docFilter').value;
+  return students.filter(s=>{
+    if(curStage!=='all'&&s.status!==curStage)return false;
+    if(q&&!s.name.toLowerCase().includes(q)&&!s.email.toLowerCase().includes(q)&&!s.phone.includes(q))return false;
+    if(ev&&s.event!==ev)return false;
+    if(dc&&s.docs!==dc)return false;
+    return true;
+  });
+}
+function render(){
+  const list=filtered();
+  const tb=document.getElementById('tblBody');
+  const cv=document.getElementById('cardView');
+  if(!list.length){
+    tb.innerHTML=`<tr><td colspan="7" class="empty">No students match your filters</td></tr>`;
+    cv.innerHTML=`<div class="empty" style="grid-column:1/-1;">No students match your filters</div>`;
+    return;
+  }
+  tb.innerHTML=list.map(s=>`<tr onclick="openProfile(${s.id})">
+    <td><div class="nc"><div class="av" style="background:${s.bg};color:${s.tc};">${s.init}</div><div><div style="font-size:13px;font-weight:500;">${s.name}</div><div style="font-size:11px;color:var(--color-text-secondary);">${s.email}</div></div></div></td>
+    <td style="font-size:12px;">${s.event.split(' ').slice(0,3).join(' ')}</td>
+    <td style="font-size:12px;">${s.country}</td>
+    <td>${stagePill(s.status)}</td>
+    <td>${docPill(s.docs)}</td>
+    <td style="font-size:12px;">${s.date}</td>
+    <td><div class="igrp">
+      <div class="ibtn" title="View profile"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="var(--color-text-secondary)" stroke-width="1.2"/><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" stroke="var(--color-text-secondary)" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+      <div class="ibtn" title="Follow up" onclick="event.stopPropagation();sendPrompt('Draft a follow-up message for student ${s.name} regarding their event attendance')"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="2" stroke="var(--color-text-secondary)" stroke-width="1.2"/><path d="M1 5l7 5 7-5" stroke="var(--color-text-secondary)" stroke-width="1.2"/></svg></div>
+    </div></td>
+  </tr>`).join('');
+  cv.innerHTML=list.map(s=>`<div class="sc" onclick="openProfile(${s.id})">
+    <div class="sc-top">
+      <div class="sc-head">
+        <div class="sc-av" style="background:${s.bg};color:${s.tc};">${s.init}</div>
+        <div style="text-align:right;">${stagePill(s.status)}${s.flag?'<div style="margin-top:4px;"><span class="pill p-dmiss" style="font-size:10px;">Doc missing</span></div>':''}</div>
+      </div>
+      <div class="sc-name">${s.name}</div>
+      <div class="sc-email">${s.email}</div>
+      <div class="sc-row"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M1 6h14M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>${s.event.split(' ').slice(0,3).join(' ')}</div>
+      <div class="sc-row"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 1C5.24 1 3 3.24 3 6c0 4 5 9 5 9s5-5 5-9c0-2.76-2.24-5-5-5z" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="6" r="1.5" stroke="currentColor" stroke-width="1.2"/></svg>${s.country} · ${s.course.split('—')[0].trim()}</div>
+    </div>
+    <div class="sc-bot">
+      <span style="font-size:11px;color:var(--color-text-secondary);">${s.date}</span>
+      <div class="igrp">
+        <div class="ibtn" onclick="event.stopPropagation();sendPrompt('Draft a follow-up message for student ${s.name}')"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="2" stroke="var(--color-text-secondary)" stroke-width="1.2"/><path d="M1 5l7 5 7-5" stroke="var(--color-text-secondary)" stroke-width="1.2"/></svg></div>
+      </div>
+    </div>
+  </div>`).join('');
+}
+function filterStage(s,el){
+  curStage=s;
+  document.querySelectorAll('.kpi').forEach(k=>k.classList.remove('active-kpi'));
+  el.classList.add('active-kpi');
+  render();
+}
+function setView(v){
+  curView=v;
+  document.getElementById('tableView').style.display=v==='table'?'block':'none';
+  document.getElementById('cardView').style.display=v==='cards'?'grid':'none';
+  document.getElementById('vt-tbl').classList.toggle('on',v==='table');
+  document.getElementById('vt-crd').classList.toggle('on',v==='cards');
+}
+function buildTracker(status){
+  const idx=STAGES.indexOf(status);
+  let h='';
+  STAGES.forEach((st,i)=>{
+    const done=i<idx,cur=i===idx;
+    const cls=done?'done':cur?'cur':'';
+    h+=`<div class="tr-step"><div class="tr-circle ${cls}">${done?'<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#27500A" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>':i+1}</div><div class="tr-lbl ${cls}">${st}</div></div>`;
+    if(i<STAGES.length-1)h+=`<div class="tr-line ${done?'done':''}"></div>`;
+  });
+  document.getElementById('dp-tracker').innerHTML=h;
+}
+function buildDocs(list){
+  return list.map(d=>{
+    const pillCls=d.status==='complete'?'p-dok':d.status==='missing'?'p-dmiss':'p-dpend';
+    return `<div class="doc-row">
+      <div class="doc-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="2" stroke="var(--color-text-secondary)" stroke-width="1.2"/><path d="M5 5h6M5 8h6M5 11h4" stroke="var(--color-text-secondary)" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+      <div style="flex:1;min-width:0;"><div class="doc-name">${d.name}</div><div class="doc-sub">${d.sub}</div></div>
+      <span class="pill ${pillCls}">${d.status==='complete'?'Verified':d.status==='missing'?'Missing':'Pending'}</span>
+      ${d.status==='missing'?`<button class="btn btn-sm btn-warn" onclick="sendPrompt('Help me request the ${d.name} from student '+document.getElementById('dp-name').textContent)">Upload ↗</button>`:`<button class="btn btn-sm">View</button>`}
+    </div>`;
+  }).join('');
+}
+function openProfile(id){
+  const s=students[id];
+  document.getElementById('dp-av').textContent=s.init;
+  document.getElementById('dp-av').style.background=s.bg;
+  document.getElementById('dp-av').style.color=s.tc;
+  document.getElementById('dp-name').textContent=s.name;
+  document.getElementById('dp-sub').textContent=s.email+' · '+s.phone;
+  document.getElementById('dp-pill').textContent=s.status;
+  document.getElementById('dp-pill').className='pill '+PILLS[s.status];
+  document.getElementById('dp-country').textContent=s.country;
+  document.getElementById('dp-course').textContent=s.course;
+  document.getElementById('dp-edu').textContent=s.edu;
+  document.getElementById('dp-city').textContent=s.city+', India';
+  document.getElementById('dp-event').textContent=s.event+' · '+s.eventDate;
+  document.getElementById('dp-date').textContent=s.date;
+  document.getElementById('dp-flag').style.display=s.flag?'flex':'none';
+  if(s.flag)document.getElementById('dp-flag-msg').textContent=s.flagMsg;
+  buildTracker(s.status);
+  document.getElementById('dp-docs').innerHTML=buildDocs(s.docList);
+  document.getElementById('profileSection').style.display='block';
+  document.getElementById('addModalSection').style.display='none';
+  document.getElementById('profileSection').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function closeProfile(){document.getElementById('profileSection').style.display='none';}
+function showAddModal(){document.getElementById('addModalSection').style.display='block';document.getElementById('profileSection').style.display='none';document.getElementById('addModalSection').scrollIntoView({behavior:'smooth',block:'start'});}
+function hideAddModal(){document.getElementById('addModalSection').style.display='none';}
+document.getElementById('kpi-all').classList.add('active-kpi');
+render();
+</script>

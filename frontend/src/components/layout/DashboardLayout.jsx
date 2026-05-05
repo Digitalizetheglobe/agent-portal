@@ -8,7 +8,7 @@ import { cn } from '../../lib/utils';
 
 const DashboardLayout = ({ requiredRole }) => {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
-  const { refreshData, clearData, initialized, loading: dataLoading } = useData();
+  const { initialized, loading: dataLoading } = useData();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
@@ -18,21 +18,6 @@ const DashboardLayout = ({ requiredRole }) => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // Fetch data when authenticated and not yet initialized
-  useEffect(() => {
-    if (isAuthenticated && !initialized) {
-      refreshData();
-    }
-  }, [isAuthenticated, initialized, refreshData]);
-
-  // Clear data when component unmounts (user logs out)
-  useEffect(() => {
-    return () => {
-      if (!isAuthenticated) {
-        clearData();
-      }
-    };
-  }, [isAuthenticated, clearData]);
 
   if (authLoading) {
     return (
@@ -55,7 +40,7 @@ const DashboardLayout = ({ requiredRole }) => {
     <div className="min-h-screen bg-background" data-testid="dashboard-layout">
       {/* Mobile Overlay */}
       {mobileMenuOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
@@ -63,8 +48,8 @@ const DashboardLayout = ({ requiredRole }) => {
 
       {/* Sidebar - Desktop */}
       <div className="hidden md:block">
-        <Sidebar 
-          collapsed={sidebarCollapsed} 
+        <Sidebar
+          collapsed={sidebarCollapsed}
           setCollapsed={setSidebarCollapsed}
         />
       </div>
@@ -74,8 +59,8 @@ const DashboardLayout = ({ requiredRole }) => {
         'fixed inset-y-0 left-0 z-50 md:hidden transition-transform duration-300',
         mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
-        <Sidebar 
-          collapsed={false} 
+        <Sidebar
+          collapsed={false}
           setCollapsed={() => setMobileMenuOpen(false)}
         />
       </div>
@@ -85,11 +70,11 @@ const DashboardLayout = ({ requiredRole }) => {
         'flex flex-col min-h-screen transition-all duration-300',
         sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'
       )}>
-        <Topbar 
+        <Topbar
           sidebarCollapsed={sidebarCollapsed}
           onMobileMenuClick={() => setMobileMenuOpen(true)}
         />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
+        <main className="flex-1 ">
           {dataLoading && !initialized ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

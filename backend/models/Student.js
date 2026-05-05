@@ -21,6 +21,17 @@ const documentSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  category: {
+    type: String,
+    enum: ['Passport', 'Transcript', 'LanguageTest', 'Other'],
+    default: 'Other'
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  remarks: String,
   uploadedAt: {
     type: Date,
     default: Date.now
@@ -82,6 +93,11 @@ const studentSchema = new mongoose.Schema({
     type: Map,
     of: mongoose.Schema.Types.Mixed,
     default: new Map()
+  },
+  status: {
+    type: String,
+    enum: ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'],
+    default: 'Registered'
   }
 }, {
   timestamps: true,

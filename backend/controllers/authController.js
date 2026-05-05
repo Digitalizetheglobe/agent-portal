@@ -281,3 +281,79 @@ exports.resetPassword = async (req, res) => {
     });
   }
 };
+
+// @desc    Update current user profile
+// @route   PUT /api/auth/update-profile
+// @access  Private
+exports.updateProfile = async (req, res) => {
+  try {
+    const fieldsToUpdate = {
+      name: req.body.name,
+      phone: req.body.phone,
+      agencyName: req.body.agencyName,
+      businessRegistrationNumber: req.body.businessRegistrationNumber,
+      fullAddress: req.body.fullAddress
+    };
+
+    // Remove undefined fields
+    Object.keys(fieldsToUpdate).forEach(key => 
+      fieldsToUpdate[key] === undefined && delete fieldsToUpdate[key]
+    );
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: fieldsToUpdate },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json(user.toJSON());
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Update password
+// @route   PUT /api/auth/update-password
+// @access  Private
+exports.updatePassword = async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({
+        success: false,
+        detail: 'Please provide current and new password'
+      });
+    }
+
+    const user = await User.findById(req.user._id).select('+password');
+
+    // Check current password
+    const isMatch = await user.comparePassword(current_password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        detail: 'Current password is incorrect'
+      });
+    }
+
+    // Update password
+    user.password = new_password;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password updated successfully'
+    });
+  } catch (error) {
+    console.error('Update password error:', error);
+    res.status(500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};

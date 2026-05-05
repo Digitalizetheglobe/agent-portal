@@ -1,434 +1,559 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Trash2, MoreHorizontal, Edit2, Eye } from 'lucide-react';
+import {
+  Search, Plus, Download, Flag, User, Mail, Phone,
+  ChevronRight, FileText, CheckCircle2, AlertCircle,
+  X, MessageSquare, Bell
+} from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { Badge } from '../../components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../../components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../../components/ui/alert-dialog';
 import { toast } from 'sonner';
 
+const STAGES = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
+const STAGE_COLORS = {
+  'Registered': '#378ADD',
+  'Contacted': '#EF9F27',
+  'Confirmed': '#7F77DD',
+  'Attended': '#639922',
+  'Converted': '#1D9E75'
+};
+const STAGE_PILLS = {
+  'Registered': 'bg-[#E6F1FB] text-[#0C447C]',
+  'Contacted': 'bg-[#FAEEDA] text-[#633806]',
+  'Confirmed': 'bg-[#EEEDFE] text-[#3C3489]',
+  'Attended': 'bg-[#EAF3DE] text-[#27500A]',
+  'Converted': 'bg-[#E1F5EE] text-[#085041]'
+};
+
+const DOC_CATEGORIES = [
+  { label: 'Passport', value: 'Passport' },
+  { label: 'Academic Transcripts', value: 'Transcript' },
+  { label: 'IELTS Score Card', value: 'LanguageTest' }
+];
+
 const StudentsPage = () => {
-  const { students, events, agents, deleteStudent, fetchStudents, loading } = useData();
+  const { 
+    students, 
+    events, 
+    agents, 
+    deleteStudent, 
+    fetchStudents, 
+    updateStudentStatus, 
+    verifyStudentDocument,
+    viewStudentDocument,
+    requestStudentDocument,
+    loading 
+  } = useData();
   const navigate = useNavigate();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [eventFilter, setEventFilter] = useState('all');
-  const [agentFilter, setAgentFilter] = useState('all');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [studentToDelete, setStudentToDelete] = useState(null);
+  const [countryFilter, setCountryFilter] = useState('all');
+  const [docFilter, setDocFilter] = useState('all');
+  const [curStage, setCurStage] = useState('all');
+  const [selectedStudentId, setSelectedStudentId] = useState(null);
 
-  // Fetch all students on component mount
   useEffect(() => {
-    const loadStudents = async () => {
-      try {
-        await fetchStudents();
-        console.log('Students loaded successfully:', students.length);
-      } catch (error) {
-        console.error('Error loading students (useEffect):', error);
-        // toast.error('Failed to load students data');
-      }
-    };
-    
-    loadStudents();
-  }, [fetchStudents, students.length]); // Include dependencies used in effect
+    fetchStudents();
+  }, [fetchStudents]);
 
-  
-  // Show loading state
-  if (loading) {
+  const getStudentName = (s) => {
+    if (!s) return 'N/A';
+    if (s.name) return s.name;
+    const cf = s.customFields || {};
+    if (cf.name) return cf.name;
+    if (cf instanceof Map && cf.has('name')) return cf.get('name');
+    const entries = cf instanceof Map ? Array.from(cf.entries()) : Object.entries(cf);
+    for (const [k, v] of entries) {
+      if (typeof v === 'string' && k.toLowerCase().includes('name')) return v;
+    }
+    for (const [k, v] of entries) {
+      if (typeof v === 'string' && k.startsWith('field_') && !v.includes('@') && !v.match(/^[+\d\s-]{8,}$/)) return v;
+    }
+    return 'N/A';
+  };
+
+  // Derived Data & Filtering
+  const baseFilteredStudents = useMemo(() => {
+    return students.filter(s => {
+      const name = getStudentName(s).toLowerCase();
+      const cf = s.customFields || {};
+      const email = (s.email || cf.email || (cf instanceof Map ? cf.get('email') : '') || '').toLowerCase();
+      const phone = (s.phone || cf.phone || (cf instanceof Map ? cf.get('phone') : '') || '');
+      const country = (s.country || cf.country || (cf instanceof Map ? cf.get('country') : '') || '').toLowerCase();
+      const q = searchQuery.toLowerCase();
+
+      if (searchQuery && !name.includes(q) && !email.includes(q) && !phone.includes(q) && !country.includes(q)) return false;
+      if (eventFilter !== 'all' && (s.eventId !== eventFilter && s._id !== eventFilter)) return false;
+      if (countryFilter !== 'all' && (s.country || cf.country) !== countryFilter) return false;
+      if (docFilter !== 'all' && getDocStatus(s) !== docFilter) return false;
+
+      return true;
+    });
+  }, [students, searchQuery, eventFilter, countryFilter, docFilter]);
+
+  const filteredStudents = useMemo(() => {
+    if (curStage === 'all') return baseFilteredStudents;
+    return baseFilteredStudents.filter(s => s.status === curStage);
+  }, [baseFilteredStudents, curStage]);
+
+  const kpis = useMemo(() => {
+    const total = baseFilteredStudents.length;
+    const missingDocs = baseFilteredStudents.filter(s => getDocStatus(s) === 'missing').length;
+    const confirmed = baseFilteredStudents.filter(s => s.status === 'Confirmed').length;
+    const attended = baseFilteredStudents.filter(s => s.status === 'Attended').length;
+    const converted = baseFilteredStudents.filter(s => s.status === 'Converted').length;
+
+    return {
+      total,
+      missingDocs,
+      confirmed,
+      attended,
+      converted,
+      confirmedPerc: total ? Math.round((confirmed / total) * 100) : 0,
+      attendedPerc: total ? Math.round((attended / total) * 100) : 0,
+      convRate: total ? Math.round((converted / total) * 100) : 0
+    };
+  }, [baseFilteredStudents]);
+
+  const stageCounts = useMemo(() => {
+    const counts = { all: baseFilteredStudents.length };
+    STAGES.forEach(stage => {
+      counts[stage] = baseFilteredStudents.filter(s => s.status === stage).length;
+    });
+    return counts;
+  }, [baseFilteredStudents]);
+
+  const uniqueCountries = useMemo(() => {
+    const countries = new Set();
+    students.forEach(s => {
+      const cf = s.customFields || {};
+      const c = s.country || cf.country || (cf instanceof Map ? cf.get('country') : null);
+      if (c) countries.add(c);
+    });
+    return Array.from(countries);
+  }, [students]);
+
+  // Helper Functions
+  function getDocStatus(student) {
+    if (!student.documents || student.documents.length === 0) return 'missing';
+    const hasRejected = student.documents.some(d => d.status === 'rejected');
+    if (hasRejected) return 'missing';
+    const hasPending = student.documents.some(d => d.status === 'pending');
+    if (hasPending) return 'pending';
+    return 'complete';
+  }
+
+  const getEventName = (eventId) => {
+    const event = events.find(e => e.id === eventId || e._id === eventId);
+    return event?.title || 'Unknown Event';
+  };
+
+  const getAgentName = (agentId) => {
+    if (!agentId) return 'Admin';
+    const agent = agents.find(a => a.id === agentId || a._id === agentId);
+    return agent?.name || 'Unknown Agent';
+  };
+
+  const getInitials = (name) => {
+    if (!name) return '??';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const handleStatusChange = async (studentId, newStatus) => {
+    try {
+      await updateStudentStatus(studentId, newStatus);
+      toast.success(`Status updated to ${newStatus}`);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Failed to update status');
+    }
+  };
+
+  const handleVerifyDocument = async (studentId, docId, status) => {
+    try {
+      await verifyStudentDocument(studentId, docId, { status, remarks: `${status.charAt(0).toUpperCase() + status.slice(1)} by admin` });
+      toast.success(`Document ${status}`);
+    } catch (error) {
+      toast.error(`Failed to ${status} document`);
+    }
+  };
+
+  const selectedStudent = useMemo(() => {
+    return students.find(s => (s.id === selectedStudentId || s._id === selectedStudentId));
+  }, [students, selectedStudentId]);
+
+  if (loading && students.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading students...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#042C53]"></div>
       </div>
     );
   }
 
-  // Helper functions to get student data
-  const getStudentName = (student) => {
-    // Try standard fields first
-    if (student.name) return student.name;
-    if (student.customFields?.name) return student.customFields.name;
-    
-    // Check customFields as Map for standard name field
-    if (student.customFields instanceof Map && student.customFields.has('name')) {
-      return student.customFields.get('name');
-    }
-    
-    // If customFields exists, try to find the first text-like field
-    if (student.customFields && typeof student.customFields === 'object') {
-      const fields = student.customFields instanceof Map 
-        ? Array.from(student.customFields.entries())
-        : Object.entries(student.customFields);
-      
-      // Look for fields that might contain names (exclude emails, phones, etc.)
-      for (const [key, value] of fields) {
-        if (value && typeof value === 'string' && 
-            !value.includes('@') && // Not an email
-            !value.match(/^\d+$/) && // Not just numbers
-            !value.match(/^[+\d\s\-\(\)]+$/) && // Not a phone number
-            key.includes('field_')) { // Dynamic form field
-          return value;
-        }
-      }
-      
-      // Fallback: return the first string value from customFields
-      for (const [key, value] of fields) {
-        if (value && typeof value === 'string' && key.includes('field_')) {
-          return value;
-        }
-      }
-    }
-    
-    return 'N/A';
-  };
-
-  const getStudentPhone = (student) => {
-    // Try standard fields first
-    if (student.phone) return student.phone;
-    if (student.customFields?.phone) return student.customFields.phone;
-    
-    // Check customFields as Map for standard phone field
-    if (student.customFields instanceof Map && student.customFields.has('phone')) {
-      return student.customFields.get('phone');
-    }
-    
-    // If customFields exists, try to find phone-like field
-    if (student.customFields && typeof student.customFields === 'object') {
-      const fields = student.customFields instanceof Map 
-        ? Array.from(student.customFields.entries())
-        : Object.entries(student.customFields);
-      
-      for (const [key, value] of fields) {
-        if (value && typeof value === 'string' && 
-            value.match(/^[+\d\s\-\(\)]+$/) && // Phone number pattern
-            key.includes('field_')) {
-          return value;
-        }
-      }
-    }
-    
-    return 'N/A';
-  };
-
-  // Filter students based on search and filters
-  const filteredStudents = students.filter(student => {
-    // If no search query, match all students for search
-    const studentName = getStudentName(student);
-    const studentPhone = getStudentPhone(student);
-    const studentEmail = student.email || student.customFields?.email || student.customFields?.get?.('email') || '';
-    const studentCountry = student.country || student.customFields?.country || student.customFields?.get?.('country') || '';
-    
-    const matchesSearch = !searchQuery || 
-      studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      studentEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      studentCountry.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      studentPhone.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesEvent = eventFilter === 'all' || student.eventId === eventFilter;
-    // Handle null agentId for students registered by admin
-    const matchesAgent = agentFilter === 'all' || 
-                         (agentFilter === 'unassigned' && !student.agentId) ||
-                         student.agentId === agentFilter;
-
-    return matchesSearch && matchesEvent && matchesAgent;
-  });
-
-  // Debug logging
-  console.log('Total students:', students.length);
-  console.log('Filtered students:', filteredStudents.length);
-  if (students[0]) {
-    console.log('Sample student data:', students[0]);
-    console.log('Student customFields:', students[0]?.customFields);
-    console.log('CustomFields type:', typeof students[0]?.customFields);
-    console.log('CustomFields is Map:', students[0]?.customFields instanceof Map);
-    console.log('All student keys:', Object.keys(students[0]));
-    if (students[0]?.customFields) {
-      console.log('CustomFields keys:', Object.keys(students[0].customFields));
-      if (students[0].customFields instanceof Map) {
-        console.log('CustomFields Map entries:', Array.from(students[0].customFields.entries()));
-      }
-    }
-  }
-
-  const getEventName = (eventId) => {
-    const event = events.find(e => e.id === eventId);
-    return event?.title || 'Unknown';
-  };
-
-  const getAgentName = (agentId) => {
-    if (!agentId) return 'Unassigned';
-    const agent = agents.find(a => a.id === agentId);
-    return agent?.name || 'Unknown';
-  };
-
-  const clearFilters = () => {
-    setSearchQuery('');
-    setEventFilter('all');
-    setAgentFilter('all');
-  };
-
-   const hasActiveFilters = searchQuery || eventFilter !== 'all' || agentFilter !== 'all';
-
-  const handleDeleteStudent = (student) => {
-    setStudentToDelete(student);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDeleteStudent = async () => {
-    if (studentToDelete) {
-      try {
-        await deleteStudent(studentToDelete.id);
-        toast.success(`Student ${studentToDelete.name} has been deleted successfully.`);
-        setDeleteDialogOpen(false);
-        setStudentToDelete(null);
-        // Refresh students data after deletion
-        try {
-          await fetchStudents();
-        } catch (refreshError) {
-          console.error('Error refreshing students after deletion:', refreshError);
-          toast.error('Failed to refresh students data');
-        }
-      } catch (error) {
-        console.error('Error deleting student:', error);
-        toast.error('Failed to delete student.');
-      }
-    }
-  };
-
-  const handleViewStudent = (student) => {
-    // Navigate to student details page or open modal
-    navigate(`/admin/students/${student.id}`);
-  };
-
-  const handleEditStudent = (student) => {
-    // Navigate to edit student page or open modal
-    navigate(`/admin/students/${student.id}/edit`);
-  };
-
   return (
-    <div className="space-y-6" data-testid="students-page">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="p-6 font-sans bg-[#F9FAFB] min-h-screen">
+      {/* Top Row */}
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground font-['Outfit']">
-            Students
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            View all registered students
+          <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Student Management</h1>
+          <p className="text-sm text-[#6B7280] mt-0.5">
+            {baseFilteredStudents.length.toLocaleString()} students 
+            {eventFilter !== 'all' ? ` in ${getEventName(eventFilter)}` : ' across all events'}
           </p>
         </div>
-        <Badge variant="outline" className="self-start md:self-auto">
-          {filteredStudents.length} of {students.length} students
-        </Badge>
+        <div className="flex gap-2">
+          <button
+            className="flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
+            onClick={() => toast.info('Export started...')}>
+            <Download size={14} /> Export ↗
+          </button>
+          <button 
+            className="flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-[#FAC775] bg-[#FAEEDA] text-[#633806] transition-all hover:bg-[#FAC775]" 
+            onClick={() => toast.info('Stale students flagged')}>
+            <Flag size={14} /> Flag stale ↗
+          </button>
+          <button
+            className="flex items-center gap-2 text-xs font-bold h-10 px-5 rounded-lg bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10 transition-all active:scale-95"
+            onClick={() => navigate('/admin/students/new')}>
+            <Plus size={14} /> Add student
+          </button>
+        </div>
       </div>
 
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search students by name, email, or country..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                data-testid="student-search-input"
-                className="pl-10"
-              />
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Select value={eventFilter} onValueChange={setEventFilter}>
-                <SelectTrigger className="w-full sm:w-48" data-testid="event-filter">
-                  <Filter className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Filter by Event" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Events</SelectItem>
-                  {events.map(event => (
-                    <SelectItem key={event.id} value={event.id}>
-                      {event.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={agentFilter} onValueChange={setAgentFilter}>
-                <SelectTrigger className="w-full sm:w-48" data-testid="agent-filter">
-                  <Filter className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Filter by Agent" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Agents</SelectItem>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {agents.map(agent => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {hasActiveFilters && (
-                <Button 
-                  variant="outline" 
-                  onClick={clearFilters}
-                  data-testid="clear-filters-btn"
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
+      {/* KPI Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+        {[
+          { label: 'Total Students', val: kpis.total, sub: eventFilter !== 'all' ? 'Event reach' : 'Global reach', color: '#0C447C' },
+          { label: 'Doc Missing', val: kpis.missingDocs, sub: 'Needs follow-up', color: '#791F1F' },
+          { label: 'Confirmed', val: kpis.confirmed, sub: `${kpis.confirmedPerc}% of current`, color: '#3C3489' },
+          { label: 'Attended', val: kpis.attended, sub: `${kpis.attendedPerc}% of current`, color: '#27500A' },
+          { label: 'Converted', val: kpis.converted, sub: `${kpis.convRate}% conv. rate`, color: '#085041' }
+        ].map((kpi, i) => (
+          <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm">
+            <div className="text-[10px] text-[#6B7280] mb-1.5 uppercase font-bold tracking-wider">{kpi.label}</div>
+            <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpi.val.toLocaleString()}</div>
+            <div className="text-[10px] mt-1 font-semibold" style={{ color: kpi.color }}>{kpi.sub}</div>
           </div>
-        </CardContent>
-      </Card>
+        ))}
+      </div>
 
-      {/* Students Table */}
-      <Card data-testid="students-table-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-['Outfit']">
-            Student Registrations
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="font-medium">Event</TableHead>
-                  <TableHead className="font-medium">Student name</TableHead>
-                  <TableHead className="font-medium w-[80px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredStudents.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8">
-                      <p className="text-muted-foreground">
-                        {hasActiveFilters 
-                          ? 'No students found matching your filters.' 
-                          : 'No students registered yet.'}
-                      </p>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredStudents.map((student) => (
-                    <TableRow 
-                      key={student.id}
-                      data-testid={`student-row-${student.id}`}
-                    >
-                      <TableCell>
-                        <span className="text-sm">{getEventName(student.eventId)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                            <span className="text-emerald-600 dark:text-emerald-400 font-medium text-sm">
-                              {getStudentName(student) !== 'N/A' ? 
-                                getStudentName(student).charAt(0).toUpperCase() : '?'}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="font-medium">{getStudentName(student)}</span>
-                            <p className="text-xs text-muted-foreground">{getStudentPhone(student)}</p>
-                          </div>
+      {/* Pipeline Strip */}
+      {/* <div className="flex mb-6 rounded-xl overflow-hidden border border-[#E5E7EB] bg-white shadow-sm">
+        <div 
+          className={`flex-1 px-4 py-3.5 cursor-pointer border-r border-[#F3F4F6] transition-all flex flex-col ${curStage === 'all' ? 'bg-[#F3F4F6] border-b-2 border-[#042C53]' : 'hover:bg-[#F9FAFB]'}`} 
+          onClick={() => setCurStage('all')}
+        >
+          <div className="w-2 h-2 rounded-full mb-2 bg-[#888780]"></div>
+          <div className="text-lg font-bold text-[#111827] font-['Outfit']">{stageCounts.all}</div>
+          <div className="text-[10px] text-[#6B7280] font-semibold">All students</div>
+        </div>
+        {STAGES.map(stage => (
+          <div 
+            key={stage} 
+            className={`flex-1 px-4 py-3.5 cursor-pointer border-r border-[#F3F4F6] last:border-r-0 transition-all flex flex-col ${curStage === stage ? 'bg-[#F3F4F6] border-b-2 border-[#042C53]' : 'hover:bg-[#F9FAFB]'}`} 
+            onClick={() => setCurStage(stage)}
+          >
+            <div className="w-2 h-2 rounded-full mb-2" style={{ background: STAGE_COLORS[stage] }}></div>
+            <div className="text-lg font-bold text-[#111827] font-['Outfit']">{stageCounts[stage]}</div>
+            <div className="text-[10px] text-[#6B7280] font-semibold">{stage}</div>
+          </div>
+        ))}
+      </div> */}
+
+      {/* Controls */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[250px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+          <input
+            type="text"
+            placeholder="Search by name, email, or phone…"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-[#D1D5DB] outline-none focus:border-[#042C53] focus:ring-2 focus:ring-[#042C53]/5 transition-all"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <select
+          className="text-sm px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
+          value={eventFilter}
+          onChange={(e) => setEventFilter(e.target.value)}
+        >
+          <option value="all">All Events</option>
+          {events.map(ev => (
+            <option key={ev.id || ev._id} value={ev.id || ev._id}>{ev.title}</option>
+          ))}
+        </select>
+        <select
+          className="text-sm px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
+          value={countryFilter}
+          onChange={(e) => setCountryFilter(e.target.value)}
+        >
+          <option value="all">All Countries</option>
+          {uniqueCountries.map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <select
+          className="text-sm px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
+          value={docFilter}
+          onChange={(e) => setDocFilter(e.target.value)}
+        >
+          <option value="all">All Doc Status</option>
+          <option value="complete">Complete</option>
+          <option value="missing">Missing</option>
+          <option value="pending">Pending</option>
+        </select>
+      </div>
+
+      {/* Table Panel */}
+      <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm mb-6">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[22%]">Student</th>
+              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[15%]">Event</th>
+              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Country</th>
+              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[14%]">Pipeline Status</th>
+              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Documents</th>
+              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Agent</th>
+              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[13%]">Registered</th>
+              <th className="w-[5%]"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredStudents.length === 0 ? (
+              <tr>
+                <td colSpan="8" className="text-center py-16 text-[#6B7280]">
+                  <User size={48} className="mx-auto mb-4 opacity-20" />
+                  <p>No students match the current filters</p>
+                </td>
+              </tr>
+            ) : (
+              filteredStudents.map(s => {
+                const docStatus = getDocStatus(s);
+                return (
+                  <tr
+                    key={s.id || s._id}
+                    className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors"
+                    onClick={() => setSelectedStudentId(s.id || s._id)}
+                  >
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-[#E6F1FB] text-[#0C447C]">
+                          {getInitials(getStudentName(s))}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem 
-                              onClick={() => handleViewStudent(student)}
-                              data-testid={`view-student-${student.id}`}
-                            >
-                              <Eye className="w-4 h-4 mr-2" />
-                              View
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleEditStudent(student)}
-                              data-testid={`edit-student-${student.id}`}
-                            >
-                              <Edit2 className="w-4 h-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleDeleteStudent(student)}
-                              className="text-destructive focus:text-destructive"
-                              data-testid={`delete-student-${student.id}`}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                        <div className="min-w-0">
+                          <div className="font-bold text-[#111827] truncate">{getStudentName(s)}</div>
+                          <div className="text-[10px] text-[#6B7280] truncate">{s.email || s.customFields?.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-xs">{getEventName(s.eventId)}</td>
+                    <td className="px-4 py-3.5 text-xs">{s.country || s.customFields?.country || 'N/A'}</td>
+                    <td className="px-4 py-3.5">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      {docStatus === 'complete' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#EAF3DE] text-[#27500A]">Complete</span>}
+                      {docStatus === 'missing' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FCEBEB] text-[#791F1F]">Missing</span>}
+                      {docStatus === 'pending' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FAEEDA] text-[#633806]">Pending</span>}
+                    </td>
+                    <td className="px-4 py-3.5 text-xs">{getAgentName(s.agentId).split(' ')[0]}</td>
+                    <td className="px-4 py-3.5 text-xs">{new Date(s.createdAt || s.submittedAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3.5">
+                      <div className="w-7 h-7 rounded-lg border border-[#D1D5DB] flex items-center justify-center text-[#6B7280] hover:text-[#111827] hover:border-[#111827] transition-all">
+                        <ChevronRight size={14} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Student Registration</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete the registration for <strong>{studentToDelete?.name}</strong>? 
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDeleteStudent}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Detail Panel */}
+      {selectedStudent && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[1000] flex justify-end" onClick={() => setSelectedStudentId(null)}>
+          <div
+            className="w-full max-w-[500px] bg-white h-full shadow-[-4px_0_15px_rgba(0,0,0,0.1)] p-6 overflow-y-auto animate-in slide-in-from-right duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4 mb-6 pb-5 border-b border-[#F3F4F6]">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold bg-[#E6F1FB] text-[#0C447C]">
+                {getInitials(getStudentName(selectedStudent))}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xl font-bold text-[#111827] font-['Outfit'] truncate">{getStudentName(selectedStudent)}</div>
+                <div className="text-sm text-[#6B7280] mt-1 flex flex-wrap gap-2 items-center">
+                  <span className="flex items-center gap-1"><Mail size={12} /> {selectedStudent.email || selectedStudent.customFields?.email}</span>
+                  <span>·</span>
+                  <span className="flex items-center gap-1"><Phone size={12} /> {selectedStudent.phone || selectedStudent.customFields?.phone}</span>
+                </div>
+              </div>
+              <div className="flex gap-2 items-center">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${STAGE_PILLS[selectedStudent.status]}`}>
+                  {selectedStudent.status}
+                </span>
+                <button className="p-1.5 rounded-lg hover:bg-gray-100 text-[#6B7280]" onClick={() => setSelectedStudentId(null)}><X size={18} /></button>
+              </div>
+            </div>
+
+            {getDocStatus(selectedStudent) === 'missing' && (
+              <div className="flex items-center gap-3 px-4 py-3 bg-[#FEF3C7] border-l-4 border-[#F59E0B] rounded-lg mb-6 text-sm text-[#92400E] font-medium">
+                <AlertCircle size={16} />
+                <span>Documents missing or rejected — follow up required before event date.</span>
+              </div>
+            )}
+
+            <div className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-4 font-['Outfit']">Journey Progress</div>
+            <div className="flex items-center mb-6">
+              {STAGES.map((stage, idx) => {
+                const currentIdx = STAGES.indexOf(selectedStudent.status);
+                const isDone = idx < currentIdx;
+                const isActive = idx === currentIdx;
+                return (
+                  <React.Fragment key={stage}>
+                    <div className="flex flex-col items-center flex-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold border transition-all ${isDone ? 'bg-[#EAF3DE] border-[#C0DD97] text-[#27500A]' : isActive ? 'bg-[#E6F1FB] border-[#85B7EB] text-[#0C447C] ring-4 ring-[#042C53]/5' : 'bg-gray-50 border-[#E5E7EB] text-[#6B7280]'}`}>
+                        {isDone ? <CheckCircle2 size={14} /> : idx + 1}
+                      </div>
+                      <div className={`text-[10px] mt-2 font-semibold text-center ${isDone ? 'text-[#27500A]' : isActive ? 'text-[#0C447C] font-bold' : 'text-[#6B7280]'}`}>{stage}</div>
+                    </div>
+                    {idx < STAGES.length - 1 && (
+                      <div className={`flex-1 h-0.5 mt-[-18px] ${isDone ? 'bg-[#97C459]' : 'bg-[#F3F4F6]'}`}></div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              {[
+                { label: 'Preferred Country', val: selectedStudent.country || selectedStudent.customFields?.country },
+                { label: 'Course Interest', val: selectedStudent.courseInterested || selectedStudent.customFields?.courseInterested },
+                { label: 'Education', val: selectedStudent.education || selectedStudent.customFields?.education },
+                { label: 'Event', val: getEventName(selectedStudent.eventId) },
+                { label: 'Assigned Agent', val: getAgentName(selectedStudent.agentId) },
+                { label: 'Registered On', val: new Date(selectedStudent.createdAt || selectedStudent.submittedAt).toLocaleDateString() }
+              ].map((item, i) => (
+                <div key={i}>
+                  <div className="text-[10px] text-[#6B7280] font-bold uppercase mb-1">{item.label}</div>
+                  <div className="text-[13px] font-semibold text-[#111827]">{item.val || 'N/A'}</div>
+                </div>
+              ))}
+              <div className="col-span-2">
+                <div className="text-[10px] text-[#6B7280] font-bold uppercase mb-1">Update Status</div>
+                <select
+                  className="w-full text-xs font-semibold px-2 py-2 rounded-lg border border-[#D1D5DB] bg-white outline-none"
+                  value={selectedStudent.status}
+                  onChange={(e) => handleStatusChange(selectedStudent.id || selectedStudent._id, e.target.value)}
+                >
+                  {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-4 font-['Outfit']">Documents</div>
+            <div className="flex flex-col gap-2.5 mb-6">
+              {DOC_CATEGORIES.map(docType => {
+                const doc = selectedStudent.documents?.find(d => d.category === docType.value);
+                return (
+                  <div key={docType.value} className="flex items-center gap-3 p-3 border border-[#F3F4F6] rounded-xl bg-white shadow-sm">
+                    <div className="w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center text-[#6B7280]">
+                      <FileText size={18} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-[13px] font-bold text-[#111827]">{docType.label}</div>
+                      <div className="text-[10px] text-[#6B7280] mt-0.5">
+                        {doc ? `Uploaded ${new Date(doc.uploadedAt).toLocaleDateString()}` : 'Not uploaded'}
+                      </div>
+                    </div>
+                    {doc ? (
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${doc.status === 'approved' ? 'bg-[#EAF3DE] text-[#27500A]' : doc.status === 'rejected' ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-[#FAEEDA] text-[#633806]'}`}>
+                          {doc.status}
+                        </span>
+                        {doc.status === 'pending' && (
+                          <div className="flex gap-1">
+                            <button 
+                              className="px-2 py-1 text-[9px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50"
+                              onClick={() => viewStudentDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id)}
+                            >
+                              View
+                            </button>
+                            <button 
+                              className="px-2 py-1 text-[9px] font-bold rounded-lg bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:bg-[#DCEFC0]"
+                              onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'approved')}
+                            >
+                              Approve
+                            </button>
+                            <button 
+                              className="px-2 py-1 text-[9px] font-bold rounded-lg bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] hover:bg-[#FADADA]"
+                              onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'rejected')}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                        {doc.status !== 'pending' && (
+                          <button 
+                            className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" 
+                            onClick={() => viewStudentDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id)}
+                          >
+                            View
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-[#FCEBEB] text-[#791F1F]">Missing</span>
+                        <button 
+                          className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" 
+                          onClick={() => requestStudentDocument(selectedStudent.id || selectedStudent._id, docType.label)}
+                        >
+                          Request ↗
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-5 border-t border-[#F3F4F6]">
+              <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => toast.success('Follow-up message sent')}>
+                <MessageSquare size={14} /> Message Student ↗
+              </button>
+              <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => toast.success('Agent notified')}>
+                <Bell size={14} /> Alert Agent ↗
+              </button>
+              <div className="w-full flex gap-2">
+                <button className="flex-1 px-4 py-2 text-[11px] font-bold rounded-lg bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:opacity-90 transition-all" onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Attended')}>
+                  Mark Attended
+                </button>
+                <button className="flex-1 px-4 py-2 text-[11px] font-bold rounded-lg bg-[#042C53] text-[#B5D4F4] hover:opacity-90 transition-all" onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Converted')}>
+                  Mark Converted ↗
+                </button>
+              </div>
+              <button
+                className="w-full mt-2 px-4 py-2 text-[11px] font-bold rounded-lg bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] hover:bg-[#F7C1C1] transition-all"
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to delete this record?')) {
+                    deleteStudent(selectedStudent.id || selectedStudent._id);
+                    setSelectedStudentId(null);
+                    toast.success('Student record deleted');
+                  }
+                }}
+              >
+                Delete Record
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

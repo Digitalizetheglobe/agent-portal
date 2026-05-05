@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { agentAPI, eventAPI, studentAPI, statsAPI, formatApiError } from '../utils/api';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import { agentAPI, eventAPI, studentAPI, statsAPI, invoiceAPI, ticketAPI, notificationAPI, formatApiError } from '../utils/api';
 import { toast } from 'sonner';
 
 const DataContext = createContext(null);
@@ -17,8 +18,12 @@ export const DataProvider = ({ children }) => {
   const [events, setEvents] = useState([]);
   const [students, setStudents] = useState([]);
   const [stats, setStats] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   // Fetch all data
   const fetchAgents = useCallback(async () => {
@@ -159,10 +164,70 @@ export const DataProvider = ({ children }) => {
         activeAgents: 2,
         totalEvents: 3,
         upcomingEvents: 2,
-        totalStudents: 5
+        totalStudents: 15,
+        convertedStudents: 3,
+        conversionRate: 20.0,
+        statusBreakdown: [
+          { status: 'Registered', count: 5 },
+          { status: 'Contacted', count: 3 },
+          { status: 'Confirmed', count: 2 },
+          { status: 'Attended', count: 2 },
+          { status: 'Converted', count: 3 }
+        ],
+        registrationTrend: [
+          { month: 'Nov 2023', count: 2 },
+          { month: 'Dec 2023', count: 4 },
+          { month: 'Jan 2024', count: 3 },
+          { month: 'Feb 2024', count: 5 },
+          { month: 'Mar 2024', count: 8 },
+          { month: 'Apr 2024', count: 6 }
+        ],
+        eventBreakdown: [
+          { title: 'Tech Conference', count: 12 },
+          { title: 'Career Fair', count: 8 },
+          { title: 'Workshop', count: 5 }
+        ],
+        agentBreakdown: [
+          { name: 'John Smith', count: 15 },
+          { name: 'Jane Doe', count: 12 },
+          { name: 'Bob Wilson', count: 8 }
+        ]
       };
       setStats(mockStats);
       return mockStats;
+    }
+  }, []);
+
+  const fetchInvoices = useCallback(async () => {
+    try {
+      const response = await invoiceAPI.getAll();
+      setInvoices(response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchTickets = useCallback(async () => {
+    try {
+      const response = await ticketAPI.getAll();
+      setTickets(response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching tickets:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await notificationAPI.getAll();
+      setNotifications(response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      return [];
     }
   }, []);
 
@@ -170,14 +235,22 @@ export const DataProvider = ({ children }) => {
   const refreshData = useCallback(async () => {
     setLoading(true);
     try {
-      await Promise.all([fetchAgents(), fetchEvents(), fetchStudents(), fetchStats()]);
+      await Promise.all([
+        fetchAgents(), 
+        fetchEvents(), 
+        fetchStudents(), 
+        fetchStats(), 
+        fetchInvoices(), 
+        fetchTickets(),
+        fetchNotifications()
+      ]);
       setInitialized(true);
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
       setLoading(false);
     }
-  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats]);
+  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats, fetchInvoices, fetchTickets]);
 
   // Clear all data - called on logout
   const clearData = useCallback(() => {
@@ -185,8 +258,20 @@ export const DataProvider = ({ children }) => {
     setEvents([]);
     setStudents([]);
     setStats(null);
+    setInvoices([]);
+    setTickets([]);
+    setNotifications([]);
     setInitialized(false);
   }, []);
+
+  // Automatically refresh data when authenticated, clear when not
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshData();
+    } else {
+      clearData();
+    }
+  }, [isAuthenticated, refreshData, clearData]);
 
   // Agent CRUD operations
   const createAgent = async (agentData) => {
@@ -224,6 +309,28 @@ export const DataProvider = ({ children }) => {
   };
 
   const getAgentById = (id) => agents.find(agent => agent.id === id);
+
+  const verifyAgent = async (id, data) => {
+    try {
+      const response = await agentAPI.verify(id, data);
+      setAgents(prev => prev.map(agent => agent.id === id ? response.data : agent));
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to verify agent', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const uploadVerificationDocument = async (file, docType) => {
+    try {
+      const response = await agentAPI.uploadVerificationDocument(file, docType);
+      // Return updated user data
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to upload document', { description: formatApiError(error) });
+      throw error;
+    }
+  };
 
   // Event CRUD operations
   const createEvent = async (eventData) => {
@@ -317,7 +424,7 @@ export const DataProvider = ({ children }) => {
     }
   };
 
-  const updateStudent = async (id, studentData) => {
+  const updateStudent = useCallback(async (id, studentData) => {
     try {
       const response = await studentAPI.update(id, studentData);
       setStudents(prev => prev.map(student => student.id === id ? response.data : student));
@@ -326,9 +433,20 @@ export const DataProvider = ({ children }) => {
       toast.error('Failed to update student', { description: formatApiError(error) });
       throw error;
     }
-  };
+  }, []);
 
-  const getStudentById = async (id) => {
+  const updateStudentStatus = useCallback(async (id, status) => {
+    try {
+      const response = await studentAPI.updateStatus(id, status);
+      setStudents(prev => prev.map(student => student.id === id ? response.data : student));
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update student status', { description: formatApiError(error) });
+      throw error;
+    }
+  }, []);
+
+  const getStudentById = useCallback(async (id) => {
     try {
       const response = await studentAPI.getById(id);
       return response.data;
@@ -336,17 +454,54 @@ export const DataProvider = ({ children }) => {
       console.error('Error fetching student:', error);
       throw error;
     }
-  };
+  }, []);
 
   // Upload document
-  const uploadStudentDocument = async (studentId, file) => {
+  const uploadStudentDocument = async (studentId, file, category) => {
     try {
-      const response = await studentAPI.uploadDocument(studentId, file);
+      const response = await studentAPI.uploadDocument(studentId, file, category);
       await fetchStudents();
       return response.data;
     } catch (error) {
       toast.error('Failed to upload document', { description: formatApiError(error) });
       throw error;
+    }
+  };
+
+  const verifyStudentDocument = async (studentId, docId, data) => {
+    try {
+      const response = await studentAPI.verifyDocument(studentId, docId, data);
+      setStudents(prev => prev.map(student => student.id === studentId ? response.data : student));
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to verify document', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const viewStudentDocument = async (studentId, docId) => {
+    try {
+      const response = await studentAPI.downloadDocument(studentId, docId);
+      const contentType = response.headers['content-type'];
+      const blob = new Blob([response.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Open in new tab
+      const newWindow = window.open(url, '_blank');
+      if (!newWindow) {
+        toast.error('Pop-up blocked. Please allow pop-ups to view documents.');
+      }
+    } catch (error) {
+      toast.error('Failed to view document');
+    }
+  };
+
+  const requestStudentDocument = async (studentId, category) => {
+    try {
+      await studentAPI.requestDocument(studentId, category);
+      toast.success('Request sent to agent');
+    } catch (error) {
+      toast.error('Failed to send request');
     }
   };
 
@@ -356,13 +511,104 @@ export const DataProvider = ({ children }) => {
     activeAgents: agents.filter(a => a.status === 'active').length,
     totalEvents: events.length,
     upcomingEvents: events.filter(e => new Date(e.date) >= new Date()).length,
-    totalStudents: students.length
+    totalStudents: students.length,
+    convertedStudents: students.filter(s => s.status === 'Converted').length,
+    conversionRate: students.length > 0 ? ((students.filter(s => s.status === 'Converted').length / students.length) * 100).toFixed(1) : 0,
+    statusBreakdown: [],
+    registrationTrend: [],
+    eventBreakdown: [],
+    agentBreakdown: []
+  };
+
+  // Invoice operations
+  const createInvoice = async (data) => {
+    try {
+      const response = await invoiceAPI.create(data);
+      setInvoices(prev => [response.data, ...prev]);
+      toast.success('Invoice raised successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to raise invoice', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateInvoiceStatus = async (id, data) => {
+    try {
+      const response = await invoiceAPI.updateStatus(id, data);
+      setInvoices(prev => prev.map(inv => inv.id === id ? response.data : inv));
+      toast.success(`Invoice marked as ${data.status}`);
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update invoice status', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Ticket operations
+  const createTicket = async (data) => {
+    try {
+      const response = await ticketAPI.create(data);
+      setTickets(prev => [response.data, ...prev]);
+      toast.success('Ticket created successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to create ticket', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const addTicketResponse = async (id, message) => {
+    try {
+      const response = await ticketAPI.addResponse(id, message);
+      setTickets(prev => prev.map(t => t.id === id ? response.data : t));
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to send response', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateTicketStatus = async (id, status) => {
+    try {
+      const response = await ticketAPI.updateStatus(id, status);
+      setTickets(prev => prev.map(t => t.id === id ? response.data : t));
+      toast.success(`Ticket status updated to ${status}`);
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update ticket status', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Notification operations
+  const markNotificationAsRead = async (id) => {
+    try {
+      const response = await notificationAPI.markAsRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? response.data : n));
+      return response.data;
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await notificationAPI.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      toast.success('All notifications marked as read');
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
   };
 
   const value = {
     agents,
     events,
     students,
+    invoices,
+    tickets,
+    notifications,
     loading,
     initialized,
     refreshData,
@@ -372,6 +618,8 @@ export const DataProvider = ({ children }) => {
     updateAgent,
     deleteAgent,
     getAgentById,
+    verifyAgent,
+    uploadVerificationDocument,
     // Event operations
     createEvent,
     updateEvent,
@@ -379,14 +627,32 @@ export const DataProvider = ({ children }) => {
     getEventById,
     getEventsForAgent,
     // Student operations
+    fetchStudents,
     addStudent,
     getStudentsByEvent,
     getStudentsByAgent,
     deleteStudent,
     updateStudent,
+    updateStudentStatus,
     getStudentById,
     uploadStudentDocument,
+    verifyStudentDocument,
+    viewStudentDocument,
+    requestStudentDocument,
     fetchStudentsForEvent,
+    // Invoice operations
+    createInvoice,
+    updateInvoiceStatus,
+    fetchInvoices,
+    // Ticket operations
+    createTicket,
+    addTicketResponse,
+    updateTicketStatus,
+    fetchTickets,
+    // Notification operations
+    fetchNotifications,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
     // Statistics
     getStats
   };

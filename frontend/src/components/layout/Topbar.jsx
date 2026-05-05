@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import NotificationCenter from './NotificationCenter';
 import { cn } from '../../lib/utils';
 
 const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
@@ -66,7 +67,7 @@ const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
       {/* Right Side Actions */}
       <div className="flex items-center gap-2 md:gap-4">
         {/* Theme Toggle */}
-        <Button
+        {/* <Button
           variant="ghost"
           size="icon"
           onClick={toggleTheme}
@@ -78,13 +79,16 @@ const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
           ) : (
             <Moon className="w-5 h-5" strokeWidth={1.5} />
           )}
-        </Button>
+        </Button> */}
+
+        {/* Notifications */}
+        <NotificationCenter />
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               data-testid="user-menu-trigger"
               className="flex items-center gap-2 h-9 px-2"
             >
@@ -105,12 +109,15 @@ const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem data-testid="profile-menu-item">
+            <DropdownMenuItem 
+              onClick={() => navigate(user?.role === 'admin' ? '/admin/settings' : '/agent/settings')}
+              data-testid="profile-menu-item"
+            >
               <User className="w-4 h-4 mr-2" />
-              Profile
+              Profile Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               onClick={handleLogout}
               data-testid="logout-menu-item"
               className="text-destructive focus:text-destructive"

@@ -17,6 +17,13 @@ import EventDetailsPage from "./pages/admin/EventDetailsPage";
 import AgentDashboard from "./pages/agent/AgentDashboard";
 import AgentEventsPage from "./pages/agent/AgentEventsPage";
 import AgentEventsManagementPage from "./pages/agent/AgentEventsManagementPage";
+import InvoicesPage from "./pages/agent/InvoicesPage";
+import SupportPage from "./pages/agent/SupportPage";
+import AgentStudentsPage from "./pages/agent/AgentStudentsPage";
+
+import AdminInvoicesPage from "./pages/admin/AdminInvoicesPage";
+import AdminSupportPage from "./pages/admin/AdminSupportPage";
+import SettingsPage from "./pages/shared/SettingsPage";
 
 // Layouts
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -42,6 +49,9 @@ function App() {
                   <Route path="students" element={<StudentsPage />} />
                   <Route path="students/:studentId" element={<StudentDetailsPage />} />
                   <Route path="students/:studentId/edit" element={<StudentEditPage />} />
+                  <Route path="invoices" element={<AdminInvoicesPage />} />
+                  <Route path="support" element={<AdminSupportPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
                 </Route>
 
                 {/* Agent Routes */}
@@ -51,6 +61,11 @@ function App() {
                   <Route path="events" element={<AgentEventsPage />} />
                   <Route path="events-management" element={<AgentEventsManagementPage />} />
                   <Route path="events/:eventId" element={<EventDetailsPage />} />
+                  <Route path="students" element={<AgentStudentsPage />} />
+                  <Route path="students/:studentId" element={<StudentDetailsPage />} />
+                  <Route path="invoices" element={<InvoicesPage />} />
+                  <Route path="support" element={<SupportPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
                 </Route>
 
                 {/* Default Route */}

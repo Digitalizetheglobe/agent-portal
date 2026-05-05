@@ -3,6 +3,7 @@ const Event = require('../models/Event');
 const { sendEmail, templates } = require('../utils/email');
 const { putObject, getObject, generateStoragePath } = require('../utils/storage');
 const { v4: uuidv4 } = require('uuid');
+const { createNotification } = require('./notificationController');
 
 // @desc    Get all students
 // @route   GET /api/students
@@ -118,13 +119,27 @@ exports.createStudent = async (req, res) => {
 
     // Check if event has capacity limit
     if (event.seatCapacity && event.seatCapacity > 0) {
-      // Count current students for this event (all agents combined)
-      const currentStudentCount = await Student.countDocuments({ eventId });
-      
-      if (currentStudentCount >= event.seatCapacity) {
+      // Use the filledSeats count from the Event model for better performance/sync
+      if (event.filledSeats >= event.seatCapacity) {
         return res.status(400).json({
           success: false,
           detail: `Event capacity is full. Maximum ${event.seatCapacity} students allowed.`
+        });
+      }
+    }
+
+    // Duplicate Prevention: Check if email is already registered for this event
+    const normalizedEmail = email ? email.toLowerCase() : customFields?.email?.toLowerCase();
+    if (normalizedEmail) {
+      const existingStudent = await Student.findOne({ 
+        eventId, 
+        email: normalizedEmail 
+      });
+
+      if (existingStudent) {
+        return res.status(400).json({
+          success: false,
+          detail: 'A student with this email is already registered for this event.'
         });
       }
     }
@@ -170,6 +185,9 @@ exports.createStudent = async (req, res) => {
     if (notes) studentData.notes = notes;
 
     const student = await Student.create(studentData);
+
+    // Increment filledSeats in Event model
+    await Event.findByIdAndUpdate(eventId, { $inc: { filledSeats: 1 } });
 
     // Send confirmation email to student (if email field exists)
     const studentEmail = customFields?.email || email;
@@ -231,6 +249,8 @@ exports.uploadDocument = async (req, res) => {
       originalFilename: req.file.originalname,
       contentType: req.file.mimetype,
       size: result.size || req.file.size,
+      category: req.body.category || 'Other',
+      status: 'pending',
       uploadedAt: new Date()
     };
 
@@ -424,13 +444,170 @@ exports.downloadDocument = async (req, res) => {
     const { data, contentType } = await getObject(doc.storagePath);
 
     res.setHeader('Content-Type', doc.contentType || contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${doc.originalFilename}"`);
+    const disposition = req.query.inline === 'true' ? 'inline' : 'attachment';
+    res.setHeader('Content-Disposition', `${disposition}; filename="${doc.originalFilename}"`);
     res.send(Buffer.from(data));
   } catch (error) {
     console.error('Download document error:', error);
     res.status(500).json({
       success: false,
       detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Update student status
+// @route   PATCH /api/students/:id/status
+// @access  Private
+exports.updateStudentStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const allowedStatuses = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
+
+    if (!status || !allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        detail: 'Invalid status provided'
+      });
+    }
+
+    const student = await Student.findById(req.params.id);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Student not found'
+      });
+    }
+
+    // Check access permissions (Admins can update all, agents only their own)
+    if (req.user.role === 'agent' && student.agentId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        detail: 'Access denied'
+      });
+    }
+
+    student.status = status;
+    await student.save();
+
+    // Create notification for agent
+    await createNotification({
+      recipient: student.agentId,
+      title: 'Student Status Updated',
+      message: `The status of ${student.name || 'your student'} has been updated to ${status}.`,
+      type: 'info',
+      relatedId: student._id,
+      relatedModel: 'Student'
+    });
+
+    res.status(200).json(student.toJSON());
+  } catch (error) {
+    console.error('Update student status error:', error);
+    res.status(500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Verify student document
+// @route   PATCH /api/students/:id/documents/:docId/verify
+// @access  Private (Admin only)
+exports.verifyStudentDocument = async (req, res) => {
+  try {
+    const { status, remarks } = req.body;
+    
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        detail: 'Only admins can verify documents'
+      });
+    }
+
+    const student = await Student.findById(req.params.id);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Student not found'
+      });
+    }
+
+    const docIndex = student.documents.findIndex(d => d.id === req.params.docId);
+    if (docIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Document not found'
+      });
+    }
+    if (status) student.documents[docIndex].status = status;
+    if (remarks !== undefined) student.documents[docIndex].remarks = remarks;
+
+    await student.save();
+
+    // Create notification for agent
+    await createNotification({
+      recipient: student.agentId,
+      title: status === 'approved' ? 'Document Approved' : 'Document Rejected',
+      message: `The ${student.documents[docIndex].category} document for ${student.name || 'your student'} has been ${status}.`,
+      type: status === 'approved' ? 'success' : 'warning',
+      relatedId: student._id,
+      relatedModel: 'Student'
+    });
+    res.status(200).json(student.toJSON());
+  } catch (error) {
+    console.error('Verify student document error:', error);
+    res.status(500).json({
+      success: false,
+      detail: 'Server error'
+    });
+  }
+};
+// @desc    Request missing document
+// @route   POST /api/students/:id/documents/request
+// @access  Private (Admin only)
+exports.requestDocument = async (req, res) => {
+  try {
+    const { category } = req.body;
+    
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        detail: 'Only admins can request documents'
+      });
+    }
+
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Student not found'
+      });
+    }
+
+    const event = await Event.findById(student.eventId);
+    const course = student.courseInterested || student.customFields?.courseInterested || 'N/A';
+
+    // Create notification for agent
+    await createNotification({
+      recipient: student.agentId,
+      title: 'Action Required: Missing Document',
+      message: `Admin has requested the "${category}" document for student "${student.name || 'N/A'}" registered for "${event?.title || 'Unknown Event'}" (Course: ${course}).`,
+      type: 'warning',
+      relatedId: student._id,
+      relatedModel: 'Student'
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Document request notification sent to agent'
+    });
+  } catch (error) {
+    console.error('Request document error:', error);
+    res.status(500).json({
+      success: false,
+      detail: 'Server error'
     });
   }
 };

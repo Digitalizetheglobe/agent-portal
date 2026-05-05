@@ -15,9 +15,10 @@ import {
   SelectValue,
 } from '../../components/ui/select';
 import { toast } from 'sonner';
+import { cn } from '../../lib/utils';
 
 const StudentEditPage = () => {
-  const { id } = useParams();
+  const { studentId: id } = useParams();
   const navigate = useNavigate();
   const { students, events, agents, updateStudent, getStudentById } = useData();
   
@@ -152,27 +153,36 @@ const StudentEditPage = () => {
   };
 
   return (
-    <div className="space-y-6" data-testid="student-edit-page">
+    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-8" data-testid="student-edit-page">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/admin/students')}>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-start gap-4">
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="mt-1 h-9 border-[#E5E7EB] bg-white hover:bg-gray-50"
+            onClick={() => navigate('/admin/students')}
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Students
+            Back
           </Button>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground font-['Outfit']">
-              Edit Student
+            <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
+              Edit Student Details
             </h1>
-            <p className="text-muted-foreground">Update student registration information</p>
+            <p className="text-sm font-medium text-[#6B7280] mt-1">Update registration records for {student.name}</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleCancel}>
-            <X className="w-4 h-4 mr-2" />
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            className="h-10 px-6 border-[#E5E7EB] bg-white hover:bg-gray-50 font-bold"
+            onClick={handleCancel}
+          >
             Cancel
           </Button>
           <Button 
+            className="h-10 px-6 bg-[#042C53] hover:bg-[#0C447C] font-bold rounded-lg shadow-sm"
             onClick={handleSubmit} 
             disabled={isSubmitting}
             data-testid="save-student-btn"
@@ -183,61 +193,65 @@ const StudentEditPage = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Form - 2 columns */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-8">
             {/* Personal Information Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-['Outfit']">Personal Information</CardTitle>
-                <CardDescription>
-                  Update the student's personal details
+            <Card className="border-[#E5E7EB] shadow-sm">
+              <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
+                <CardTitle className="text-base font-semibold font-['Outfit'] text-[#111827]">Personal Information</CardTitle>
+                <CardDescription className="text-xs font-medium">
+                  Core contact and identification details
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <CardContent className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Full Name *</Label>
+                    <Label htmlFor="name" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Full Name *</Label>
                     <Input
                       id="name"
                       value={formData.name}
                       onChange={(e) => handleInputChange('name', e.target.value)}
                       placeholder="Enter student's full name"
+                      className="h-11 border-[#E5E7EB] focus-visible:ring-[#042C53]/10"
                       data-testid="student-name-input"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email Address *</Label>
+                    <Label htmlFor="email" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Email Address *</Label>
                     <Input
                       id="email"
                       type="email"
                       value={formData.email}
                       onChange={(e) => handleInputChange('email', e.target.value)}
                       placeholder="student@example.com"
+                      className="h-11 border-[#E5E7EB] focus-visible:ring-[#042C53]/10"
                       data-testid="student-email-input"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number *</Label>
+                    <Label htmlFor="phone" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Phone Number *</Label>
                     <Input
                       id="phone"
                       value={formData.phone}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
                       placeholder="+1234567890"
+                      className="h-11 border-[#E5E7EB] focus-visible:ring-[#042C53]/10"
                       data-testid="student-phone-input"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="country">Country *</Label>
+                    <Label htmlFor="country" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Country of Interest *</Label>
                     <Input
                       id="country"
                       value={formData.country}
                       onChange={(e) => handleInputChange('country', e.target.value)}
                       placeholder="United States"
+                      className="h-11 border-[#E5E7EB] focus-visible:ring-[#042C53]/10"
                       data-testid="student-country-input"
                       required
                     />
@@ -247,45 +261,48 @@ const StudentEditPage = () => {
             </Card>
 
             {/* Academic Information Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-['Outfit']">Academic Information</CardTitle>
-                <CardDescription>
-                  Update the student's academic details and interests
+            <Card className="border-[#E5E7EB] shadow-sm">
+              <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
+                <CardTitle className="text-base font-semibold font-['Outfit'] text-[#111827]">Academic Profile</CardTitle>
+                <CardDescription className="text-xs font-medium">
+                  Education background and course preferences
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <CardContent className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="courseInterested">Course Interest *</Label>
+                    <Label htmlFor="courseInterested" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Interested Course *</Label>
                     <Input
                       id="courseInterested"
                       value={formData.courseInterested}
                       onChange={(e) => handleInputChange('courseInterested', e.target.value)}
                       placeholder="e.g., Computer Science, Business"
+                      className="h-11 border-[#E5E7EB] focus-visible:ring-[#042C53]/10"
                       data-testid="student-course-input"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="currentEducation">Current Education</Label>
+                    <Label htmlFor="currentEducation" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Current Qualification</Label>
                     <Input
                       id="currentEducation"
                       value={formData.currentEducation}
                       onChange={(e) => handleInputChange('currentEducation', e.target.value)}
                       placeholder="e.g., High School, Bachelor's Degree"
+                      className="h-11 border-[#E5E7EB] focus-visible:ring-[#042C53]/10"
                       data-testid="student-education-input"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="additionalInfo">Additional Information</Label>
+                  <Label htmlFor="additionalInfo" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Internal Notes</Label>
                   <Textarea
                     id="additionalInfo"
                     value={formData.additionalInfo}
                     onChange={(e) => handleInputChange('additionalInfo', e.target.value)}
-                    placeholder="Any additional notes or information about the student..."
-                    rows={3}
+                    placeholder="Any additional context for this student..."
+                    rows={4}
+                    className="border-[#E5E7EB] focus-visible:ring-[#042C53]/10 resize-none"
                     data-testid="student-additional-input"
                   />
                 </div>
@@ -294,24 +311,24 @@ const StudentEditPage = () => {
           </div>
 
           {/* Sidebar - 1 column */}
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* Assignment Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-['Outfit']">Assignment</CardTitle>
-                <CardDescription>
-                  Update event and agent assignments
+            <Card className="border-[#E5E7EB] shadow-sm">
+              <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
+                <CardTitle className="text-base font-semibold font-['Outfit'] text-[#111827]">Assignments</CardTitle>
+                <CardDescription className="text-xs font-medium">
+                  Campaign and Agency mapping
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-6 space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="eventId">Event *</Label>
+                  <Label htmlFor="eventId" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Target Event *</Label>
                   <Select
                     value={formData.eventId}
                     onValueChange={(value) => handleInputChange('eventId', value)}
                     data-testid="event-select"
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 border-[#E5E7EB]">
                       <SelectValue placeholder="Select an event" />
                     </SelectTrigger>
                     <SelectContent>
@@ -324,13 +341,13 @@ const StudentEditPage = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="agentId">Assigned Agent *</Label>
+                  <Label htmlFor="agentId" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Originating Agent *</Label>
                   <Select
                     value={formData.agentId}
                     onValueChange={(value) => handleInputChange('agentId', value)}
                     data-testid="agent-select"
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 border-[#E5E7EB]">
                       <SelectValue placeholder="Select an agent" />
                     </SelectTrigger>
                     <SelectContent>
@@ -345,30 +362,26 @@ const StudentEditPage = () => {
               </CardContent>
             </Card>
 
-            {/* Form Actions Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-['Outfit']">Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            {/* Sticky Actions */}
+            <Card className="border-[#E5E7EB] shadow-md bg-white">
+              <CardContent className="p-6 space-y-3">
                 <Button 
                   type="submit" 
-                  className="w-full"
+                  className="w-full h-11 bg-[#042C53] hover:bg-[#0C447C] font-bold"
                   disabled={isSubmitting}
+                  onClick={handleSubmit}
                   data-testid="submit-student-form"
                 >
-                  <Save className="w-4 h-4 mr-2" />
-                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                  {isSubmitting ? 'Updating...' : 'Commit Changes'}
                 </Button>
                 <Button 
                   type="button"
                   variant="outline" 
-                  className="w-full"
+                  className="w-full h-11 border-[#E5E7EB] font-bold hover:bg-gray-50"
                   onClick={handleCancel}
                   disabled={isSubmitting}
                 >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel
+                  Discard Edits
                 </Button>
               </CardContent>
             </Card>

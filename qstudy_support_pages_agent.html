@@ -1,0 +1,1410 @@
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  .pg {
+    font-family: var(--font-sans);
+  }
+
+  .view-switch {
+    display: flex;
+    gap: 0;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    margin: 20px 24px 0;
+    width: fit-content;
+  }
+
+  .vs-btn {
+    padding: 7px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary);
+    border: none;
+    cursor: pointer;
+    border-right: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .vs-btn:last-child {
+    border-right: none;
+  }
+
+  .vs-btn.on {
+    background: #042C53;
+    color: #B5D4F4;
+  }
+
+  .agent-view,
+  .admin-view {
+    padding: 0 24px 32px;
+  }
+
+  /* HERO */
+  .hero {
+    background: #042C53;
+    border-radius: var(--border-radius-lg);
+    padding: 40px 32px;
+    text-align: center;
+    margin-bottom: 28px;
+    margin-top: 20px;
+  }
+
+  .hero h1 {
+    font-size: 22px;
+    font-weight: 500;
+    color: #B5D4F4;
+    margin-bottom: 6px;
+  }
+
+  .hero p {
+    font-size: 13px;
+    color: #85B7EB;
+    margin-bottom: 20px;
+  }
+
+  .hero-search {
+    position: relative;
+    max-width: 460px;
+    margin: 0 auto;
+  }
+
+  .hero-search input {
+    width: 100%;
+    padding: 11px 16px 11px 40px;
+    font-size: 14px;
+    border-radius: var(--border-radius-lg);
+    background: #fff;
+    border: none;
+    color: #2C2C2A;
+  }
+
+  .hero-search input::placeholder {
+    color: #888780;
+  }
+
+  .hero-si {
+    position: absolute;
+    left: 13px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* QUICK LINKS */
+  .quick-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .qlink {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .qlink:hover {
+    border-color: var(--color-border-secondary);
+    background: var(--color-background-secondary);
+  }
+
+  .ql-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--border-radius-md);
+    margin: 0 auto 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ql-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .ql-sub {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 3px;
+  }
+
+  /* FAQ */
+  .faq-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .faq-left {}
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-bottom: 10px;
+    letter-spacing: 0.03em;
+  }
+
+  .faq-group {
+    margin-bottom: 20px;
+  }
+
+  .faq-group-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    padding: 8px 14px;
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-bottom: none;
+  }
+
+  .faq-panel {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
+    overflow: hidden;
+  }
+
+  .faq-item {
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .faq-item:last-child {
+    border-bottom: none;
+  }
+
+  .faq-q {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    gap: 10px;
+  }
+
+  .faq-q:hover {
+    background: var(--color-background-secondary);
+  }
+
+  .faq-chevron {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    transition: transform 0.2s;
+    color: var(--color-text-secondary);
+  }
+
+  .faq-chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .faq-a {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.65;
+    padding: 0 16px 14px;
+    display: none;
+  }
+
+  .faq-a.open {
+    display: block;
+  }
+
+  .faq-a ul {
+    padding-left: 16px;
+    margin-top: 6px;
+  }
+
+  .faq-a li {
+    margin-bottom: 4px;
+  }
+
+  .faq-a strong {
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  /* CONTACT CARD */
+  .contact-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 20px;
+    margin-bottom: 14px;
+  }
+
+  .cc-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 4px;
+  }
+
+  .cc-sub {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-bottom: 16px;
+  }
+
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    font-size: 13px;
+  }
+
+  .form-group textarea {
+    resize: vertical;
+    min-height: 72px;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .btn:hover {
+    background: var(--color-background-secondary);
+  }
+
+  .btn-primary {
+    background: #042C53;
+    color: #B5D4F4;
+    border-color: #042C53;
+  }
+
+  .btn-primary:hover {
+    background: #0C447C;
+  }
+
+  .btn-sm {
+    padding: 5px 10px;
+    font-size: 12px;
+    width: auto;
+  }
+
+  .btn-success {
+    background: #EAF3DE;
+    color: #27500A;
+    border-color: #C0DD97;
+  }
+
+  .btn-danger {
+    background: #FCEBEB;
+    color: #791F1F;
+    border-color: #F7C1C1;
+  }
+
+  /* MY TICKETS */
+  .my-tickets {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 16px;
+  }
+
+  .tk-item {
+    padding: 11px 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .tk-item:last-child {
+    border-bottom: none;
+  }
+
+  .tk-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+
+  .tk-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tk-title {
+    font-size: 13px;
+    color: var(--color-text-primary);
+  }
+
+  .tk-meta {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 2px;
+  }
+
+  .tk-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .tb-open {
+    background: #FCEBEB;
+    color: #791F1F;
+  }
+
+  .tb-prog {
+    background: #FAEEDA;
+    color: #633806;
+  }
+
+  .tb-res {
+    background: #EAF3DE;
+    color: #27500A;
+  }
+
+  /* ADMIN VIEW */
+  .adm-toprow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-top: 20px;
+  }
+
+  .adm-toprow h2 {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .adm-toprow p {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-top: 2px;
+  }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .kpi {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 13px 15px;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-bottom: 5px;
+  }
+
+  .kpi-val {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .kpi-sub {
+    font-size: 11px;
+    margin-top: 3px;
+  }
+
+  .adm-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .panel {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 16px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-secondary);
+  }
+
+  .ph-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .ph-link {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+
+  .ph-link:hover {
+    color: var(--color-text-primary);
+  }
+
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 13px;
+  }
+
+  .tbl th {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    padding: 9px 14px;
+    text-align: left;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .tbl td {
+    padding: 10px 14px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-primary);
+    vertical-align: middle;
+  }
+
+  .tbl tr:last-child td {
+    border-bottom: none;
+  }
+
+  .tbl tr:hover td {
+    background: var(--color-background-secondary);
+    cursor: pointer;
+  }
+
+  .pill {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-weight: 500;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .p-open {
+    background: #FCEBEB;
+    color: #791F1F;
+  }
+
+  .p-prog {
+    background: #FAEEDA;
+    color: #633806;
+  }
+
+  .p-res {
+    background: #EAF3DE;
+    color: #27500A;
+  }
+
+  .p-cls {
+    background: #F1EFE8;
+    color: #5F5E5A;
+  }
+
+  .p-tech {
+    background: #E6F1FB;
+    color: #0C447C;
+  }
+
+  .p-pay {
+    background: #FAEEDA;
+    color: #633806;
+  }
+
+  .p-stu {
+    background: #EEEDFE;
+    color: #3C3489;
+  }
+
+  .p-oth {
+    background: #F1EFE8;
+    color: #5F5E5A;
+  }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .icon-btn:hover {
+    background: var(--color-background-secondary);
+  }
+
+  .action-grp {
+    display: flex;
+    gap: 5px;
+  }
+
+  .ticket-detail {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+
+  .td-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .td-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .td-sub {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-top: 3px;
+  }
+
+  .td-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .dm-item label {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .dm-item span {
+    font-size: 13px;
+    color: var(--color-text-primary);
+  }
+
+  .reply-box {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .reply-label {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+
+  .reply-msg {
+    font-size: 13px;
+    color: var(--color-text-primary);
+    line-height: 1.6;
+  }
+
+  .td-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    flex-wrap: wrap;
+  }
+
+  .faq-mgmt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .faq-mgmt-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .faq-mgmt-row:last-child {
+    border-bottom: none;
+  }
+
+  .faq-mgmt-q {
+    font-size: 13px;
+    color: var(--color-text-primary);
+    flex: 1;
+  }
+
+  .faq-mgmt-cat {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+  }
+
+  .response-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .rs-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .rs-label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    width: 80px;
+    flex-shrink: 0;
+  }
+
+  .rs-bar {
+    flex: 1;
+    height: 5px;
+    background: var(--color-background-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .rs-fill {
+    height: 100%;
+    border-radius: 4px;
+  }
+
+  .rs-val {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+</style>
+
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">QStudy support pages — Agent help
+  centre with FAQ and ticket form, and Admin ticket management panel.</h2>
+
+<div class="pg">
+  <div class="view-switch">
+    <button class="vs-btn on" onclick="showView('agent',this)">Agent help centre</button>
+    <button class="vs-btn" onclick="showView('admin',this)">Admin support panel</button>
+  </div>
+
+  <div class="agent-view" id="agentView">
+    <div class="hero">
+      <h1>Have a question? We're here to help.</h1>
+      <p>Search our help articles or browse by topic below.</p>
+      <div class="hero-search">
+        <svg class="hero-si" width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="6.5" cy="6.5" r="4.5" stroke="#888780" stroke-width="1.3" />
+          <path d="M10 10l3 3" stroke="#888780" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+        <input type="text" placeholder="Search articles, e.g. 'how to register a student'…"
+          oninput="liveSearch(this.value)">
+      </div>
+    </div>
+
+    <div class="quick-grid">
+      <div class="qlink" onclick="scrollToGroup('registration')">
+        <div class="ql-icon" style="background:#E6F1FB;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="6" cy="5" r="3" stroke="#0C447C" stroke-width="1.2" />
+            <path d="M1 14c0-3 2-5 5-5" stroke="#0C447C" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M11 9v5M8.5 11.5h5" stroke="#0C447C" stroke-width="1.3" stroke-linecap="round" />
+          </svg></div>
+        <div class="ql-label">Student registration</div>
+        <div class="ql-sub">7 articles</div>
+      </div>
+      <div class="qlink" onclick="scrollToGroup('events')">
+        <div class="ql-icon" style="background:#EAF3DE;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="2" width="14" height="13" rx="2" stroke="#27500A" stroke-width="1.2" />
+            <path d="M1 6h14M5 1v3M11 1v3" stroke="#27500A" stroke-width="1.2" stroke-linecap="round" />
+          </svg></div>
+        <div class="ql-label">Events & seats</div>
+        <div class="ql-sub">5 articles</div>
+      </div>
+      <div class="qlink" onclick="scrollToGroup('invoices')">
+        <div class="ql-icon" style="background:#FAEEDA;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="1" width="12" height="14" rx="2" stroke="#633806" stroke-width="1.2" />
+            <path d="M5 5h6M5 8h6M5 11h4" stroke="#633806" stroke-width="1.2" stroke-linecap="round" />
+          </svg></div>
+        <div class="ql-label">Invoices & payments</div>
+        <div class="ql-sub">6 articles</div>
+      </div>
+      <div class="qlink" onclick="scrollToGroup('account')">
+        <div class="ql-icon" style="background:#EEEDFE;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="6" r="3.5" stroke="#3C3489" stroke-width="1.2" />
+            <path d="M2 15c0-3 2.7-5 6-5s6 2 6 5" stroke="#3C3489" stroke-width="1.2" stroke-linecap="round" />
+          </svg></div>
+        <div class="ql-label">Account & profile</div>
+        <div class="ql-sub">4 articles</div>
+      </div>
+    </div>
+
+    <div class="faq-layout">
+      <div class="faq-left" id="faqLeft">
+
+        <div class="faq-group" id="group-registration">
+          <div class="faq-group-label">Student registration</div>
+          <div class="faq-panel">
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">How do I register a student for an event?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Go to <strong>Events</strong> from your dashboard and select the event you want to
+                register for. Click <strong>Register student</strong>, fill in all required fields — full name (as per
+                ID), email, phone, preferred country, course interest, education qualification, and current city — then
+                submit. You'll see the student appear in your registration list instantly.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">What if a student doesn't have a passport yet?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Students can initially register with any government-issued ID. However, for <strong>Event Entry</strong> and <strong>Visa Processing</strong>, a valid passport is mandatory. They can update their passport details in the portal later once they receive it.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">What documents does a student need to upload?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Required documents vary by event, but typically include:
+                <ul>
+                  <li><strong>Passport</strong> (mandatory for all events)</li>
+                  <li><strong>Academic transcripts</strong> (last qualification)</li>
+                  <li><strong>IELTS/TOEFL score card</strong> (if applying for English-speaking countries)</li>
+                  <li>Any additional documents specified by the event</li>
+                </ul>
+                You can upload documents from the student's profile page under the <strong>Documents</strong> tab.
+              </div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">Can I register the same student for multiple events?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Yes, you can register a student for multiple events as long as the event dates don't
+                clash and seats are available. The system will alert you if a duplicate registration is detected for the
+                exact same event. Each event registration is tracked separately.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">I see a "duplicate registration" warning — what do I do?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">This means a student with the same email or phone has already been registered for this
+                event — either by you or another agent. Check your student list first. If you believe it is an error,
+                raise a <strong>Student-related</strong> support ticket and our team will investigate within 24 hours.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="faq-group" id="group-events">
+          <div class="faq-group-label">Events & seats</div>
+          <div class="faq-panel">
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">How do I know how many seats are left for an event?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Seat availability is shown in real-time on the <strong>Event Listings</strong> page.
+                Each event card shows a seat count badge — green for open, amber when fewer than 20 seats remain. Once
+                an event is full, registration closes automatically and you'll see a "Fully booked" label.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">How can I filter events by country?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">On the <strong>Events Dashboard</strong>, use the "Filter" button at the top right. You can filter events by Country, Date Range, and Institution type. This helps you find the most relevant opportunities for your students.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">What happens if a student I registered does not attend?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">If a student does not attend, their status will remain as <strong>Confirmed</strong>
+                and will not progress to <strong>Attended</strong>. This may affect your commission eligibility for that
+                student. Always follow up with students before the event to confirm attendance and reduce no-shows.
+              </div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">Will I be notified about new events?<svg class="faq-chevron"
+                  viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Yes. When QStudy adds a new event, you'll receive a notification via email, SMS, and
+                in-app. You can manage your notification preferences under <strong>Settings → Notifications</strong>.
+                Make sure your email and phone number are up to date in your profile.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="faq-group" id="group-invoices">
+          <div class="faq-group-label">Invoices & payments</div>
+          <div class="faq-panel">
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">How do I raise an invoice?<svg class="faq-chevron"
+                  viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Go to <strong>Invoices</strong> from your sidebar and click <strong>New
+                  invoice</strong>. Select the event, and the system will automatically pull the number of confirmed and
+                converted students attributed to you. Review the amount, add any notes, and submit. The admin team
+                reviews invoices within 3–5 business days.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">My invoice was rejected — what should I do?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Check the rejection reason shown on the invoice detail page. Common reasons include
+                student count mismatch, missing attendance confirmation, or incorrect event selected. Correct the issue
+                and resubmit, or raise a <strong>Payment</strong> support ticket if you believe the rejection was
+                incorrect.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">How long does payment take after invoice approval?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Once your invoice is approved, payment is processed within <strong>7–10 business
+                  days</strong> to the bank account configured in your payment settings. You will receive an email
+                confirmation when the transfer is initiated. Make sure your payment details under <strong>Settings →
+                  Payment</strong> are correct to avoid delays.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="faq-group" id="group-account">
+          <div class="faq-group-label">Account & profile</div>
+          <div class="faq-panel">
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">How do I update my agency or contact details?<svg
+                  class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a">Go to <strong>Settings → Profile</strong> and update your name, agency name, phone
+                number, address, or email. Some fields (like email) may require re-verification. Changes are saved
+                immediately. If you need to update your verification documents, raise a support ticket under the
+                <strong>Other</strong> category.</div>
+            </div>
+            <div class="faq-item">
+              <div class="faq-q" onclick="toggleFaq(this)">My account is showing "Pending verification" — what does that
+                mean?<svg class="faq-chevron" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg></div>
+              <div class="faq-a"><strong>Pending verification</strong> means the QStudy admin team is reviewing your
+                submitted documents (passport and agency registration). This process usually takes 1–2 business days.
+                During this time you can browse events but cannot register students. You'll receive an email once your
+                account is verified or if any documents are missing.</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="faq-right">
+        <div class="contact-card">
+          <div class="cc-title">Raise a support ticket</div>
+          <div class="cc-sub">Can't find your answer? Our team responds within 6 hours.</div>
+          <div class="form-row" style="margin-bottom:12px;">
+            <div class="form-group" style="margin-bottom:0;"><label>Your name</label><input type="text"
+                placeholder="Full name"></div>
+            <div class="form-group" style="margin-bottom:0;"><label>Email</label><input type="text"
+                placeholder="your@email.com"></div>
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select>
+              <option>Technical issue</option>
+              <option>Student-related</option>
+              <option>Payment / invoice</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Subject</label>
+            <input type="text" placeholder="Brief description of your issue">
+          </div>
+          <div class="form-group">
+            <label>Message</label>
+            <textarea placeholder="Describe your issue in detail…"></textarea>
+          </div>
+          <button class="btn btn-primary">Submit ticket</button>
+        </div>
+
+        <div class="my-tickets">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <span style="font-size:13px;font-weight:500;color:var(--color-text-primary);">My tickets</span>
+            <span style="font-size:12px;color:var(--color-text-secondary);cursor:pointer;"
+              onclick="sendPrompt('Show me all my support tickets and their current status')">View all ↗</span>
+          </div>
+          <div class="tk-item">
+            <div class="tk-dot" style="background:#E24B4A;"></div>
+            <div class="tk-body">
+              <div class="tk-title">Passport upload failing — file size error</div>
+              <div class="tk-meta">Technical · 2h ago</div>
+            </div><span class="tk-badge tb-open">Open</span>
+          </div>
+          <div class="tk-item">
+            <div class="tk-dot" style="background:#EF9F27;"></div>
+            <div class="tk-body">
+              <div class="tk-title">Invoice INV-047 — amount disputed</div>
+              <div class="tk-meta">Payment · 5h ago</div>
+            </div><span class="tk-badge tb-prog">In progress</span>
+          </div>
+          <div class="tk-item">
+            <div class="tk-dot" style="background:#639922;"></div>
+            <div class="tk-body">
+              <div class="tk-title">SMS notifications not received</div>
+              <div class="tk-meta">Technical · Yesterday</div>
+            </div><span class="tk-badge tb-res">Resolved</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-view" id="adminView" style="display:none;">
+    <div class="adm-toprow">
+      <div>
+        <h2>Support management</h2>
+        <p>All agent tickets · respond, assign, and resolve</p>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" style="font-size:12px;"
+          onclick="sendPrompt('Show all support tickets open for more than 48 hours that need escalation')">Flag overdue
+          ↗</button>
+        <button class="btn btn-sm btn-primary" style="font-size:12px;"
+          onclick="sendPrompt('Generate a support performance report for this week')">Export report ↗</button>
+      </div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-label">Total tickets</div>
+        <div class="kpi-val">38</div>
+        <div class="kpi-sub" style="color:#0C447C;">This month</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Open</div>
+        <div class="kpi-val">7</div>
+        <div class="kpi-sub" style="color:#791F1F;">Needs action</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Avg response time</div>
+        <div class="kpi-val">5.4h</div>
+        <div class="kpi-sub" style="color:#27500A;">Target: 6h</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Resolved today</div>
+        <div class="kpi-val">4</div>
+        <div class="kpi-sub" style="color:#27500A;">On track</div>
+      </div>
+    </div>
+
+    <div class="adm-layout">
+      <div>
+        <div class="panel">
+          <div class="panel-head">
+            <span class="ph-title">All tickets</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select style="font-size:12px;padding:4px 8px;">
+                <option>All categories</option>
+                <option>Technical</option>
+                <option>Payment</option>
+                <option>Student</option>
+                <option>Other</option>
+              </select>
+              <select style="font-size:12px;padding:4px 8px;">
+                <option>All statuses</option>
+                <option>Open</option>
+                <option>In progress</option>
+                <option>Resolved</option>
+              </select>
+            </div>
+          </div>
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th style="width:6%;">#</th>
+                <th style="width:30%;">Issue</th>
+                <th style="width:14%;">Agent</th>
+                <th style="width:12%;">Category</th>
+                <th style="width:11%;">Status</th>
+                <th style="width:11%;">Raised</th>
+                <th style="width:16%;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr onclick="showTicketDetail()">
+                <td style="font-size:12px;color:var(--color-text-secondary);">#041</td>
+                <td>
+                  <div style="font-size:13px;font-weight:500;">Passport upload failing — file size error</div>
+                </td>
+                <td style="font-size:12px;">Rahul Joshi</td>
+                <td><span class="pill p-tech">Technical</span></td>
+                <td><span class="pill p-open">Open</span></td>
+                <td style="font-size:12px;">2h ago</td>
+                <td>
+                  <div class="action-grp">
+                    <div class="icon-btn" title="Reply"
+                      onclick="event.stopPropagation();sendPrompt('Reply to support ticket #041 about passport upload file size error')">
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M14 3H2a1 1 0 00-1 1v8a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1z"
+                          stroke="var(--color-text-secondary)" stroke-width="1.2" />
+                        <path d="M1 5l7 5 7-5" stroke="var(--color-text-secondary)" stroke-width="1.2" />
+                      </svg></div>
+                    <div class="icon-btn" title="Resolve" onclick="event.stopPropagation();"><svg width="13" height="13"
+                        viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8l3 3 7-7" stroke="var(--color-text-secondary)" stroke-width="1.3"
+                          stroke-linecap="round" stroke-linejoin="round" />
+                      </svg></div>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-size:12px;color:var(--color-text-secondary);">#040</td>
+                <td>
+                  <div style="font-size:13px;font-weight:500;">Invoice INV-047 amount disputed</div>
+                </td>
+                <td style="font-size:12px;">Studylink Asia</td>
+                <td><span class="pill p-pay">Payment</span></td>
+                <td><span class="pill p-prog">In progress</span></td>
+                <td style="font-size:12px;">5h ago</td>
+                <td>
+                  <div class="action-grp">
+                    <div class="icon-btn"
+                      onclick="sendPrompt('Reply to support ticket #040 about invoice INV-047 dispute')"><svg width="13"
+                        height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M14 3H2a1 1 0 00-1 1v8a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1z"
+                          stroke="var(--color-text-secondary)" stroke-width="1.2" />
+                        <path d="M1 5l7 5 7-5" stroke="var(--color-text-secondary)" stroke-width="1.2" />
+                      </svg></div>
+                    <div class="icon-btn"><svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8l3 3 7-7" stroke="var(--color-text-secondary)" stroke-width="1.3"
+                          stroke-linecap="round" stroke-linejoin="round" />
+                      </svg></div>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-size:12px;color:var(--color-text-secondary);">#039</td>
+                <td>
+                  <div style="font-size:13px;font-weight:500;">Student Ayaan Khan — duplicate registration</div>
+                </td>
+                <td style="font-size:12px;">Priya Mehta</td>
+                <td><span class="pill p-stu">Student</span></td>
+                <td><span class="pill p-prog">In progress</span></td>
+                <td style="font-size:12px;">8h ago</td>
+                <td>
+                  <div class="action-grp">
+                    <div class="icon-btn"
+                      onclick="sendPrompt('Investigate and resolve duplicate registration issue for student Ayaan Khan')">
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M14 3H2a1 1 0 00-1 1v8a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1z"
+                          stroke="var(--color-text-secondary)" stroke-width="1.2" />
+                        <path d="M1 5l7 5 7-5" stroke="var(--color-text-secondary)" stroke-width="1.2" />
+                      </svg></div>
+                    <div class="icon-btn"><svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8l3 3 7-7" stroke="var(--color-text-secondary)" stroke-width="1.3"
+                          stroke-linecap="round" stroke-linejoin="round" />
+                      </svg></div>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-size:12px;color:var(--color-text-secondary);">#038</td>
+                <td>
+                  <div style="font-size:13px;font-weight:500;">SMS notifications not received for Canada Fair</div>
+                </td>
+                <td style="font-size:12px;">Global Edvice</td>
+                <td><span class="pill p-tech">Technical</span></td>
+                <td><span class="pill p-res">Resolved</span></td>
+                <td style="font-size:12px;">Yesterday</td>
+                <td>
+                  <div class="action-grp">
+                    <div class="icon-btn"><svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="6" stroke="var(--color-text-secondary)" stroke-width="1.2" />
+                        <path d="M8 5v4" stroke="var(--color-text-secondary)" stroke-width="1.4"
+                          stroke-linecap="round" />
+                        <circle cx="8" cy="11" r="0.8" fill="var(--color-text-secondary)" />
+                      </svg></div>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-size:12px;color:var(--color-text-secondary);">#037</td>
+                <td>
+                  <div style="font-size:13px;font-weight:500;">Can't change password — email OTP not arriving</div>
+                </td>
+                <td style="font-size:12px;">Aman Kumar</td>
+                <td><span class="pill p-tech">Technical</span></td>
+                <td><span class="pill p-res">Resolved</span></td>
+                <td style="font-size:12px;">2d ago</td>
+                <td>
+                  <div class="action-grp">
+                    <div class="icon-btn"><svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="6" stroke="var(--color-text-secondary)" stroke-width="1.2" />
+                        <path d="M8 5v4" stroke="var(--color-text-secondary)" stroke-width="1.4"
+                          stroke-linecap="round" />
+                        <circle cx="8" cy="11" r="0.8" fill="var(--color-text-secondary)" />
+                      </svg></div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="ticketDetailSection" style="display:none;">
+          <div class="ticket-detail">
+            <div class="td-head">
+              <div>
+                <div class="td-title">Passport upload failing — file size error</div>
+                <div class="td-sub">Ticket #041 · Rahul Joshi · 2 hours ago</div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <span class="pill p-open">Open</span>
+                <button class="btn btn-sm"
+                  onclick="document.getElementById('ticketDetailSection').style.display='none'">Close</button>
+              </div>
+            </div>
+            <div class="td-meta">
+              <div class="dm-item"><label>Category</label><span><span class="pill p-tech">Technical</span></span></div>
+              <div class="dm-item"><label>Agent email</label><span>rahul.joshi@studylinkasia.com</span></div>
+              <div class="dm-item"><label>Event related</label><span>UK University Expo · 8 May 2026</span></div>
+              <div class="dm-item"><label>Assigned to</label><span>Unassigned</span></div>
+            </div>
+            <div class="reply-box">
+              <div class="reply-label">Agent message</div>
+              <div class="reply-msg">When I try to upload my student's passport, I keep getting an error that says the
+                file is too large. The file is a standard PDF at around 4MB. I've tried multiple times and on different
+                browsers but the issue persists. Please help urgently as the UK Expo is coming up soon.</div>
+            </div>
+            <div class="form-group"><label>Admin reply</label><textarea placeholder="Type your response to the agent…"
+                style="min-height:80px;"></textarea></div>
+            <div class="td-actions">
+              <button class="btn btn-sm"
+                onclick="sendPrompt('Draft a reply to agent Rahul Joshi about the passport upload file size limit — explain the 2MB limit and how to compress the PDF')">Draft
+                reply with AI ↗</button>
+              <button class="btn btn-sm btn-success">Send & resolve</button>
+              <button class="btn btn-sm btn-primary">Send reply</button>
+              <select style="font-size:12px;padding:5px 8px;margin-left:auto;">
+                <option>Mark as open</option>
+                <option>Mark in progress</option>
+                <option>Mark resolved</option>
+                <option>Mark closed</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel" style="margin-bottom:16px;">
+          <div class="panel-head"><span class="ph-title">Response time by category</span></div>
+          <div style="padding:14px 16px;">
+            <div class="response-stats">
+              <div class="rs-row"><span class="rs-label">Technical</span>
+                <div class="rs-bar">
+                  <div class="rs-fill" style="width:70%;background:#378ADD;"></div>
+                </div><span class="rs-val">4.2h</span>
+              </div>
+              <div class="rs-row"><span class="rs-label">Payment</span>
+                <div class="rs-bar">
+                  <div class="rs-fill" style="width:90%;background:#EF9F27;"></div>
+                </div><span class="rs-val">5.4h</span>
+              </div>
+              <div class="rs-row"><span class="rs-label">Student</span>
+                <div class="rs-bar">
+                  <div class="rs-fill" style="width:55%;background:#7F77DD;"></div>
+                </div><span class="rs-val">3.3h</span>
+              </div>
+              <div class="rs-row"><span class="rs-label">Other</span>
+                <div class="rs-bar">
+                  <div class="rs-fill" style="width:40%;background:#B4B2A9;"></div>
+                </div><span class="rs-val">2.4h</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span class="ph-title">FAQ management</span>
+            <span class="ph-link" onclick="sendPrompt('Add a new FAQ to the agent help centre')">+ Add FAQ ↗</span>
+          </div>
+          <div class="faq-mgmt-list">
+            <div class="faq-mgmt-row">
+              <div class="faq-mgmt-q">How do I register a student for an event?</div><span
+                class="faq-mgmt-cat pill p-tech" style="background:#E6F1FB;color:#0C447C;">Registration</span>
+              <div class="icon-btn" style="margin-left:4px;"
+                onclick="sendPrompt('Edit FAQ: How do I register a student for an event?')"><svg width="12" height="12"
+                  viewBox="0 0 16 16" fill="none">
+                  <path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="var(--color-text-secondary)" stroke-width="1.2"
+                    stroke-linejoin="round" />
+                </svg></div>
+            </div>
+            <div class="faq-mgmt-row">
+              <div class="faq-mgmt-q">How do I raise an invoice?</div><span class="faq-mgmt-cat pill"
+                style="background:#FAEEDA;color:#633806;">Payment</span>
+              <div class="icon-btn" style="margin-left:4px;"
+                onclick="sendPrompt('Edit FAQ: How do I raise an invoice?')"><svg width="12" height="12"
+                  viewBox="0 0 16 16" fill="none">
+                  <path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="var(--color-text-secondary)" stroke-width="1.2"
+                    stroke-linejoin="round" />
+                </svg></div>
+            </div>
+            <div class="faq-mgmt-row">
+              <div class="faq-mgmt-q">What documents does a student need?</div><span class="faq-mgmt-cat pill"
+                style="background:#E6F1FB;color:#0C447C;">Registration</span>
+              <div class="icon-btn" style="margin-left:4px;"
+                onclick="sendPrompt('Edit FAQ: What documents does a student need?')"><svg width="12" height="12"
+                  viewBox="0 0 16 16" fill="none">
+                  <path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="var(--color-text-secondary)" stroke-width="1.2"
+                    stroke-linejoin="round" />
+                </svg></div>
+            </div>
+            <div class="faq-mgmt-row">
+              <div class="faq-mgmt-q">How long does payment take after approval?</div><span class="faq-mgmt-cat pill"
+                style="background:#FAEEDA;color:#633806;">Payment</span>
+              <div class="icon-btn" style="margin-left:4px;"
+                onclick="sendPrompt('Edit FAQ: How long does payment take?')"><svg width="12" height="12"
+                  viewBox="0 0 16 16" fill="none">
+                  <path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="var(--color-text-secondary)" stroke-width="1.2"
+                    stroke-linejoin="round" />
+                </svg></div>
+            </div>
+            <div class="faq-mgmt-row">
+              <div class="faq-mgmt-q">My account shows pending verification</div><span class="faq-mgmt-cat pill"
+                style="background:#EEEDFE;color:#3C3489;">Account</span>
+              <div class="icon-btn" style="margin-left:4px;"
+                onclick="sendPrompt('Edit FAQ: My account shows pending verification')"><svg width="12" height="12"
+                  viewBox="0 0 16 16" fill="none">
+                  <path d="M11 2l3 3-9 9H2v-3l9-9z" stroke="var(--color-text-secondary)" stroke-width="1.2"
+                    stroke-linejoin="round" />
+                </svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showView(v, el) {
+    document.getElementById('agentView').style.display = v === 'agent' ? 'block' : 'none';
+    document.getElementById('adminView').style.display = v === 'admin' ? 'block' : 'none';
+    document.querySelectorAll('.vs-btn').forEach(b => b.classList.remove('on'));
+    el.classList.add('on');
+  }
+  function toggleFaq(el) {
+    const item = el.parentElement;
+    const ans = item.querySelector('.faq-a');
+    const chev = el.querySelector('.faq-chevron');
+    const isOpen = ans.classList.contains('open');
+    document.querySelectorAll('.faq-a.open').forEach(a => a.classList.remove('open'));
+    document.querySelectorAll('.faq-chevron.open').forEach(c => c.classList.remove('open'));
+    if (!isOpen) { ans.classList.add('open'); chev.classList.add('open'); }
+  }
+  function scrollToGroup(id) {
+    const el = document.getElementById('group-' + id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const first = el.querySelector('.faq-q');
+    if (first) setTimeout(() => toggleFaq(first), 400);
+  }
+  function liveSearch(q) {
+    const sq = q.toLowerCase();
+    document.querySelectorAll('.faq-item').forEach(item => {
+      const txt = item.querySelector('.faq-q').textContent.toLowerCase();
+      item.style.display = (!sq || txt.includes(sq)) ? 'block' : 'none';
+    });
+  }
+  function showTicketDetail() {
+    const sec = document.getElementById('ticketDetailSection');
+    sec.style.display = 'block';
+    sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>

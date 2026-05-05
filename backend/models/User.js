@@ -42,10 +42,36 @@ const userSchema = new mongoose.Schema({
     enum: ['active', 'inactive'],
     default: 'active'
   },
+  agencyName: String,
+  businessRegistrationNumber: String,
+  fullAddress: String,
   avatar: {
     type: String,
     default: null
-  }
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  verificationDocuments: [{
+    docType: {
+      type: String,
+      enum: ['Identity', 'Business License', 'Tax ID', 'Other'],
+      required: true
+    },
+    fileUrl: String,
+    fileName: String,
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending'
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    },
+    remarks: String
+  }]
 }, {
   timestamps: true,
   toJSON: {

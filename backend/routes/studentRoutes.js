@@ -8,7 +8,10 @@ const {
   updateStudent,
   deleteStudent,
   uploadDocument, 
-  downloadDocument 
+  downloadDocument,
+  updateStudentStatus,
+  verifyStudentDocument,
+  requestDocument
 } = require('../controllers/studentController');
 const { protect } = require('../middleware/auth');
 
@@ -63,6 +66,11 @@ router.put('/:id', (req, res, next) => {
   next();
 }, updateStudent);
 
+router.patch('/:id/status', (req, res, next) => {
+  console.log('PATCH /students/:id/status', req.params.id);
+  next();
+}, updateStudentStatus);
+
 router.delete('/:id', (req, res, next) => {
   console.log('DELETE /students/:id', req.params.id);
   next();
@@ -70,6 +78,8 @@ router.delete('/:id', (req, res, next) => {
 
 // Document routes (must come after student routes to avoid conflicts)
 router.post('/:id/documents', upload.single('file'), uploadDocument);
+router.post('/:id/documents/request', requestDocument);
 router.get('/:id/documents/:docId', downloadDocument);
+router.patch('/:id/documents/:docId/verify', verifyStudentDocument);
 
 module.exports = router;

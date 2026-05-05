@@ -1,0 +1,334 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.adm { padding: 28px 24px; font-family: var(--font-sans); }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.topbar-left h1 { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+.topbar-left p { font-size: 13px; color: var(--color-text-secondary); margin-top: 3px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.admin-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #EEEDFE; color: #3C3489; font-weight: 500; }
+.avatar-adm { width: 36px; height: 36px; border-radius: 50%; background: #26215C; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: #CECBF6; flex-shrink: 0; }
+.notif-btn { width: 36px; height: 36px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); background: var(--color-background-primary); display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+.notif-dot { width: 7px; height: 7px; background: #E24B4A; border-radius: 50%; position: absolute; top: 6px; right: 6px; }
+.section-divider { height: 0.5px; background: var(--color-border-tertiary); margin: 20px 0; }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 20px; }
+.kpi { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 18px 20px; }
+.kpi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.kpi-label { font-size: 12px; color: var(--color-text-secondary); }
+.kpi-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.kpi-val { font-size: 26px; font-weight: 500; color: var(--color-text-primary); }
+.kpi-sub { font-size: 12px; margin-top: 5px; display: flex; align-items: center; gap: 5px; }
+.up { color: #3B6D11; } .dn { color: #A32D2D; } .neu { color: var(--color-text-secondary); }
+.pip { width: 6px; height: 6px; border-radius: 50%; }
+.pip-g { background: #639922; } .pip-r { background: #E24B4A; } .pip-n { background: #B4B2A9; }
+
+.row2 { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); gap: 16px; margin-bottom: 16px; }
+.row3 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px; margin-bottom: 16px; }
+.panel { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 20px; }
+.ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.pt { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+.plink { font-size: 12px; color: var(--color-text-secondary); cursor: pointer; }
+.plink:hover { color: var(--color-text-primary); }
+
+.chart-wrap { position: relative; height: 175px; }
+.chart-wrap2 { position: relative; height: 175px; }
+
+.donut-wrap { display: flex; align-items: center; gap: 20px; }
+.donut-canvas { position: relative; width: 130px; height: 130px; flex-shrink: 0; }
+.donut-legend { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.dl-row { display: flex; align-items: center; gap: 8px; }
+.dl-sq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.dl-label { font-size: 12px; color: var(--color-text-secondary); flex: 1; }
+.dl-val { font-size: 12px; font-weight: 500; color: var(--color-text-primary); }
+
+.agent-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.agent-table th { font-size: 11px; color: var(--color-text-secondary); font-weight: 500; padding: 0 0 10px 0; text-align: left; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.agent-table td { padding: 10px 0; border-bottom: 0.5px solid var(--color-border-tertiary); vertical-align: middle; color: var(--color-text-primary); }
+.agent-table tr:last-child td { border-bottom: none; }
+.ag-name { display: flex; align-items: center; gap: 8px; }
+.ag-av { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; flex-shrink: 0; }
+.status-pill { font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: 500; }
+.s-active { background: #EAF3DE; color: #27500A; }
+.s-pending { background: #FAEEDA; color: #633806; }
+.s-inactive { background: #F1EFE8; color: #5F5E5A; }
+
+.invoice-list { display: flex; flex-direction: column; gap: 0; }
+.inv-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.inv-row:last-child { border-bottom: none; }
+.inv-id { font-size: 12px; font-weight: 500; color: var(--color-text-primary); width: 72px; flex-shrink: 0; }
+.inv-agent { font-size: 12px; color: var(--color-text-secondary); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inv-amt { font-size: 12px; font-weight: 500; color: var(--color-text-primary); width: 64px; text-align: right; flex-shrink: 0; }
+.inv-status { font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: 500; flex-shrink: 0; }
+.is-review { background: #FAEEDA; color: #633806; }
+.is-approved { background: #EAF3DE; color: #27500A; }
+.is-rejected { background: #FCEBEB; color: #791F1F; }
+
+.ticket-list { display: flex; flex-direction: column; gap: 0; }
+.tk-row { display: flex; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--color-border-tertiary); align-items: flex-start; }
+.tk-row:last-child { border-bottom: none; }
+.tk-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+.tk-body { flex: 1; min-width: 0; }
+.tk-title { font-size: 13px; color: var(--color-text-primary); }
+.tk-meta { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+.tk-badge { font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: 500; flex-shrink: 0; margin-top: 2px; }
+.tb-open { background: #FCEBEB; color: #791F1F; }
+.tb-prog { background: #FAEEDA; color: #633806; }
+.tb-res { background: #EAF3DE; color: #27500A; }
+
+.occ-list { display: flex; flex-direction: column; gap: 10px; }
+.occ-row { display: flex; align-items: center; gap: 10px; }
+.occ-name { font-size: 12px; color: var(--color-text-secondary); width: 90px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.occ-bar-bg { flex: 1; height: 6px; background: var(--color-background-secondary); border-radius: 4px; overflow: hidden; }
+.occ-bar-fill { height: 100%; border-radius: 4px; }
+.occ-pct { font-size: 12px; font-weight: 500; color: var(--color-text-primary); width: 32px; text-align: right; flex-shrink: 0; }
+
+.action-row { display: flex; gap: 10px; margin-top: 18px; }
+.act-btn { flex: 1; padding: 9px 0; font-size: 12px; font-weight: 500; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); cursor: pointer; text-align: center; }
+.act-btn:hover { background: var(--color-background-secondary); }
+.act-btn-primary { background: #042C53; color: #B5D4F4; border-color: #042C53; }
+.act-btn-primary:hover { background: #0C447C; }
+</style>
+
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">QStudy admin dashboard showing platform overview with KPIs, agent performance, revenue, event occupancy, invoices, and support tickets.</h2>
+
+<div class="adm">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Admin overview</h1>
+      <p>Thursday, 30 April 2026 · QStudy command centre</p>
+    </div>
+    <div class="topbar-right">
+      <span class="admin-badge">Super admin</span>
+      <div class="notif-btn">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a5 5 0 00-5 5v2.5L1.5 11h13L13 8.5V6a5 5 0 00-5-5z" stroke="var(--color-text-secondary)" stroke-width="1.2" fill="none"/><path d="M6.5 13a1.5 1.5 0 003 0" stroke="var(--color-text-secondary)" stroke-width="1.2" fill="none"/></svg>
+        <div class="notif-dot"></div>
+      </div>
+      <div class="avatar-adm">QS</div>
+    </div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-top">
+        <span class="kpi-label">Total agents</span>
+        <div class="kpi-icon" style="background:#EEEDFE;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="5" r="2.5" stroke="#534AB7" stroke-width="1.2"/><path d="M1 13c0-2.5 1.8-4 4-4s4 1.5 4 4" stroke="#534AB7" stroke-width="1.2" stroke-linecap="round"/><circle cx="12" cy="6" r="2" stroke="#534AB7" stroke-width="1.2"/><path d="M10 13c0-2 1.2-3.2 2-3.2" stroke="#534AB7" stroke-width="1.2" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+      <div class="kpi-val">84</div>
+      <div class="kpi-sub up"><div class="pip pip-g"></div>71 active · 13 pending</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-top">
+        <span class="kpi-label">Total students</span>
+        <div class="kpi-icon" style="background:#E6F1FB;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2L2 5l6 3 6-3-6-3z" stroke="#185FA5" stroke-width="1.2" stroke-linejoin="round"/><path d="M2 5v5M14 5v5M5 6.5v4.5a5 5 0 006 0V6.5" stroke="#185FA5" stroke-width="1.2" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+      <div class="kpi-val">2,341</div>
+      <div class="kpi-sub up"><div class="pip pip-g"></div>+312 this month</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-top">
+        <span class="kpi-label">Revenue (MTD)</span>
+        <div class="kpi-icon" style="background:#EAF3DE;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="14" height="9" rx="2" stroke="#3B6D11" stroke-width="1.2"/><path d="M1 7h14" stroke="#3B6D11" stroke-width="1.2"/><circle cx="8" cy="10" r="1.2" fill="#3B6D11"/></svg>
+        </div>
+      </div>
+      <div class="kpi-val">₹8.4L</div>
+      <div class="kpi-sub up"><div class="pip pip-g"></div>+22% vs last month</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-top">
+        <span class="kpi-label">Avg seat fill rate</span>
+        <div class="kpi-icon" style="background:#FAEEDA;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 12L6 7l3 3 2.5-4L14 9" stroke="#854F0B" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+      <div class="kpi-val">73%</div>
+      <div class="kpi-sub dn"><div class="pip pip-r"></div>-4% from target</div>
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">Monthly registrations vs conversions</span>
+        <span class="plink" onclick="sendPrompt('Give me a breakdown of conversion rates by agent for the past 6 months')">By agent ↗</span>
+      </div>
+      <div style="display:flex;gap:16px;margin-bottom:10px;">
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--color-text-secondary);"><span style="width:10px;height:10px;border-radius:2px;background:#378ADD;display:inline-block;"></span>Registrations</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--color-text-secondary);"><span style="width:10px;height:10px;border-radius:2px;background:#1D9E75;display:inline-block;"></span>Conversions</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="regConvChart" role="img" aria-label="Grouped bar chart showing monthly student registrations and conversions from November to April">Nov: 180 reg 72 conv, Dec: 210 reg 88 conv, Jan: 260 reg 104 conv, Feb: 310 reg 130 conv, Mar: 390 reg 168 conv, Apr: 340 reg 152 conv</canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">Student status split</span>
+        <span class="plink" onclick="sendPrompt('Which students have been in Contacted status for more than 7 days without moving forward?')">Flag stale ↗</span>
+      </div>
+      <div class="donut-wrap">
+        <div class="donut-canvas">
+          <canvas id="statusDonut" role="img" aria-label="Donut chart showing student status distribution: Registered 18%, Contacted 26%, Confirmed 22%, Attended 18%, Converted 16%">Registered 18%, Contacted 26%, Confirmed 22%, Attended 18%, Converted 16%</canvas>
+        </div>
+        <div class="donut-legend">
+          <div class="dl-row"><div class="dl-sq" style="background:#85B7EB;"></div><span class="dl-label">Registered</span><span class="dl-val">421</span></div>
+          <div class="dl-row"><div class="dl-sq" style="background:#7F77DD;"></div><span class="dl-label">Contacted</span><span class="dl-val">608</span></div>
+          <div class="dl-row"><div class="dl-sq" style="background:#5DCAA5;"></div><span class="dl-label">Confirmed</span><span class="dl-val">515</span></div>
+          <div class="dl-row"><div class="dl-sq" style="background:#97C459;"></div><span class="dl-label">Attended</span><span class="dl-val">421</span></div>
+          <div class="dl-row"><div class="dl-sq" style="background:#EF9F27;"></div><span class="dl-label">Converted</span><span class="dl-val">376</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="ph">
+      <span class="pt">Top performing agents</span>
+      <span class="plink" onclick="sendPrompt('Show me agents with low conversion rates who may need support or training')">View all agents ↗</span>
+    </div>
+    <table class="agent-table">
+      <thead>
+        <tr>
+          <th style="width:30%;">Agent</th>
+          <th style="width:12%;">Registrations</th>
+          <th style="width:12%;">Confirmed</th>
+          <th style="width:12%;">Converted</th>
+          <th style="width:14%;">Conv. rate</th>
+          <th style="width:12%;">Status</th>
+          <th style="width:8%;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="ag-name"><div class="ag-av" style="background:#E6F1FB;color:#0C447C;">RJ</div><span>Rahul Joshi</span></div></td>
+          <td>247</td><td>134</td><td>54</td>
+          <td><span style="color:#27500A;font-weight:500;">21.9%</span></td>
+          <td><span class="status-pill s-active">Active</span></td>
+          <td><span class="plink" onclick="sendPrompt('Show me detailed performance report for agent Rahul Joshi')">View ↗</span></td>
+        </tr>
+        <tr>
+          <td><div class="ag-name"><div class="ag-av" style="background:#E1F5EE;color:#085041;">PM</div><span>Priya Mehta</span></div></td>
+          <td>193</td><td>108</td><td>41</td>
+          <td><span style="color:#27500A;font-weight:500;">21.2%</span></td>
+          <td><span class="status-pill s-active">Active</span></td>
+          <td><span class="plink" onclick="sendPrompt('Show me detailed performance report for agent Priya Mehta')">View ↗</span></td>
+        </tr>
+        <tr>
+          <td><div class="ag-name"><div class="ag-av" style="background:#FAEEDA;color:#633806;">SK</div><span>Sameer Khan</span></div></td>
+          <td>156</td><td>79</td><td>28</td>
+          <td><span style="color:#BA7517;font-weight:500;">17.9%</span></td>
+          <td><span class="status-pill s-active">Active</span></td>
+          <td><span class="plink" onclick="sendPrompt('Show me detailed performance report for agent Sameer Khan')">View ↗</span></td>
+        </tr>
+        <tr>
+          <td><div class="ag-name"><div class="ag-av" style="background:#FCEBEB;color:#791F1F;">AR</div><span>Aisha Rao</span></div></td>
+          <td>88</td><td>31</td><td>8</td>
+          <td><span style="color:#A32D2D;font-weight:500;">9.1%</span></td>
+          <td><span class="status-pill s-pending">Pending</span></td>
+          <td><span class="plink" onclick="sendPrompt('Show me detailed performance report for agent Aisha Rao')">View ↗</span></td>
+        </tr>
+        <tr>
+          <td><div class="ag-name"><div class="ag-av" style="background:#EEEDFE;color:#3C3489;">VN</div><span>Vivek Nair</span></div></td>
+          <td>64</td><td>20</td><td>5</td>
+          <td><span style="color:#A32D2D;font-weight:500;">7.8%</span></td>
+          <td><span class="status-pill s-inactive">Inactive</span></td>
+          <td><span class="plink" onclick="sendPrompt('Show me detailed performance report for agent Vivek Nair')">View ↗</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="row3">
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">Event seat occupancy</span>
+        <span class="plink" onclick="sendPrompt('Which events have low occupancy and need more agent outreach?')">Boost events ↗</span>
+      </div>
+      <div class="occ-list">
+        <div class="occ-row"><span class="occ-name">UK Expo · May 8</span><div class="occ-bar-bg"><div class="occ-bar-fill" style="width:88%;background:#378ADD;"></div></div><span class="occ-pct">88%</span></div>
+        <div class="occ-row"><span class="occ-name">Canada · May 15</span><div class="occ-bar-bg"><div class="occ-bar-fill" style="width:61%;background:#7F77DD;"></div></div><span class="occ-pct">61%</span></div>
+        <div class="occ-row"><span class="occ-name">Germany · May 22</span><div class="occ-bar-bg"><div class="occ-bar-fill" style="width:74%;background:#5DCAA5;"></div></div><span class="occ-pct">74%</span></div>
+        <div class="occ-row"><span class="occ-name">Australia · Jun 3</span><div class="occ-bar-bg"><div class="occ-bar-fill" style="width:42%;background:#EF9F27;"></div></div><span class="occ-pct">42%</span></div>
+        <div class="occ-row"><span class="occ-name">US Webinar · Jun 10</span><div class="occ-bar-bg"><div class="occ-bar-fill" style="width:29%;background:#E24B4A;"></div></div><span class="occ-pct">29%</span></div>
+      </div>
+      <div class="action-row">
+        <div class="act-btn" onclick="sendPrompt('Draft a notification to all agents about upcoming events with low occupancy')">Notify agents ↗</div>
+        <div class="act-btn act-btn-primary" onclick="sendPrompt('Create a new event for QStudy')">+ New event</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph">
+        <span class="pt">Invoice queue</span>
+        <span class="plink" onclick="sendPrompt('Show all pending invoices that need approval today')">Review all ↗</span>
+      </div>
+      <div class="invoice-list">
+        <div class="inv-row"><span class="inv-id">INV-051</span><span class="inv-agent">Rahul Joshi</span><span class="inv-amt">₹22,500</span><span class="inv-status is-review">Review</span></div>
+        <div class="inv-row"><span class="inv-id">INV-050</span><span class="inv-agent">Priya Mehta</span><span class="inv-amt">₹18,000</span><span class="inv-status is-review">Review</span></div>
+        <div class="inv-row"><span class="inv-id">INV-049</span><span class="inv-agent">Sameer Khan</span><span class="inv-amt">₹14,000</span><span class="inv-status is-approved">Approved</span></div>
+        <div class="inv-row"><span class="inv-id">INV-048</span><span class="inv-agent">Global Edvice</span><span class="inv-amt">₹9,500</span><span class="inv-status is-rejected">Rejected</span></div>
+        <div class="inv-row"><span class="inv-id">INV-047</span><span class="inv-agent">Studylink Asia</span><span class="inv-amt">₹31,000</span><span class="inv-status is-approved">Approved</span></div>
+      </div>
+      <div class="action-row">
+        <div class="act-btn act-btn-primary" onclick="sendPrompt('Approve all invoices currently under review')">Approve pending ↗</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph">
+      <span class="pt">Support tickets</span>
+      <span class="plink" onclick="sendPrompt('Which support tickets have been open for more than 48 hours without a response?')">Escalate old ↗</span>
+    </div>
+    <div class="ticket-list">
+      <div class="tk-row"><div class="tk-dot" style="background:#E24B4A;"></div><div class="tk-body"><div class="tk-title">Agent cannot upload passport — file size error</div><div class="tk-meta">Rahul Joshi · Technical · 2h ago</div></div><span class="tk-badge tb-open">Open</span></div>
+      <div class="tk-row"><div class="tk-dot" style="background:#EF9F27;"></div><div class="tk-body"><div class="tk-title">Invoice INV-047 amount disputed — student count mismatch</div><div class="tk-meta">Studylink Asia · Payment · 5h ago</div></div><span class="tk-badge tb-prog">In progress</span></div>
+      <div class="tk-row"><div class="tk-dot" style="background:#EF9F27;"></div><div class="tk-body"><div class="tk-title">Student Ayaan Khan shows duplicate registration</div><div class="tk-meta">Priya Mehta · Student · 8h ago</div></div><span class="tk-badge tb-prog">In progress</span></div>
+      <div class="tk-row"><div class="tk-dot" style="background:#639922;"></div><div class="tk-body"><div class="tk-title">SMS notifications not received for Canada Fair</div><div class="tk-meta">Global Edvice · Technical · Yesterday</div></div><span class="tk-badge tb-res">Resolved</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+const gridCol = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+const labelCol = isDark ? '#888780' : '#888780';
+
+new Chart(document.getElementById('regConvChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Nov','Dec','Jan','Feb','Mar','Apr'],
+    datasets: [
+      { label: 'Registrations', data: [180,210,260,310,390,340], backgroundColor: '#378ADD', borderRadius: 3, barPercentage: 0.55 },
+      { label: 'Conversions', data: [72,88,104,130,168,152], backgroundColor: '#1D9E75', borderRadius: 3, barPercentage: 0.55 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { backgroundColor: isDark ? '#2C2C2A' : '#fff', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', borderWidth: 0.5, titleColor: isDark ? '#D3D1C7' : '#2C2C2A', bodyColor: isDark ? '#B4B2A9' : '#5F5E5A', padding: 10, cornerRadius: 8 } },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 11 }, color: labelCol }, border: { display: false } },
+      y: { grid: { color: gridCol }, ticks: { font: { size: 11 }, color: labelCol }, border: { display: false }, min: 0 }
+    }
+  }
+});
+
+new Chart(document.getElementById('statusDonut'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Registered','Contacted','Confirmed','Attended','Converted'],
+    datasets: [{ data: [18,26,22,18,16], backgroundColor: ['#85B7EB','#7F77DD','#5DCAA5','#97C459','#EF9F27'], borderWidth: 0, hoverOffset: 4 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, cutout: '70%',
+    plugins: { legend: { display: false }, tooltip: { backgroundColor: isDark ? '#2C2C2A' : '#fff', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', borderWidth: 0.5, titleColor: isDark ? '#D3D1C7' : '#2C2C2A', bodyColor: isDark ? '#B4B2A9' : '#5F5E5A', padding: 10, cornerRadius: 8, callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}%` } } }
+  }
+});
+</script>

@@ -53,7 +53,7 @@ const LoginPage = () => {
     setErrors({});
 
     try {
-      const result = await login(formData.email, formData.password);
+      const result = await login(formData.email.trim(), formData.password);
 
       if (result.success) {
         toast.success(`Welcome back!`, {
@@ -77,7 +77,11 @@ const LoginPage = () => {
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  }, []);
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  }, [errors]);
 
 
   if (isAuthenticated) {
@@ -100,7 +104,7 @@ const LoginPage = () => {
       <div className="flex-1 bg-background flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-foreground mb-2">Welcome back</h2>
+            <h2 className="text-3xl font-semibold text-foreground font-['Outfit'] mb-2">Welcome back</h2>
             <p className="text-muted-foreground">Please enter your details to sign in</p>
           </div>
 
@@ -113,7 +117,7 @@ const LoginPage = () => {
                 type="email"
                 name="email"
                 id="email"
-                value={formData.email || 'janedoe@mail.com'}
+                value={formData.email}
                 onChange={handleInputChange}
                 className="w-full px-4 py-3 border border-input rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
                 placeholder="janedoe@mail.com"

@@ -70,8 +70,31 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateProfile = async (data) => {
+    try {
+      const response = await authAPI.updateProfile(data);
+      setUser(response.data);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: formatApiError(error) };
+    }
+  };
+
+  const updatePassword = async (current_password, new_password) => {
+    try {
+      await authAPI.updatePassword(current_password, new_password);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: formatApiError(error) };
+    }
+  };
+
   const isAdmin = () => user?.role === 'admin';
   const isAgent = () => user?.role === 'agent';
+
+  const updateUser = useCallback((userData) => {
+    setUser(userData);
+  }, []);
 
   const value = {
     user,
@@ -80,6 +103,9 @@ export const AuthProvider = ({ children }) => {
     logout,
     isAdmin,
     isAgent,
+    updateUser,
+    updateProfile,
+    updatePassword,
     isAuthenticated: !!user && user !== false,
     registerCallbacks
   };

@@ -109,7 +109,9 @@ export const authAPI = {
   me: () => api.get('/auth/me'),
   refresh: () => api.post('/auth/refresh'),
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
-  resetPassword: (token, newPassword) => api.post('/auth/reset-password', { token, new_password: newPassword })
+  resetPassword: (token, newPassword) => api.post('/auth/reset-password', { token, new_password: newPassword }),
+  updateProfile: (data) => api.put('/auth/update-profile', data),
+  updatePassword: (current_password, new_password) => api.put('/auth/update-password', { current_password, new_password })
 };
 
 // Agent APIs
@@ -117,8 +119,18 @@ export const agentAPI = {
   getAll: () => api.get('/agents'),
   getById: (id) => api.get(`/agents/${id}`),
   create: (data) => api.post('/agents', data),
+  createAdmin: (data) => api.post('/agents/admin', data),
   update: (id, data) => api.put(`/agents/${id}`, data),
-  delete: (id) => api.delete(`/agents/${id}`)
+  delete: (id) => api.delete(`/agents/${id}`),
+  uploadVerificationDocument: (file, docType) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('docType', docType);
+    return api.post('/agents/me/documents', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  verify: (id, data) => api.patch(`/agents/${id}/verify`, data)
 };
 
 // Event APIs
@@ -140,15 +152,20 @@ export const studentAPI = {
     console.log('Update data:', data);
     return api.put(`/students/${id}`, data);
   },
+  updateStatus: (id, status) => api.patch(`/students/${id}/status`, { status }),
   delete: (id) => api.delete(`/students/${id}`),
-  uploadDocument: (studentId, file) => {
+  uploadDocument: (studentId, file, category) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (category) formData.append('category', category);
     return api.post(`/students/${studentId}/documents`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
-  downloadDocument: (studentId, docId) => api.get(`/students/${studentId}/documents/${docId}`, {
+  verifyDocument: (studentId, docId, data) => api.patch(`/students/${studentId}/documents/${docId}/verify`, data),
+  requestDocument: (studentId, category) => api.post(`/students/${studentId}/documents/request`, { category }),
+  downloadDocument: (studentId, docId, params = {}) => api.get(`/students/${studentId}/documents/${docId}`, {
+    params,
     responseType: 'blob'
   })
 };
@@ -156,6 +173,30 @@ export const studentAPI = {
 // Stats API
 export const statsAPI = {
   get: () => api.get('/stats')
+};
+
+// Invoice APIs
+export const invoiceAPI = {
+  getAll: () => api.get('/invoices'),
+  getById: (id) => api.get(`/invoices/${id}`),
+  create: (data) => api.post('/invoices', data),
+  updateStatus: (id, data) => api.patch(`/invoices/${id}/status`, data)
+};
+
+// Ticket APIs
+export const ticketAPI = {
+  getAll: () => api.get('/tickets'),
+  getById: (id) => api.get(`/tickets/${id}`),
+  create: (data) => api.post('/tickets', data),
+  addResponse: (id, message) => api.post(`/tickets/${id}/responses`, { message }),
+  updateStatus: (id, status) => api.patch(`/tickets/${id}/status`, { status })
+};
+
+// Notification APIs
+export const notificationAPI = {
+  getAll: () => api.get('/notifications'),
+  markAsRead: (id) => api.patch(`/notifications/${id}/read`),
+  markAllAsRead: () => api.patch('/notifications/read-all')
 };
 
 export default api;

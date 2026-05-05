@@ -1,0 +1,383 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+.pg{padding:24px;font-family:var(--font-sans);}
+.toprow{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.toprow h2{font-size:18px;font-weight:500;color:var(--color-text-primary);}
+.toprow p{font-size:13px;color:var(--color-text-secondary);margin-top:2px;}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;font-size:13px;font-weight:500;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;}
+.btn:hover{background:var(--color-background-secondary);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-primary{background:#042C53;color:#B5D4F4;border-color:#042C53;}
+.btn-primary:hover{background:#0C447C;}
+.btn-success{background:#EAF3DE;color:#27500A;border-color:#C0DD97;}
+.btn-success:hover{background:#C0DD97;}
+.btn-warn{background:#FAEEDA;color:#633806;border-color:#FAC775;}
+.btn-warn:hover{background:#FAC775;}
+.btn-danger{background:#FCEBEB;color:#791F1F;border-color:#F7C1C1;}
+.btn-danger:hover{background:#F7C1C1;}
+.kpi-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:20px;}
+.kpi{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:13px 15px;}
+.kpi-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:5px;}
+.kpi-val{font-size:20px;font-weight:500;color:var(--color-text-primary);}
+.kpi-sub{font-size:11px;margin-top:3px;}
+.pipeline-strip{display:flex;gap:0;margin-bottom:20px;border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid var(--color-border-tertiary);}
+.ps-seg{flex:1;padding:12px 14px;background:var(--color-background-primary);cursor:pointer;border-right:0.5px solid var(--color-border-tertiary);transition:background 0.1s;}
+.ps-seg:last-child{border-right:none;}
+.ps-seg:hover{background:var(--color-background-secondary);}
+.ps-seg.active{background:var(--color-background-secondary);}
+.ps-num{font-size:18px;font-weight:500;color:var(--color-text-primary);}
+.ps-label{font-size:11px;color:var(--color-text-secondary);margin-top:2px;}
+.ps-dot{width:8px;height:8px;border-radius:50%;margin-bottom:6px;}
+.controls{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.search-wrap{position:relative;flex:1;min-width:140px;}
+.search-wrap input{width:100%;padding-left:32px;font-size:13px;}
+.si{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-secondary);}
+.panel{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;margin-bottom:16px;}
+.tbl{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;}
+.tbl th{font-size:11px;color:var(--color-text-secondary);font-weight:500;padding:10px 14px;text-align:left;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);}
+.tbl td{padding:11px 14px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-primary);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:var(--color-background-secondary);cursor:pointer;}
+.pill{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:500;display:inline-block;white-space:nowrap;}
+.p-reg{background:#E6F1FB;color:#0C447C;}
+.p-con{background:#FAEEDA;color:#633806;}
+.p-conf{background:#EEEDFE;color:#3C3489;}
+.p-att{background:#EAF3DE;color:#27500A;}
+.p-conv{background:#E1F5EE;color:#085041;}
+.p-doc-ok{background:#EAF3DE;color:#27500A;}
+.p-doc-miss{background:#FCEBEB;color:#791F1F;}
+.p-doc-pend{background:#FAEEDA;color:#633806;}
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;flex-shrink:0;}
+.name-cell{display:flex;align-items:center;gap:8px;}
+.icon-btn{width:28px;height:28px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+.icon-btn:hover{background:var(--color-background-secondary);}
+.action-grp{display:flex;gap:5px;}
+.detail-overlay{background:rgba(0,0,0,0.3);border-radius:var(--border-radius-lg);padding:20px;margin-bottom:16px;}
+.detail-panel{background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);padding:22px;}
+.dp-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;padding-bottom:16px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.dp-av{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;flex-shrink:0;}
+.dp-name{font-size:16px;font-weight:500;color:var(--color-text-primary);}
+.dp-sub{font-size:12px;color:var(--color-text-secondary);margin-top:3px;}
+.dp-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;}
+.dm-item label{font-size:11px;color:var(--color-text-secondary);display:block;margin-bottom:3px;}
+.dm-item span{font-size:13px;color:var(--color-text-primary);}
+.pipeline-tracker{display:flex;align-items:center;margin-bottom:18px;gap:0;}
+.pt-step{display:flex;flex-direction:column;align-items:center;flex:1;}
+.pt-circle{width:28px;height:28px;border-radius:50%;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;color:var(--color-text-secondary);position:relative;z-index:1;}
+.pt-circle.done{background:#EAF3DE;border-color:#C0DD97;color:#27500A;}
+.pt-circle.active{background:#E6F1FB;border-color:#85B7EB;color:#0C447C;}
+.pt-label{font-size:10px;color:var(--color-text-secondary);margin-top:5px;text-align:center;}
+.pt-label.done{color:#27500A;}
+.pt-label.active{color:#0C447C;font-weight:500;}
+.pt-line{flex:1;height:1px;background:var(--color-border-tertiary);margin-top:-14px;}
+.pt-line.done{background:#97C459;}
+.doc-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;}
+.doc-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);}
+.doc-icon{width:28px;height:28px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.doc-name{font-size:13px;font-weight:500;color:var(--color-text-primary);flex:1;}
+.doc-sub{font-size:11px;color:var(--color-text-secondary);margin-top:1px;}
+.status-select{padding:5px 8px;font-size:12px;border-radius:var(--border-radius-md);}
+.section-label{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px;letter-spacing:0.03em;}
+.dp-actions{display:flex;gap:8px;padding-top:14px;border-top:0.5px solid var(--color-border-tertiary);flex-wrap:wrap;}
+.flag-banner{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#FAEEDA;border-radius:var(--border-radius-md);margin-bottom:14px;font-size:13px;color:#633806;}
+</style>
+
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">QStudy admin student management page with pipeline tracker, student roster, and detailed student profile panel.</h2>
+
+<div class="pg">
+
+  <div class="toprow">
+    <div>
+      <h2>Student management</h2>
+      <p>2,341 students across all events</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-sm" onclick="sendPrompt('Export all student data as a CSV with name, status, event, and agent columns')">Export ↗</button>
+      <button class="btn btn-sm btn-warn" onclick="sendPrompt('Flag all students who have been in Contacted status for more than 7 days with no update')">Flag stale ↗</button>
+      <button class="btn btn-primary btn-sm" onclick="showDetail(0)">+ Add student</button>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">Total students</div><div class="kpi-val">2,341</div><div class="kpi-sub" style="color:#0C447C;">+312 this month</div></div>
+    <div class="kpi"><div class="kpi-label">Doc missing</div><div class="kpi-val">47</div><div class="kpi-sub" style="color:#791F1F;">Needs action</div></div>
+    <div class="kpi"><div class="kpi-label">Confirmed</div><div class="kpi-val">515</div><div class="kpi-sub" style="color:#3C3489;">22% of total</div></div>
+    <div class="kpi"><div class="kpi-label">Attended</div><div class="kpi-val">421</div><div class="kpi-sub" style="color:#27500A;">18% of total</div></div>
+    <div class="kpi"><div class="kpi-label">Converted</div><div class="kpi-val">376</div><div class="kpi-sub" style="color:#085041;">16% conv. rate</div></div>
+  </div>
+
+  <div class="pipeline-strip" id="pipelineStrip">
+    <div class="ps-seg active" data-stage="all" onclick="setStage('all',this)">
+      <div class="ps-dot" style="background:#888780;"></div>
+      <div class="ps-num">2,341</div>
+      <div class="ps-label">All students</div>
+    </div>
+    <div class="ps-seg" data-stage="Registered" onclick="setStage('Registered',this)">
+      <div class="ps-dot" style="background:#378ADD;"></div>
+      <div class="ps-num">421</div>
+      <div class="ps-label">Registered</div>
+    </div>
+    <div class="ps-seg" data-stage="Contacted" onclick="setStage('Contacted',this)">
+      <div class="ps-dot" style="background:#EF9F27;"></div>
+      <div class="ps-num">608</div>
+      <div class="ps-label">Contacted</div>
+    </div>
+    <div class="ps-seg" data-stage="Confirmed" onclick="setStage('Confirmed',this)">
+      <div class="ps-dot" style="background:#7F77DD;"></div>
+      <div class="ps-num">515</div>
+      <div class="ps-label">Confirmed</div>
+    </div>
+    <div class="ps-seg" data-stage="Attended" onclick="setStage('Attended',this)">
+      <div class="ps-dot" style="background:#639922;"></div>
+      <div class="ps-num">421</div>
+      <div class="ps-label">Attended</div>
+    </div>
+    <div class="ps-seg" data-stage="Converted" onclick="setStage('Converted',this)">
+      <div class="ps-dot" style="background:#1D9E75;"></div>
+      <div class="ps-num">376</div>
+      <div class="ps-label">Converted</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="search-wrap">
+      <svg class="si" width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M10 10l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <input type="text" id="searchInput" placeholder="Search by name, email, or phone…" oninput="renderTable()">
+    </div>
+    <select style="font-size:13px;padding:6px 10px;" id="eventFilter" onchange="renderTable()">
+      <option value="">All events</option>
+      <option>UK University Expo</option>
+      <option>Canada Study Fair</option>
+      <option>Germany Seminar</option>
+      <option>Australia Intake Expo</option>
+    </select>
+    <select style="font-size:13px;padding:6px 10px;" id="countryFilter" onchange="renderTable()">
+      <option value="">All countries</option>
+      <option>UK</option>
+      <option>Canada</option>
+      <option>Germany</option>
+      <option>Australia</option>
+      <option>USA</option>
+    </select>
+    <select style="font-size:13px;padding:6px 10px;" id="docFilter" onchange="renderTable()">
+      <option value="">All doc statuses</option>
+      <option value="complete">Complete</option>
+      <option value="missing">Missing</option>
+      <option value="pending">Pending</option>
+    </select>
+  </div>
+
+  <div class="panel">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th style="width:22%;">Student</th>
+          <th style="width:13%;">Event</th>
+          <th style="width:11%;">Country</th>
+          <th style="width:12%;">Pipeline status</th>
+          <th style="width:11%;">Documents</th>
+          <th style="width:13%;">Agent</th>
+          <th style="width:10%;">Registered</th>
+          <th style="width:8%;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="studentBody"></tbody>
+    </table>
+  </div>
+
+  <div id="detailSection" style="display:none;">
+    <div class="detail-overlay">
+      <div class="detail-panel">
+
+        <div class="dp-head">
+          <div class="dp-av" id="dp-av" style="background:#E6F1FB;color:#0C447C;">PS</div>
+          <div style="flex:1;">
+            <div class="dp-name" id="dp-name">Priya Sharma</div>
+            <div class="dp-sub" id="dp-sub">priya.sharma@email.com · +91 98200 11223</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="pill p-conf" id="dp-status-pill">Confirmed</span>
+            <button class="btn btn-sm" onclick="closeDetail()">Close</button>
+          </div>
+        </div>
+
+        <div id="dp-flag" class="flag-banner" style="display:none;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#854F0B" stroke-width="1.2"/><path d="M8 5v4" stroke="#854F0B" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11" r="0.8" fill="#854F0B"/></svg>
+          Passport document missing — follow up required before event date.
+        </div>
+
+        <div class="section-label" style="margin-bottom:10px;">Journey progress</div>
+        <div class="pipeline-tracker" id="dp-tracker" style="margin-bottom:18px;"></div>
+
+        <div class="dp-meta-grid">
+          <div class="dm-item"><label>Preferred country</label><span id="dp-country">United Kingdom</span></div>
+          <div class="dm-item"><label>Course interest</label><span id="dp-course">MBA — Business Management</span></div>
+          <div class="dm-item"><label>Education</label><span id="dp-edu">B.Com (Hons) — Pune University</span></div>
+          <div class="dm-item"><label>Current city</label><span id="dp-city">Pune, Maharashtra</span></div>
+          <div class="dm-item"><label>Event</label><span id="dp-event">UK University Expo · 8 May 2026</span></div>
+          <div class="dm-item"><label>Assigned agent</label><span id="dp-agent">Rahul Joshi</span></div>
+          <div class="dm-item"><label>Registered on</label><span id="dp-reg-date">14 Apr 2026</span></div>
+          <div class="dm-item"><label>Update status</label>
+            <select class="status-select" id="dp-status-select" onchange="updateStatus(this)">
+              <option>Registered</option>
+              <option>Contacted</option>
+              <option selected>Confirmed</option>
+              <option>Attended</option>
+              <option>Converted</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="section-label">Documents</div>
+        <div class="doc-list">
+          <div class="doc-row">
+            <div class="doc-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="2" stroke="var(--color-text-secondary)" stroke-width="1.2"/><path d="M5 5h6M5 8h6M5 11h4" stroke="var(--color-text-secondary)" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+            <div style="flex:1;"><div class="doc-name">Passport</div><div class="doc-sub" style="color:#791F1F;">Not uploaded</div></div>
+            <span class="pill p-doc-miss">Missing</span>
+            <button class="btn btn-sm" onclick="sendPrompt('Send document request to student Priya Sharma for Passport')">Request ↗</button>
+          </div>
+          <div class="doc-row">
+            <div class="doc-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="2" stroke="var(--color-text-secondary)" stroke-width="1.2"/><path d="M5 5h6M5 8h6M5 11h4" stroke="var(--color-text-secondary)" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+            <div style="flex:1;"><div class="doc-name">Academic transcripts</div><div class="doc-sub">Uploaded 15 Apr 2026</div></div>
+            <span class="pill p-doc-ok">Verified</span>
+            <button class="btn btn-sm">View</button>
+          </div>
+          <div class="doc-row">
+            <div class="doc-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="2" stroke="var(--color-text-secondary)" stroke-width="1.2"/><path d="M5 5h6M5 8h6M5 11h4" stroke="var(--color-text-secondary)" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+            <div style="flex:1;"><div class="doc-name">IELTS score card</div><div class="doc-sub">Uploaded 15 Apr 2026 · Band 7.0</div></div>
+            <span class="pill p-doc-pend">Under review</span>
+            <button class="btn btn-sm">View</button>
+          </div>
+        </div>
+
+        <div class="dp-actions">
+          <button class="btn btn-sm" onclick="sendPrompt('Send a follow-up message to student '+document.getElementById(\'dp-name\').textContent+' about their missing documents')">Message student ↗</button>
+          <button class="btn btn-sm" onclick="sendPrompt('Notify agent of '+document.getElementById(\'dp-name\').textContent+' to follow up on missing documents')">Alert agent ↗</button>
+          <button class="btn btn-sm btn-success" onclick="sendPrompt('Mark student '+document.getElementById(\'dp-name\').textContent+' as attended')">Mark attended</button>
+          <button class="btn btn-sm btn-primary" onclick="sendPrompt('Mark student '+document.getElementById(\'dp-name\').textContent+' as converted to university application')">Mark converted ↗</button>
+          <button class="btn btn-sm btn-danger" style="margin-left:auto;" onclick="sendPrompt('Remove student '+document.getElementById(\'dp-name\').textContent+' from the event with reason')">Remove</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const STAGES=['Registered','Contacted','Confirmed','Attended','Converted'];
+const STAGE_COLORS={'Registered':'#378ADD','Contacted':'#EF9F27','Confirmed':'#7F77DD','Attended':'#639922','Converted':'#1D9E75'};
+const STAGE_PILLS={'Registered':'p-reg','Contacted':'p-con','Confirmed':'p-conf','Attended':'p-att','Converted':'p-conv'};
+
+const students=[
+  {id:0,init:'PS',bg:'#E6F1FB',tc:'#0C447C',name:'Priya Sharma',email:'priya.sharma@email.com',phone:'+91 98200 11223',country:'UK',course:'MBA — Business Mgmt',edu:'B.Com (Hons)',city:'Pune',event:'UK University Expo',agent:'Rahul Joshi',date:'14 Apr 2026',status:'Confirmed',docs:'missing',flag:true},
+  {id:1,init:'AK',bg:'#FAEEDA',tc:'#633806',name:'Ayaan Khan',email:'ayaan.k@gmail.com',phone:'+91 90000 55678',country:'Canada',course:'MS Computer Science',edu:'B.Tech CSE',city:'Mumbai',event:'Canada Study Fair',agent:'Priya Mehta',date:'16 Apr 2026',status:'Registered',docs:'missing',flag:true},
+  {id:2,init:'RS',bg:'#EEEDFE',tc:'#3C3489',name:'Rohan Singh',email:'rohan.singh@mail.com',phone:'+91 99110 22334',country:'Germany',course:'M.Sc Data Science',edu:'B.Sc Statistics',city:'Bangalore',event:'Germany Seminar',agent:'Sameer Khan',date:'18 Apr 2026',status:'Contacted',docs:'pending',flag:false},
+  {id:3,init:'NP',bg:'#E1F5EE',tc:'#085041',name:'Neha Patil',email:'neha.patil@email.com',phone:'+91 87650 33221',country:'Australia',course:'Bachelor of Nursing',edu:'HSC',city:'Nashik',event:'Australia Intake Expo',agent:'Sneha More',date:'19 Apr 2026',status:'Confirmed',docs:'complete',flag:false},
+  {id:4,init:'VM',bg:'#FAECE7',tc:'#712B13',name:'Vikram Malhotra',email:'v.malhotra@inbox.com',phone:'+91 97800 44556',country:'UK',course:'LLM International Law',edu:'LLB',city:'Delhi',event:'UK University Expo',agent:'Rahul Joshi',date:'20 Apr 2026',status:'Attended',docs:'complete',flag:false},
+  {id:5,init:'SC',bg:'#EEEDFE',tc:'#3C3489',name:'Sana Chaudhary',email:'sana.c@webmail.com',phone:'+91 93200 67890',country:'Canada',course:'MBA Finance',edu:'B.Com',city:'Hyderabad',event:'Canada Study Fair',agent:'Priya Mehta',date:'21 Apr 2026',status:'Converted',docs:'complete',flag:false},
+  {id:6,init:'AR',bg:'#FCEBEB',tc:'#791F1F',name:'Arjun Rao',email:'arjun.rao@mail.in',phone:'+91 88900 12345',country:'USA',course:'MS Electrical Eng.',edu:'B.Tech EE',city:'Chennai',event:'Canada Study Fair',agent:'Aman Kumar',date:'22 Apr 2026',status:'Contacted',docs:'pending',flag:false},
+  {id:7,init:'KD',bg:'#E6F1FB',tc:'#0C447C',name:'Kavya Desai',email:'kavya.d@email.com',phone:'+91 91100 98765',country:'Germany',course:'M.Arch Architecture',edu:'B.Arch',city:'Ahmedabad',event:'Germany Seminar',agent:'Sameer Khan',date:'23 Apr 2026',status:'Registered',docs:'complete',flag:false},
+];
+
+let curStage='all';
+
+function docPill(d){
+  if(d==='complete') return '<span class="pill p-doc-ok">Complete</span>';
+  if(d==='missing') return '<span class="pill p-doc-miss">Missing</span>';
+  return '<span class="pill p-doc-pend">Pending</span>';
+}
+function stagePill(s){return `<span class="pill ${STAGE_PILLS[s]}">${s}</span>`;}
+
+function getFiltered(){
+  const q=(document.getElementById('searchInput').value||'').toLowerCase();
+  const ev=document.getElementById('eventFilter').value;
+  const co=document.getElementById('countryFilter').value;
+  const doc=document.getElementById('docFilter').value;
+  return students.filter(s=>{
+    if(curStage!=='all'&&s.status!==curStage) return false;
+    if(q&&!s.name.toLowerCase().includes(q)&&!s.email.toLowerCase().includes(q)&&!s.phone.includes(q)) return false;
+    if(ev&&s.event!==ev) return false;
+    if(co&&s.country!==co) return false;
+    if(doc&&s.docs!==doc) return false;
+    return true;
+  });
+}
+
+function renderTable(){
+  const list=getFiltered();
+  const body=document.getElementById('studentBody');
+  if(!list.length){body.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--color-text-secondary);font-size:13px;">No students match the current filters</td></tr>`;return;}
+  body.innerHTML=list.map(s=>`<tr onclick="showDetail(${s.id})">
+    <td><div class="name-cell"><div class="av" style="background:${s.bg};color:${s.tc};">${s.init}</div><div><div style="font-size:13px;font-weight:500;">${s.name}</div><div style="font-size:11px;color:var(--color-text-secondary);">${s.email}</div></div></div></td>
+    <td style="font-size:12px;">${s.event.split(' ').slice(0,2).join(' ')}</td>
+    <td style="font-size:12px;">${s.country}</td>
+    <td>${stagePill(s.status)}</td>
+    <td>${docPill(s.docs)}</td>
+    <td style="font-size:12px;">${s.agent.split(' ')[0]}</td>
+    <td style="font-size:12px;">${s.date}</td>
+    <td><div class="action-grp">
+      <div class="icon-btn" title="View profile"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="var(--color-text-secondary)" stroke-width="1.2"/><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" stroke="var(--color-text-secondary)" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+      <div class="icon-btn" title="Message" onclick="event.stopPropagation();sendPrompt('Send a follow-up message to student ${s.name}')"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="2" stroke="var(--color-text-secondary)" stroke-width="1.2"/><path d="M1 5l7 5 7-5" stroke="var(--color-text-secondary)" stroke-width="1.2"/></svg></div>
+    </div></td>
+  </tr>`).join('');
+}
+
+function setStage(s,el){
+  curStage=s;
+  document.querySelectorAll('.ps-seg').forEach(e=>e.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+function buildTracker(status){
+  const idx=STAGES.indexOf(status);
+  const wrap=document.getElementById('dp-tracker');
+  let html='';
+  STAGES.forEach((st,i)=>{
+    const done=i<idx;const active=i===idx;
+    const cls=done?'done':active?'active':'';
+    html+=`<div class="pt-step">
+      <div class="pt-circle ${cls}">${done?'<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#27500A" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>':i+1}</div>
+      <div class="pt-label ${cls}">${st}</div>
+    </div>`;
+    if(i<STAGES.length-1) html+=`<div class="pt-line ${done?'done':''}"></div>`;
+  });
+  wrap.innerHTML=html;
+}
+
+function showDetail(id){
+  const s=students[id]||students[0];
+  document.getElementById('dp-av').textContent=s.init;
+  document.getElementById('dp-av').style.background=s.bg;
+  document.getElementById('dp-av').style.color=s.tc;
+  document.getElementById('dp-name').textContent=s.name;
+  document.getElementById('dp-sub').textContent=s.email+' · '+s.phone;
+  document.getElementById('dp-status-pill').textContent=s.status;
+  document.getElementById('dp-status-pill').className='pill '+STAGE_PILLS[s.status];
+  document.getElementById('dp-country').textContent=s.country;
+  document.getElementById('dp-course').textContent=s.course;
+  document.getElementById('dp-edu').textContent=s.edu;
+  document.getElementById('dp-city').textContent=s.city;
+  document.getElementById('dp-event').textContent=s.event;
+  document.getElementById('dp-agent').textContent=s.agent;
+  document.getElementById('dp-reg-date').textContent=s.date;
+  document.getElementById('dp-status-select').value=s.status;
+  document.getElementById('dp-flag').style.display=s.flag?'flex':'none';
+  buildTracker(s.status);
+  document.getElementById('detailSection').style.display='block';
+  document.getElementById('detailSection').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function closeDetail(){document.getElementById('detailSection').style.display='none';}
+
+function updateStatus(sel){
+  const newStatus=sel.value;
+  document.getElementById('dp-status-pill').textContent=newStatus;
+  document.getElementById('dp-status-pill').className='pill '+STAGE_PILLS[newStatus];
+  buildTracker(newStatus);
+}
+
+renderTable();
+</script>

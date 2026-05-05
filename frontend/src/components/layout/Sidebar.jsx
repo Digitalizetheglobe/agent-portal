@@ -7,7 +7,10 @@ import {
   GraduationCap, 
   CalendarCheck,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileText,
+  LifeBuoy,
+  Settings
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -21,11 +24,18 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     { to: '/admin/agents', icon: Users, label: 'Agents' },
     { to: '/admin/events', icon: Calendar, label: 'Events' },
     { to: '/admin/students', icon: GraduationCap, label: 'Students' },
+    { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
+    { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
+    { to: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
 
   const agentLinks = [
     { to: '/agent/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/agent/events-management', icon: CalendarCheck, label: 'Events Management' },
+    { to: '/agent/students', icon: GraduationCap, label: 'Students' },
+    { to: '/agent/invoices', icon: FileText, label: 'Invoices' },
+    { to: '/agent/support', icon: LifeBuoy, label: 'Support' },
+    { to: '/agent/settings', icon: Settings, label: 'Settings' },
   ];
 
   const links = isAdmin() ? adminLinks : agentLinks;
