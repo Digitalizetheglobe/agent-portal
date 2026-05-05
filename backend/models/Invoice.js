@@ -49,6 +49,5 @@ const invoiceSchema = new mongoose.Schema({
 
 // Index for faster queries
 invoiceSchema.index({ agentId: 1, status: 1 });
-invoiceSchema.index({ invoiceNumber: 1 });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);
