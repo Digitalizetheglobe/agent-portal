@@ -387,7 +387,7 @@ const AgentDashboard = () => {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-gray-100">
-              {myStudents.length > 0 ? myStudents.slice(-5).reverse().map((student) => (
+              {myStudents.length > 0 ? myStudents.slice(-3).reverse().map((student) => (
                 <div key={student.id} className="flex items-center justify-between p-4 px-6 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center gap-4">
                     <div className="w-9 h-9 rounded-full bg-[#E6F1FB] flex items-center justify-center text-[#0C447C] font-bold text-xs">

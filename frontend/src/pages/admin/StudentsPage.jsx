@@ -232,12 +232,12 @@ const StudentsPage = () => {
         </div>
         <div className="flex gap-2">
           <button
-            className="flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
+            className="inline-flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
             onClick={() => toast.info('Export started...')}>
             <Download size={14} /> Export <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
           </button>
           <button 
-            className="flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-[#FAC775] bg-[#FAEEDA] text-[#633806] transition-all hover:bg-[#FAC775]" 
+            className="inline-flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-[#FAC775] bg-[#FAEEDA] text-[#633806] transition-all hover:bg-[#FAC775]" 
             onClick={() => toast.info('Stale students flagged')}>
             <Flag size={14} /> Flag stale <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
           </button>
@@ -560,7 +560,7 @@ const StudentsPage = () => {
                           {isMandatory ? 'Missing' : 'Optional'}
                         </span>
                         <button 
-                          className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" 
+                          className="inline-flex items-center px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" 
                           onClick={() => requestStudentDocument(selectedStudent.id || selectedStudent._id, docType.label)}
                         >
                           Request <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
@@ -583,7 +583,7 @@ const StudentsPage = () => {
                 <button className="flex-1 px-4 py-2 text-[11px] font-bold rounded-lg bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:opacity-90 transition-all" onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Attended')}>
                   Mark Attended
                 </button>
-                <button className="flex-1 px-4 py-2 text-[11px] font-bold rounded-lg bg-[#042C53] text-[#B5D4F4] hover:opacity-90 transition-all" onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Converted')}>
+                <button className="flex-1 inline-flex items-center justify-center px-4 py-2 text-[11px] font-bold rounded-lg bg-[#042C53] text-[#B5D4F4] hover:opacity-90 transition-all" onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Converted')}>
                   Mark Converted <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                 </button>
               </div>

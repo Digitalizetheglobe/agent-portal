@@ -85,8 +85,8 @@ const InvoicesPage = () => {
             Manage your agency commissions and track institutional invoice cycles.
           </p>
         </div>
-        <Button 
-          onClick={() => setIsDialogOpen(true)} 
+        <Button
+          onClick={() => setIsDialogOpen(true)}
           className="bg-[#042C53] hover:bg-[#0C447C] text-white font-bold text-xs uppercase tracking-widest px-6 py-6 rounded-xl shadow-lg shadow-[#042C53]/20 transition-all active:scale-95"
         >
           <FilePlus className="w-4 h-4 mr-2" />
@@ -136,7 +136,7 @@ const InvoicesPage = () => {
                       </TableRow>
                     ) : (
                       invoices.map((invoice) => (
-                        <TableRow 
+                        <TableRow
                           key={invoice.id}
                           className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-0"
                         >
@@ -153,7 +153,7 @@ const InvoicesPage = () => {
                           </TableCell>
                           <TableCell className="py-5 px-6">
                             <span className="text-sm font-bold text-[#111827]">
-                              ${invoice.amount?.toLocaleString()}
+                              ₹{invoice.amount?.toLocaleString()}
                             </span>
                           </TableCell>
                           <TableCell className="py-5 px-6">
@@ -163,8 +163,8 @@ const InvoicesPage = () => {
                             {format(new Date(invoice.raisedAt), 'MMM dd, yyyy')}
                           </TableCell>
                           <TableCell className="py-5 px-7 text-right">
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="icon"
                               className="text-slate-400 hover:text-[#042C53] hover:bg-[#F0F7FF] rounded-lg"
                             >
@@ -182,93 +182,93 @@ const InvoicesPage = () => {
         </TabsContent>
       </Tabs>
 
-          {/* Raise Invoice Dialog */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Raise New Invoice</DialogTitle>
-                <DialogDescription>
-                  Select converted students to include in this invoice.
-                </DialogDescription>
-              </DialogHeader>
+      {/* Raise Invoice Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Raise New Invoice</DialogTitle>
+            <DialogDescription>
+              Select converted students to include in this invoice.
+            </DialogDescription>
+          </DialogHeader>
 
-              <div className="py-4 space-y-4">
-                <div className="max-h-[300px] overflow-y-auto border rounded-md">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
-                      <TableRow>
-                        <TableHead className="w-[50px]"></TableHead>
-                        <TableHead>Student Name</TableHead>
-                        <TableHead>Email</TableHead>
+          <div className="py-4 space-y-4">
+            <div className="max-h-[300px] overflow-y-auto border rounded-md">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead className="w-[50px]"></TableHead>
+                    <TableHead>Student Name</TableHead>
+                    <TableHead>Email</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {uninvoicedStudents.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
+                        No students eligible for invoicing.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    uninvoicedStudents.map((student) => (
+                      <TableRow key={student.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedStudents.includes(student.id)}
+                            onCheckedChange={() => handleToggleStudent(student.id)}
+                          />
+                        </TableCell>
+                        <TableCell>{student.name}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{student.email}</TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {uninvoicedStudents.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
-                            No students eligible for invoicing.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        uninvoicedStudents.map((student) => (
-                          <TableRow key={student.id}>
-                            <TableCell>
-                              <Checkbox
-                                checked={selectedStudents.includes(student.id)}
-                                onCheckedChange={() => handleToggleStudent(student.id)}
-                              />
-                            </TableCell>
-                            <TableCell>{student.name}</TableCell>
-                            <TableCell className="text-muted-foreground text-xs">{student.email}</TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="commission">Commission Rate (%)</Label>
-                    <Input
-                      id="commission"
-                      type="number"
-                      value={commissionRate}
-                      onChange={(e) => setCommissionRate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Total Estimated Amount</Label>
-                    <div className="h-10 flex items-center font-bold text-lg px-3 bg-accent/50 rounded-md">
-                      ${(selectedStudents.length * 1000).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="remarks">Remarks (Optional)</Label>
-                  <Textarea
-                    id="remarks"
-                    placeholder="Any additional notes for the finance team..."
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                  />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="commission">Commission Rate (%)</Label>
+                <Input
+                  id="commission"
+                  type="number"
+                  value={commissionRate}
+                  onChange={(e) => setCommissionRate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Total Estimated Amount</Label>
+                <div className="h-10 flex items-center font-bold text-lg px-3 bg-accent/50 rounded-md">
+                  ₹{(selectedStudents.length * 1000).toLocaleString()}
                 </div>
               </div>
+            </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button
-                  onClick={handleRaiseInvoice}
-                  disabled={selectedStudents.length === 0 || loading}
-                >
-                  Raise Invoice
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-        );
+            <div className="space-y-2">
+              <Label htmlFor="remarks">Remarks (Optional)</Label>
+              <Textarea
+                id="remarks"
+                placeholder="Any additional notes for the finance team..."
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleRaiseInvoice}
+              disabled={selectedStudents.length === 0 || loading}
+            >
+              Raise Invoice
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 };
 
-        export default InvoicesPage;
+export default InvoicesPage;

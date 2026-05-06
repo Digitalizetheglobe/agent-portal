@@ -251,7 +251,7 @@ const EventsPage = () => {
             </span>
           </div>
           {status === 'completed' && (
-            <Button variant="ghost" size="sm" className="text-xs font-medium text-slate-500 h-8 gap-1">
+            <Button variant="ghost" size="sm" className="inline-flex items-center text-xs font-medium text-slate-500 h-8 gap-1">
               View reports <ArrowUpRight className="w-3 h-3" />
             </Button>
           )}
@@ -387,7 +387,7 @@ const EventsPage = () => {
           <Button 
             variant="outline" 
             size="sm" 
-            className="text-xs font-semibold h-9 px-4 border-slate-200"
+            className="inline-flex items-center text-xs font-semibold h-9 px-4 border-slate-200"
             onClick={() => toast.info('Notification broadcast system')}
           >
             Notify agents <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />

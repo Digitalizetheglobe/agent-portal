@@ -139,7 +139,7 @@ const AdminInvoicesPage = () => {
           <p className="text-sm font-medium text-[#6B7280] mt-0.5">Review and process agent commission invoices.</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" size="sm" className="text-xs font-semibold h-10 px-4 border-[#E5E7EB] hover:bg-white transition-all">
+          <Button variant="outline" size="sm" className="inline-flex items-center text-xs font-semibold h-10 px-4 border-[#E5E7EB] hover:bg-white transition-all">
             Export Report <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
           </Button>
         </div>

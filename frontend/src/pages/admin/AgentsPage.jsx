@@ -365,7 +365,7 @@ const AgentsPage = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 text-[11px] font-medium border-[#E5E7EB]"
+                      className="h-8 text-[11px] font-medium border-[#E5E7EB] inline-flex items-center"
                       onClick={() => handleEdit(agent)}
                     >
                       View Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />

@@ -358,7 +358,7 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
               Custom Field
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingFieldId ? 'Edit Form Field' : 'Add Form Field'}</DialogTitle>
               <DialogDescription>
@@ -551,7 +551,7 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
               return (
                 <div
                   key={field.id}
-                  className="flex items-center gap-3 p-3 border rounded-lg bg-card"
+                  className="flex items-center gap-3 p-3 border rounded-lg bg-card overflow-hidden"
                 >
                   <div className="flex flex-col gap-1">
                     <Button
@@ -578,7 +578,7 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
                   
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{field.label}</span>
+                      <span className="font-medium truncate block max-w-[200px] sm:max-w-[300px]">{field.label}</span>
                       <Badge variant="outline" className="text-xs">
                         {fieldTypeLabels[field.type]}
                       </Badge>
