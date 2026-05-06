@@ -6,29 +6,31 @@ import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { 
-  MessageSquare, 
-  AlertCircle, 
-  Clock, 
-  CheckCircle2, 
-  Send, 
-  Search, 
-  Filter, 
-  User, 
-  Plus, 
+import {
+  MessageSquare,
+  AlertCircle,
+  Clock,
+  CheckCircle2,
+  Send,
+  Search,
+  Filter,
+  User,
+  Plus,
   FileText,
   BarChart3,
   TrendingUp,
   MoreVertical,
   Reply,
-  CheckCircle
+  CheckCircle,
+  Download,
+  ArrowUpRight
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
 
 const AdminSupportPage = () => {
   const { tickets, addTicketResponse, updateTicketStatus, loading } = useData();
-  
+
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,7 +48,7 @@ const AdminSupportPage = () => {
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedTicket) return;
-    
+
     try {
       await addTicketResponse(selectedTicket.id, newMessage);
       setNewMessage('');
@@ -92,13 +94,14 @@ const AdminSupportPage = () => {
           <p className="text-sm text-[#6B7280] mt-0.5 font-medium">Respond to agent inquiries and manage help centre content.</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" size="sm" className="text-xs font-semibold h-10 px-4 border-[#E5E7EB] hover:bg-slate-50 transition-all gap-2">
+          <Button variant="outline" size="sm" className="text-xs font-semibold h-10 px-4 border-[#E5E7EB] hover:bg-slate-50 hover:text-[#042C53] transition-all gap-2">
             <TrendingUp className="w-3.5 h-3.5" />
             Performance report
           </Button>
-          <Button size="sm" className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-lg shadow-[#042C53]/10 transition-all active:scale-95 gap-2">
-            <Plus className="w-4 h-4" />
-            Export data
+          <Button variant="outline" size="sm" className="text-xs font-semibold h-10 px-4 border-[#E5E7EB] hover:bg-slate-50 hover:text-[#042C53] transition-all"
+            onClick={() => toast.info('Exporting support data...')}
+          >
+            <Download size={14} className="mr-2" /> Export data
           </Button>
         </div>
       </div>
@@ -132,8 +135,8 @@ const AdminSupportPage = () => {
             <CardHeader className="p-4 space-y-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
-                <Input 
-                  placeholder="Search agents or issues..." 
+                <Input
+                  placeholder="Search agents or issues..."
                   className="pl-9 h-9 border-[#E5E7EB] bg-white text-xs placeholder:text-[#9CA3AF] focus-visible:ring-[#042C53]/10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -160,7 +163,7 @@ const AdminSupportPage = () => {
               ) : (
                 <div className="divide-y divide-[#E5E7EB]">
                   {filteredTickets.map((ticket) => (
-                    <div 
+                    <div
                       key={ticket.id}
                       onClick={() => setSelectedTicket(ticket)}
                       className={cn(
@@ -245,12 +248,12 @@ const AdminSupportPage = () => {
 
                 {/* Responses */}
                 {selectedTicket.responses?.map((resp, idx) => (
-                  <div 
+                  <div
                     key={idx}
                     className={cn(
                       "flex flex-col max-w-[85%] p-4 rounded-xl shadow-sm",
-                      resp.senderId.role === 'admin' 
-                        ? "self-end bg-[#042C53] text-white rounded-tr-none ml-auto" 
+                      resp.senderId.role === 'admin'
+                        ? "self-end bg-[#042C53] text-white rounded-tr-none ml-auto"
                         : "self-start bg-white border border-[#E5E7EB] rounded-tl-none"
                     )}
                   >
@@ -272,23 +275,23 @@ const AdminSupportPage = () => {
               <div className="p-6 bg-white border-t border-[#E5E7EB]">
                 <div className="flex gap-3 items-end">
                   <div className="flex-1 relative">
-                    <Textarea 
-                      placeholder="Type your official response..." 
+                    <Textarea
+                      placeholder="Type your official response..."
                       className="min-h-[100px] bg-[#F9FAFB] border-[#E5E7EB] rounded-xl p-4 text-[13px] font-medium focus:ring-[#042C53]/10 transition-all resize-none"
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Button 
+                    <Button
                       className="bg-[#042C53] hover:bg-[#0C447C] text-white rounded-xl h-12 w-12 shadow-lg shadow-[#042C53]/10"
                       disabled={!newMessage.trim() || loading || selectedTicket.status === 'Closed'}
                       onClick={handleSendMessage}
                     >
                       <Send className="w-5 h-5" />
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="rounded-xl h-12 w-12 border-[#E5E7EB] text-[#1D9E75] hover:bg-emerald-50 hover:border-[#1D9E75]"
                       onClick={() => handleUpdateStatus('Resolved')}
                     >

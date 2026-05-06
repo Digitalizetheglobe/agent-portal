@@ -12,7 +12,8 @@ import {
   Users,
   CheckCircle2,
   FileText,
-  ShieldCheck
+  ShieldCheck,
+  ArrowUpRight
 } from 'lucide-react';
 import {
   LineChart,
@@ -133,7 +134,7 @@ const AgentReportPage = () => {
             <Printer className="w-4 h-4" /> Print Report
           </Button>
           <Button onClick={handlePrint} className="gap-2 bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10">
-            <Download className="w-4 h-4" /> Download PDF
+            <Download size={14} className="mr-2" /> Download PDF
           </Button>
         </div>
       </div>
@@ -302,8 +303,8 @@ const AgentReportPage = () => {
                 reportData.agentStudents.map((student) => {
                   const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
                   return (
-                    <TableRow 
-                      key={student.id || student._id} 
+                    <TableRow
+                      key={student.id || student._id}
                       className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors group cursor-pointer"
                       onClick={() => navigate(`/admin/students/${student.id || student._id}`)}
                     >

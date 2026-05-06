@@ -244,9 +244,9 @@ const AgentsPage = () => {
         </div>
         <div className="flex gap-3">
           <Button variant="outline" size="sm"
-            className="text-xs font-semibold h-10 px-4 border-slate-200 hover:bg-slate-50 transition-all gap-2"
+            className="text-xs font-semibold h-10 px-4 border-slate-200 hover:bg-slate-50 transition-all hover:text-[#042C53]"
           >
-            Export <Download className="w-3.5 h-3.5 ml-2" />
+            <Download size={14} className="mr-2" /> Export
           </Button>
           <Button onClick={handleCreate} size="sm"
             className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-lg shadow-[#042C53]/10 transition-all active:scale-95 gap-2"
@@ -330,8 +330,8 @@ const AgentsPage = () => {
 
                   <div className="flex flex-wrap gap-2 mt-4">
                     {(agent.verificationDocuments || []).map((doc, idx) => (
-                      <button 
-                        key={idx} 
+                      <button
+                        key={idx}
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] text-[10px] text-[#6B7280] hover:bg-gray-100 transition-colors"
                         onClick={() => viewAgentDocument(agent.id, doc._id || doc.id)}
                       >
@@ -575,14 +575,14 @@ const AgentsPage = () => {
               <div className="p-6 border-t border-[#E5E7EB] bg-white mt-auto">
                 <div className="flex flex-col gap-2">
                   <div className="flex gap-2">
-                    <Button 
+                    <Button
                       className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-xs h-10"
                       onClick={() => handlePerformanceReport(agentInDrawer)}
                     >
                       Full performance report
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="flex-1 border-[#E5E7EB] text-xs h-10"
                       onClick={() => handleAssignEvents(agentInDrawer)}
                     >
@@ -590,15 +590,15 @@ const AgentsPage = () => {
                     </Button>
                   </div>
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="flex-1 border-[#E5E7EB] text-xs h-10"
                       onClick={() => handleSendNotification(agentInDrawer)}
                     >
                       Send notification
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="flex-1 border-red-100 text-red-600 hover:bg-red-50 text-xs h-10"
                       onClick={() => handleDeactivate(agentInDrawer)}
                     >

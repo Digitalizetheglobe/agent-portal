@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { FileText, CheckCircle2, XCircle, Clock, Search, Filter, ArrowUpRight } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, Clock, Search, Filter, ArrowUpRight, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { Input } from '../../components/ui/input';
 
@@ -13,7 +13,7 @@ const AdminInvoicesPage = () => {
   const { invoices, updateInvoiceStatus, loading } = useData();
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredInvoices = invoices.filter(inv => 
+  const filteredInvoices = invoices.filter(inv =>
     inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     inv.agentId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     inv.agentId?.agencyName?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -45,7 +45,7 @@ const AdminInvoicesPage = () => {
     const pending = invoices.filter(i => i.status === 'Pending');
     const paid = invoices.filter(i => i.status === 'Paid');
     const rejected = invoices.filter(i => i.status === 'Rejected');
-    
+
     const pendingAmount = pending.reduce((sum, i) => sum + (i.amount || 0), 0);
     const paidAmount = paid.reduce((sum, i) => sum + (i.amount || 0), 0);
 
@@ -98,18 +98,18 @@ const AdminInvoicesPage = () => {
                   <div className="flex justify-end gap-2">
                     {invoice.status === 'Pending' && (
                       <>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
+                        <Button
+                          size="sm"
+                          variant="outline"
                           className="h-8 text-[11px] font-bold text-[#27500A] bg-[#EAF3DE] border-[#C0DD97] hover:bg-[#DCEFC0]"
                           onClick={() => handleUpdateStatus(invoice.id, 'Paid')}
                           disabled={loading}
                         >
                           <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Mark Paid
                         </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
+                        <Button
+                          size="sm"
+                          variant="outline"
                           className="h-8 text-[11px] font-bold text-[#791F1F] bg-[#FCEBEB] border-[#F7C1C1] hover:bg-[#FADADA]"
                           onClick={() => handleUpdateStatus(invoice.id, 'Rejected')}
                           disabled={loading}
@@ -139,8 +139,8 @@ const AdminInvoicesPage = () => {
           <p className="text-sm font-medium text-[#6B7280] mt-0.5">Review and process agent commission invoices.</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" size="sm" className="inline-flex items-center text-xs font-semibold h-10 px-4 border-[#E5E7EB] hover:bg-white transition-all">
-            Export Report <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
+          <Button variant="outline" size="sm" className="inline-flex items-center text-xs font-semibold h-10 px-4 border-[#E5E7EB] hover:bg-white hover:text-[#042C53] transition-all">
+            <Download size={14} className="mr-2" /> Export Report
           </Button>
         </div>
       </div>
@@ -166,15 +166,15 @@ const AdminInvoicesPage = () => {
       <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
-          <Input 
-            placeholder="Search by invoice # or agent name..." 
+          <Input
+            placeholder="Search by invoice # or agent name..."
             className="pl-9 h-10 border-[#E5E7EB] text-sm focus-visible:ring-[#042C53]/10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="flex bg-white border border-[#E5E7EB] rounded-lg p-1 gap-1">
-          <Button variant="outline" size="sm" className="h-8 text-xs gap-2 border-none hover:bg-gray-50">
+          <Button variant="outline" size="sm" className="h-8 text-xs gap-2 border-none hover:bg-gray-50 hover:text-[#042C53]">
             <Filter className="w-3.5 h-3.5" /> More Filters
           </Button>
         </div>
@@ -183,28 +183,28 @@ const AdminInvoicesPage = () => {
       <Tabs defaultValue="all" className="w-full">
         <TabsList className="bg-transparent h-auto p-0 gap-6 border-b border-[#E5E7EB] w-full justify-start rounded-none">
           {['all', 'pending', 'paid', 'rejected'].map(tab => (
-            <TabsTrigger 
+            <TabsTrigger
               key={tab}
-              value={tab} 
+              value={tab}
               className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
             >
               {tab} Invoices
             </TabsTrigger>
           ))}
         </TabsList>
-        
+
         <TabsContent value="all" className="mt-6">
           <InvoiceList list={filteredInvoices} />
         </TabsContent>
-        
+
         <TabsContent value="pending" className="mt-6">
           <InvoiceList list={filteredInvoices.filter(i => i.status === 'Pending')} />
         </TabsContent>
- 
+
         <TabsContent value="paid" className="mt-6">
           <InvoiceList list={filteredInvoices.filter(i => i.status === 'Paid')} />
         </TabsContent>
- 
+
         <TabsContent value="rejected" className="mt-6">
           <InvoiceList list={filteredInvoices.filter(i => i.status === 'Rejected')} />
         </TabsContent>

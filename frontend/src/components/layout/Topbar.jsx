@@ -1,8 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sun, Moon, LogOut, User, Menu } from 'lucide-react';
+import { LogOut, User, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
 import { Button } from '../ui/button';
 import {
   DropdownMenu,
@@ -18,7 +17,6 @@ import { cn } from '../../lib/utils';
 
 const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
   const { user, logout } = useAuth();
-  const { toggleTheme, isDark } = useTheme();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -66,20 +64,6 @@ const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
 
       {/* Right Side Actions */}
       <div className="flex items-center gap-2 md:gap-4">
-        {/* Theme Toggle */}
-        {/* <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleTheme}
-          data-testid="theme-toggle"
-          className="h-9 w-9"
-        >
-          {isDark ? (
-            <Sun className="w-5 h-5" strokeWidth={1.5} />
-          ) : (
-            <Moon className="w-5 h-5" strokeWidth={1.5} />
-          )}
-        </Button> */}
 
         {/* Notifications */}
         <NotificationCenter />

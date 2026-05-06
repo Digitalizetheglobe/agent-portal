@@ -12,55 +12,22 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState('system');
-  const [resolvedTheme, setResolvedTheme] = useState('light');
-
-  // Initialize theme from localStorage or system preference
-  useEffect(() => {
-    const storedTheme = getStoredData(STORAGE_KEYS.THEME, 'system');
-    setTheme(storedTheme);
-  }, []);
-
-  // Update resolved theme based on theme setting and system preference
-  useEffect(() => {
-    const updateResolvedTheme = () => {
-      if (theme === 'system') {
-        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setResolvedTheme(systemDark ? 'dark' : 'light');
-      } else {
-        setResolvedTheme(theme);
-      }
-    };
-
-    updateResolvedTheme();
-
-    // Listen for system theme changes
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = () => {
-      if (theme === 'system') {
-        updateResolvedTheme();
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
+  const theme = 'light';
+  const resolvedTheme = 'light';
 
   // Apply theme to document
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(resolvedTheme);
-  }, [resolvedTheme]);
+    root.classList.remove('dark');
+    root.classList.add('light');
+  }, []);
 
-  const setThemeValue = (newTheme) => {
-    setTheme(newTheme);
-    setStoredData(STORAGE_KEYS.THEME, newTheme);
+  const setThemeValue = () => {
+    // No-op
   };
 
   const toggleTheme = () => {
-    const newTheme = resolvedTheme === 'dark' ? 'light' : 'dark';
-    setThemeValue(newTheme);
+    // No-op
   };
 
   const value = {
@@ -68,7 +35,7 @@ export const ThemeProvider = ({ children }) => {
     resolvedTheme,
     setTheme: setThemeValue,
     toggleTheme,
-    isDark: resolvedTheme === 'dark'
+    isDark: false
   };
 
   return (

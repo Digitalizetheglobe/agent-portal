@@ -31,17 +31,17 @@ const DEFAULT_DOC_CATEGORIES = [
 ];
 
 const StudentsPage = () => {
-  const { 
-    students, 
-    events, 
-    agents, 
-    deleteStudent, 
-    fetchStudents, 
-    updateStudentStatus, 
+  const {
+    students,
+    events,
+    agents,
+    deleteStudent,
+    fetchStudents,
+    updateStudentStatus,
     verifyStudentDocument,
     viewStudentDocument,
     requestStudentDocument,
-    loading 
+    loading
   } = useData();
   const navigate = useNavigate();
 
@@ -63,14 +63,14 @@ const StudentsPage = () => {
   // Helper Functions
   const getDocStatus = useCallback((student) => {
     if (!student) return 'missing';
-    
+
     const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
     const required = event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
-    
+
     if (required.length === 0) return 'complete';
 
     const uploadedDocs = student.documents || [];
-    
+
     // Check if any mandatory document is missing or rejected
     const mandatoryDocs = required.filter(d => d.mandatory !== false);
     const hasMissingMandatory = mandatoryDocs.some(req => {
@@ -226,18 +226,18 @@ const StudentsPage = () => {
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Student Management</h1>
           <p className="text-sm text-[#6B7280] mt-0.5">
-            {baseFilteredStudents.length.toLocaleString()} students 
+            {baseFilteredStudents.length.toLocaleString()} students
             {eventFilter !== 'all' ? ` in ${getEventName(eventFilter)}` : ' across all events'}
           </p>
         </div>
         <div className="flex gap-2">
           <button
-            className="inline-flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
+            className="inline-flex items-center text-xs font-semibold h-10 px-4 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all hover:text-[#042C53]"
             onClick={() => toast.info('Export started...')}>
-            <Download size={14} /> Export <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
+            <Download size={14} className="mr-2" /> Export
           </button>
-          <button 
-            className="inline-flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-[#FAC775] bg-[#FAEEDA] text-[#633806] transition-all hover:bg-[#FAC775]" 
+          <button
+            className="inline-flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-[#FAC775] bg-[#FAEEDA] text-[#633806] transition-all hover:bg-[#FAC775]"
             onClick={() => toast.info('Stale students flagged')}>
             <Flag size={14} /> Flag stale <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
           </button>
@@ -525,19 +525,19 @@ const StudentsPage = () => {
                         </span>
                         {doc.status === 'pending' && (
                           <div className="flex gap-1">
-                            <button 
+                            <button
                               className="px-2 py-1 text-[9px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50"
                               onClick={() => viewStudentDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id)}
                             >
                               View
                             </button>
-                            <button 
+                            <button
                               className="px-2 py-1 text-[9px] font-bold rounded-lg bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:bg-[#DCEFC0]"
                               onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'approved')}
                             >
                               Approve
                             </button>
-                            <button 
+                            <button
                               className="px-2 py-1 text-[9px] font-bold rounded-lg bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] hover:bg-[#FADADA]"
                               onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'rejected')}
                             >
@@ -546,8 +546,8 @@ const StudentsPage = () => {
                           </div>
                         )}
                         {doc.status !== 'pending' && (
-                          <button 
-                            className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" 
+                          <button
+                            className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all"
                             onClick={() => viewStudentDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id)}
                           >
                             View
@@ -559,8 +559,8 @@ const StudentsPage = () => {
                         <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${isMandatory ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-gray-100 text-gray-400'}`}>
                           {isMandatory ? 'Missing' : 'Optional'}
                         </span>
-                        <button 
-                          className="inline-flex items-center px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" 
+                        <button
+                          className="inline-flex items-center px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all"
                           onClick={() => requestStudentDocument(selectedStudent.id || selectedStudent._id, docType.label)}
                         >
                           Request <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />

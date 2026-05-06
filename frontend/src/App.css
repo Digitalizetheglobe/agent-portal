@@ -1,9 +1,6 @@
 /* Custom App Styles */
 
 /* Smooth transitions for theme switching */
-html {
-    transition: color-scheme 0.3s;
-}
 
 /* Custom focus styles */
 *:focus-visible {
@@ -89,13 +86,3 @@ html {
     }
 }
 
-/* Dark mode specific adjustments */
-.dark .glass-effect {
-    background: rgba(18, 18, 18, 0.8);
-    backdrop-filter: blur(12px);
-}
-
-.light .glass-effect {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(12px);
-}
