@@ -60,6 +60,33 @@ const StudentsPage = () => {
     fetchStudents();
   }, [fetchStudents]);
 
+  // Helper Functions
+  const getDocStatus = useCallback((student) => {
+    if (!student) return 'missing';
+    
+    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
+    const required = event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
+    
+    if (required.length === 0) return 'complete';
+
+    const uploadedDocs = student.documents || [];
+    
+    // Check if any mandatory document is missing or rejected
+    const mandatoryDocs = required.filter(d => d.mandatory !== false);
+    const hasMissingMandatory = mandatoryDocs.some(req => {
+      const doc = uploadedDocs.find(d => d.category === req.value);
+      return !doc || doc.status === 'rejected';
+    });
+
+    if (hasMissingMandatory) return 'missing';
+
+    // Check if any document is pending
+    const hasPending = uploadedDocs.some(d => d.status === 'pending');
+    if (hasPending) return 'pending';
+
+    return 'complete';
+  }, [events]);
+
   const getStudentName = (s) => {
     if (!s) return 'N/A';
     if (s.name) return s.name;
@@ -138,31 +165,6 @@ const StudentsPage = () => {
   }, [students]);
 
   // Helper Functions
-  const getDocStatus = useCallback((student) => {
-    if (!student) return 'missing';
-    
-    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
-    const required = event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
-    
-    if (required.length === 0) return 'complete';
-
-    const uploadedDocs = student.documents || [];
-    
-    // Check if any mandatory document is missing or rejected
-    const mandatoryDocs = required.filter(d => d.mandatory !== false);
-    const hasMissingMandatory = mandatoryDocs.some(req => {
-      const doc = uploadedDocs.find(d => d.category === req.value);
-      return !doc || doc.status === 'rejected';
-    });
-
-    if (hasMissingMandatory) return 'missing';
-
-    // Check if any document is pending
-    const hasPending = uploadedDocs.some(d => d.status === 'pending');
-    if (hasPending) return 'pending';
-
-    return 'complete';
-  }, [events]);
 
   const getEventName = (eventId) => {
     const event = events.find(e => e.id === eventId || e._id === eventId);

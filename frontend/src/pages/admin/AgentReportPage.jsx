@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ChevronLeft, 
-  Download, 
-  Printer, 
-  Calendar, 
-  Mail, 
-  Phone, 
+import {
+  ChevronLeft,
+  Download,
+  Printer,
+  Calendar,
+  Mail,
+  Phone,
   Globe,
   TrendingUp,
   Users,
@@ -14,13 +14,13 @@ import {
   FileText,
   ShieldCheck
 } from 'lucide-react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -42,6 +42,23 @@ const AgentReportPage = () => {
 
   const agent = useMemo(() => agents.find(a => a.id === agentId), [agents, agentId]);
 
+  const getStudentName = (s) => {
+    if (!s) return 'N/A';
+    if (s.name && s.name !== 'N/A') return s.name;
+    const cf = s.customFields || {};
+    if (cf.name) return cf.name;
+    if (cf instanceof Map && cf.has('name')) return cf.get('name');
+    const entries = cf instanceof Map ? Array.from(cf.entries()) : Object.entries(cf);
+    for (const [k, v] of entries) {
+      if (typeof v === 'string' && k.toLowerCase().includes('name')) return v;
+    }
+    // Fallback to the first string field that looks like a name (not email, not phone)
+    for (const [k, v] of entries) {
+      if (typeof v === 'string' && !v.includes('@') && !v.match(/^[+\d\s-]{8,}$/) && v.length > 2) return v;
+    }
+    return 'Student';
+  };
+
   const reportData = useMemo(() => {
     if (!agent) return null;
 
@@ -49,7 +66,7 @@ const AgentReportPage = () => {
     const registrations = agentStudents.length;
     const confirmed = agentStudents.filter(s => s.status === 'Confirmed' || s.status === 'Attended' || s.status === 'Converted').length;
     const converted = agentStudents.filter(s => s.status === 'Converted').length;
-    
+
     // Status breakdown for Pie Chart
     const statusCounts = agentStudents.reduce((acc, s) => {
       acc[s.status] = (acc[s.status] || 0) + 1;
@@ -104,9 +121,9 @@ const AgentReportPage = () => {
     <div className="space-y-6 p-6 bg-[#F9FAFB] min-h-screen font-['Inter'] print:p-0 print:bg-white">
       {/* Header Actions - Hidden on Print */}
       <div className="flex items-center justify-between print:hidden">
-        <Button 
-          variant="ghost" 
-          onClick={() => navigate('/admin/agents')} 
+        <Button
+          variant="ghost"
+          onClick={() => navigate('/admin/agents')}
           className="gap-2 -ml-2 text-[#6B7280] hover:text-[#111827] hover:bg-white/50"
         >
           <ChevronLeft className="w-4 h-4" /> Back to Agents
@@ -182,35 +199,35 @@ const AgentReportPage = () => {
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <LineChart data={reportData.monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                <XAxis 
-                  dataKey="month" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 500 }} 
-                  dy={10} 
+                <XAxis
+                  dataKey="month"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 500 }}
+                  dy={10}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 500 }} 
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 500 }}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    borderRadius: '12px', 
-                    border: '1px solid #E5E7EB', 
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: '12px',
+                    border: '1px solid #E5E7EB',
                     boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)',
                     fontFamily: 'Inter',
                     fontSize: '12px'
                   }}
                   itemStyle={{ color: '#042C53', fontWeight: 'bold' }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="count" 
-                  stroke="#042C53" 
-                  strokeWidth={3} 
-                  dot={{ r: 4, fill: '#042C53', strokeWidth: 2, stroke: '#fff' }} 
-                  activeDot={{ r: 6, strokeWidth: 0 }} 
+                <Line
+                  type="monotone"
+                  dataKey="count"
+                  stroke="#042C53"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: '#042C53', strokeWidth: 2, stroke: '#fff' }}
+                  activeDot={{ r: 6, strokeWidth: 0 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -285,20 +302,24 @@ const AgentReportPage = () => {
                 reportData.agentStudents.map((student) => {
                   const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
                   return (
-                    <TableRow key={student.id} className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors group">
+                    <TableRow 
+                      key={student.id || student._id} 
+                      className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors group cursor-pointer"
+                      onClick={() => navigate(`/admin/students/${student.id || student._id}`)}
+                    >
                       <TableCell className="py-4">
-                        <div className="font-bold text-[#111827]">{student.name}</div>
-                        <div className="text-[10px] text-[#9CA3AF] mt-0.5 uppercase tracking-wider font-semibold">{student.id.slice(-6)}</div>
+                        <div className="font-bold text-[#111827]">{getStudentName(student)}</div>
+                        {/* <div className="text-[10px] text-[#9CA3AF] mt-0.5 uppercase tracking-wider font-semibold">{(student.id || student._id || '').toString().slice(-6)}</div> */}
                       </TableCell>
                       <TableCell className="py-4">
                         <div className="text-xs text-[#4B5563] font-medium">{student.email}</div>
                         <div className="text-[10px] text-[#9CA3AF] mt-0.5">{student.phone || 'N/A'}</div>
                       </TableCell>
                       <TableCell className="py-4">
-                        <Badge className={cn("px-2 py-0.5 rounded-lg border-none text-[9px] font-bold uppercase tracking-widest", 
+                        <Badge className={cn("px-2 py-0.5 rounded-lg border-none text-[9px] font-bold uppercase tracking-widest",
                           student.status === 'Converted' ? 'bg-[#E1F5EE] text-[#085041]' :
-                          student.status === 'Confirmed' ? 'bg-[#EEEDFE] text-[#3C3489]' :
-                          'bg-[#F3F4F6] text-[#4B5563]'
+                            student.status === 'Confirmed' ? 'bg-[#EEEDFE] text-[#3C3489]' :
+                              'bg-[#F3F4F6] text-[#4B5563]'
                         )}>
                           {student.status}
                         </Badge>
@@ -328,7 +349,8 @@ const AgentReportPage = () => {
       </div>
 
       {/* Print Styles */}
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @media print {
           @page { size: A4; margin: 20mm; }
           body { background-color: white !important; }

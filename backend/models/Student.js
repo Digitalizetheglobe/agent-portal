@@ -103,8 +103,8 @@ const studentSchema = new mongoose.Schema({
   toJSON: {
     transform: function(doc, ret) {
       if (ret._id) ret.id = ret._id.toString();
-      if (ret.eventId) ret.eventId = ret.eventId.toString();
-      if (ret.agentId) ret.agentId = ret.agentId.toString();
+      if (ret.eventId && typeof ret.eventId.toString === 'function') ret.eventId = ret.eventId.toString();
+      if (ret.agentId && typeof ret.agentId.toString === 'function') ret.agentId = ret.agentId.toString();
       ret.submittedAt = ret.createdAt;
       
       // Convert customFields Map to plain object

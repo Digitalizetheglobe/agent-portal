@@ -250,7 +250,7 @@ export const DataProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats, fetchInvoices, fetchTickets]);
+  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats, fetchInvoices, fetchTickets, fetchNotifications]);
 
   // Clear all data - called on logout
   const clearData = useCallback(() => {

@@ -106,8 +106,10 @@ const eventSchema = new mongoose.Schema({
   timestamps: true,
   toJSON: {
     transform: function(doc, ret) {
-      ret.id = ret._id.toString();
-      ret.assignedAgents = ret.assignedAgents.map(id => id.toString());
+      if (ret._id) ret.id = ret._id.toString();
+      if (ret.assignedAgents && Array.isArray(ret.assignedAgents)) {
+        ret.assignedAgents = ret.assignedAgents.map(id => (id && id.toString) ? id.toString() : id);
+      }
       delete ret._id;
       delete ret.__v;
       return ret;

@@ -151,13 +151,13 @@ const StudentDetailsPage = () => {
 
     // 2. Try to find in custom fields by label matching
     if (event?.formFields) {
-      const field = event.formFields.find(f => 
-        f.label.toLowerCase().trim() === fieldKey.toLowerCase().trim() || 
+      const field = event.formFields.find(f =>
+        f.label.toLowerCase().trim() === fieldKey.toLowerCase().trim() ||
         (fallbackKey && f.label.toLowerCase().trim() === fallbackKey.toLowerCase().trim()) ||
         // Check for partial matches like "Full Name" matching "name"
         f.label.toLowerCase().includes(fieldKey.toLowerCase())
       );
-      
+
       if (field && student.customFields && (student.customFields[field.id] || student.customFields[`field_${field.id}`])) {
         return student.customFields[field.id] || student.customFields[`field_${field.id}`];
       }
@@ -179,7 +179,7 @@ const StudentDetailsPage = () => {
 
     // Define standard field keys to skip in the "Other" section
     const standardFieldKeys = ['name', 'email', 'phone', 'country', 'education', 'courseInterested', 'notes'];
-    
+
     // Also skip fields that are already matched by label in standard sections
     const standardLabels = ['Full Name', 'Email Address', 'Phone Number', 'Country of Interest', 'Target Course', 'Education Level', 'Internal Notes'];
 
@@ -189,7 +189,7 @@ const StudentDetailsPage = () => {
       // Find the label from event formFields if possible
       const fieldId = key.replace(/^field_/, '');
       const formField = event?.formFields?.find(f => f.id === fieldId || `field_${f.id}` === key);
-      
+
       const label = formField ? formField.label : key.replace(/^field_/, '').replace(/_/g, ' ');
 
       // Skip if it's a standard field or already displayed
@@ -338,7 +338,7 @@ const StudentDetailsPage = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-start gap-4">
-          <Button
+          {/* <Button
             variant="outline"
             size="sm"
             className="mt-1 h-9 border-[#E5E7EB] bg-white hover:bg-gray-50"
@@ -346,7 +346,7 @@ const StudentDetailsPage = () => {
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
-          </Button>
+          </Button> */}
           <div>
             <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
               Student Profile
