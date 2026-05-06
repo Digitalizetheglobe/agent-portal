@@ -101,11 +101,13 @@ exports.generateRefreshToken = (user) => {
 
 // Set token cookies
 exports.setTokenCookies = (res, accessToken, refreshToken) => {
+  const isProd = process.env.NODE_ENV === 'production';
+  
   // Access token cookie - 15 minutes
   res.cookie('access_token', accessToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     maxAge: 15 * 60 * 1000, // 15 minutes
     path: '/'
   });
@@ -113,8 +115,8 @@ exports.setTokenCookies = (res, accessToken, refreshToken) => {
   // Refresh token cookie - 7 days
   res.cookie('refresh_token', refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/'
   });

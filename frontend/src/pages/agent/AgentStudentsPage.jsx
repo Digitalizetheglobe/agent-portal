@@ -137,17 +137,17 @@ const AgentStudentsPage = () => {
 
   const getStudentValue = (student, key, fallbackLabel) => {
     if (!student) return 'N/A';
-    
+
     // Direct property
     if (student[key] && student[key] !== 'Not specified') return student[key];
-    
+
     // Custom field by exact key
     if (student.customFields?.[key]) return student.customFields[key];
-    
+
     // Custom field by label lookup
     const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
     if (event?.formFields) {
-      const field = event.formFields.find(f => 
+      const field = event.formFields.find(f =>
         f.label.toLowerCase().trim() === fallbackLabel.toLowerCase().trim() ||
         f.label.toLowerCase().includes(fallbackLabel.toLowerCase())
       );
@@ -156,7 +156,7 @@ const AgentStudentsPage = () => {
         if (val) return val;
       }
     }
-    
+
     return 'N/A';
   };
 
@@ -172,14 +172,14 @@ const AgentStudentsPage = () => {
 
   const getDocStatus = useCallback((student) => {
     if (!student) return 'missing';
-    
+
     const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
     const required = event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
-    
+
     if (required.length === 0) return 'complete';
 
     const uploadedDocs = student.documents || [];
-    
+
     // Check if any mandatory document is missing or rejected
     const mandatoryDocs = required.filter(d => d.mandatory !== false);
     const hasMissingMandatory = mandatoryDocs.some(req => {
@@ -297,7 +297,7 @@ const AgentStudentsPage = () => {
             className="h-10 text-xs font-bold border-gray-200"
             onClick={() => toast.info('Exporting student list...')}
           >
-            <Download size={14} className="mr-2" /> Export <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
+            <Download size={14} className="mr-2" /> Export
           </Button>
           <Button
             className="h-10 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10"
@@ -805,9 +805,9 @@ const AgentStudentsPage = () => {
                               }`}>
                               {doc.status}
                             </span>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               className="h-8 text-[10px] font-bold text-[#042C53] px-2"
                               onClick={() => viewStudentDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id)}
                             >

@@ -63,8 +63,12 @@ exports.login = async (req, res) => {
     // Set cookies
     setTokenCookies(res, accessToken, refreshToken);
 
-    // Return user data (without password)
-    res.status(200).json(user.toJSON());
+    // Return user data and tokens
+    res.status(200).json({
+      ...user.toJSON(),
+      accessToken,
+      refreshToken
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({
@@ -114,7 +118,7 @@ exports.getMe = async (req, res) => {
 // @access  Public (with refresh token)
 exports.refreshToken = async (req, res) => {
   try {
-    const refreshToken = req.cookies.refresh_token;
+    let refreshToken = req.cookies.refresh_token || req.body.refreshToken;
 
     if (!refreshToken) {
       return res.status(401).json({
@@ -151,14 +155,15 @@ exports.refreshToken = async (req, res) => {
       res.cookie('access_token', accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 15 * 60 * 1000,
         path: '/'
       });
 
       res.status(200).json({
         success: true,
-        message: 'Token refreshed'
+        message: 'Token refreshed',
+        accessToken
       });
     } catch (error) {
       if (error.name === 'TokenExpiredError') {

@@ -3,6 +3,12 @@ import axios from 'axios';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Check if there's a token in the environment variables (for dev/testing)
+const ENV_TOKEN = process.env.REACT_APP_JWT_TOKEN;
+if (ENV_TOKEN && !localStorage.getItem('access_token')) {
+  localStorage.setItem('access_token', ENV_TOKEN);
+}
+
 // Create axios instance with credentials
 const api = axios.create({
   baseURL: API,
@@ -31,7 +37,10 @@ const processQueue = (error, token = null) => {
 // Add request interceptor to include auth token
 api.interceptors.request.use(
   (config) => {
-    // Token is handled via cookies, so no need to manually add Authorization header
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {
@@ -65,16 +74,26 @@ api.interceptors.response.use(
 
       try {
         // Attempt to refresh the token
-        await api.post('/auth/refresh');
+        const refreshToken = localStorage.getItem('refresh_token');
+        const response = await api.post('/auth/refresh', { refreshToken });
+        
+        const { accessToken } = response.data;
+        if (accessToken) {
+          localStorage.setItem('access_token', accessToken);
+        }
         
         // Process the queue with the new token
-        processQueue(null);
+        processQueue(null, accessToken);
         
         // Retry the original request
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed, process queue with error
         processQueue(refreshError);
+        
+        // Clear tokens on failure
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
         
         // If refresh fails, redirect to login
         if (window.location.pathname !== '/login') {
@@ -104,10 +123,33 @@ export const formatApiError = (error) => {
 
 // Auth APIs
 export const authAPI = {
-  login: (email, password, role) => api.post('/auth/login', { email, password, role }),
-  logout: () => api.post('/auth/logout'),
+  login: async (email, password, role) => {
+    const response = await api.post('/auth/login', { email, password, role });
+    if (response.data.accessToken) {
+      localStorage.setItem('access_token', response.data.accessToken);
+    }
+    if (response.data.refreshToken) {
+      localStorage.setItem('refresh_token', response.data.refreshToken);
+    }
+    return response;
+  },
+  logout: async () => {
+    try {
+      await api.post('/auth/logout');
+    } finally {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+    }
+  },
   me: () => api.get('/auth/me'),
-  refresh: () => api.post('/auth/refresh'),
+  refresh: async () => {
+    const refreshToken = localStorage.getItem('refresh_token');
+    const response = await api.post('/auth/refresh', { refreshToken });
+    if (response.data.accessToken) {
+      localStorage.setItem('access_token', response.data.accessToken);
+    }
+    return response;
+  },
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token, newPassword) => api.post('/auth/reset-password', { token, new_password: newPassword }),
   updateProfile: (data) => api.put('/auth/update-profile', data),

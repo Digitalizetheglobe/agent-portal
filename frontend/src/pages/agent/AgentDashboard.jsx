@@ -172,8 +172,8 @@ const AgentDashboard = () => {
   const getStudentDisplayName = (student) => {
     if (student.name) return student.name;
     if (student.customFields) {
-      const nameKey = Object.keys(student.customFields).find(key => 
-        key.toLowerCase().includes('name') || 
+      const nameKey = Object.keys(student.customFields).find(key =>
+        key.toLowerCase().includes('name') ||
         key.toLowerCase().includes('full')
       );
       if (nameKey) return student.customFields[nameKey];
@@ -306,7 +306,7 @@ const AgentDashboard = () => {
                 <CardTitle className="text-lg font-['Outfit'] text-[#111827]">My Performance</CardTitle>
                 <CardDescription>Monthly registration trends</CardDescription>
               </div>
-              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
+              <span className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
             </div>
           </CardHeader>
           <CardContent>
@@ -450,7 +450,7 @@ const AgentDashboard = () => {
                 </div>
               )}
             </div>
-            <button 
+            <button
               onClick={handleRequestMoreEvents}
               className="w-full mt-6 p-4 bg-[#F9FAFB] rounded-xl border border-dashed border-gray-300 text-center hover:bg-gray-50 hover:border-[#042C53] transition-all group focus:outline-none focus:ring-2 focus:ring-[#042C53]/10"
             >
