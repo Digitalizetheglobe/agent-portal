@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Bell, Check, Info, AlertTriangle, AlertCircle, Trash2, CheckCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { 
   DropdownMenu, 
@@ -16,6 +18,8 @@ import { cn } from '../../lib/utils';
 
 const NotificationCenter = () => {
   const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useData();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -55,6 +59,42 @@ const NotificationCenter = () => {
     e.preventDefault();
     e.stopPropagation();
     markNotificationAsRead(id);
+  };
+
+  const handleNotificationClick = (notification) => {
+    if (!notification.isRead) {
+      markNotificationAsRead(notification.id);
+    }
+
+    if (notification.relatedModel && notification.relatedId) {
+      const role = user?.role || 'agent';
+      let path = '';
+      
+      switch (notification.relatedModel) {
+        case 'Student':
+          path = `/${role}/students/${notification.relatedId}`;
+          break;
+        case 'Event':
+          path = `/${role}/events/${notification.relatedId}`;
+          break;
+        case 'Invoice':
+          path = `/${role}/invoices`;
+          break;
+        case 'Ticket':
+          path = `/${role}/support`;
+          break;
+        case 'Agent':
+          path = role === 'admin' ? `/admin/agents/${notification.relatedId}/report` : `/agent/dashboard`;
+          break;
+        default:
+          break;
+      }
+      
+      if (path) {
+        navigate(path);
+        setOpen(false);
+      }
+    }
   };
 
   return (
@@ -109,7 +149,7 @@ const NotificationCenter = () => {
                     "flex gap-3 p-4 transition-colors hover:bg-muted/50 cursor-pointer relative group",
                     !notification.isRead && "bg-primary/5"
                   )}
-                  onClick={() => !notification.isRead && markNotificationAsRead(notification.id)}
+                  onClick={() => handleNotificationClick(notification)}
                 >
                   <div className={cn(
                     "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
@@ -157,7 +197,15 @@ const NotificationCenter = () => {
           <>
             <DropdownMenuSeparator className="m-0" />
             <div className="p-2 bg-muted/10">
-              <Button variant="ghost" size="sm" className="w-full text-xs font-medium text-muted-foreground">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="w-full text-xs font-medium text-muted-foreground"
+                onClick={() => {
+                  navigate(`/${user?.role || 'agent'}/notifications`);
+                  setOpen(false);
+                }}
+              >
                 View all notifications
               </Button>
             </div>

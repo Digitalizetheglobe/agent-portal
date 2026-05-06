@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   DollarSign,
   Ticket,
-  ChevronDown
+  ChevronDown,
+  ArrowUpRight
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -35,7 +36,7 @@ import {
 
 const AgentDashboard = () => {
   const { user } = useAuth();
-  const { getEventsForAgent, getStudentsByAgent, agents, getStats, invoices, students, tickets } = useData();
+  const { getEventsForAgent, getStudentsByAgent, agents, getStats, invoices, students, tickets, createTicket } = useData();
   const stats = getStats();
 
   const [dateRange, setDateRange] = useState('1 month');
@@ -191,6 +192,19 @@ const AgentDashboard = () => {
     return 'Yesterday';
   };
 
+  const handleRequestMoreEvents = async () => {
+    try {
+      await createTicket({
+        subject: 'Request for More Events',
+        description: 'I would like to request more event assignments for my agency to onboard more students.',
+        category: 'Other',
+        priority: 'Medium'
+      });
+    } catch (error) {
+      console.error('Failed to file request:', error);
+    }
+  };
+
   return (
     <div className="space-y-8 p-4 md:p-8 bg-[#F9FAFB] min-h-screen" data-testid="agent-dashboard">
       {/* Topbar / Header */}
@@ -200,7 +214,7 @@ const AgentDashboard = () => {
             Agent Command Centre
           </h1>
           <p className="text-muted-foreground mt-1 text-sm font-medium">
-            Welcome back, {user?.name || 'Partner'} · QStudy Verified Agent
+            Welcome back, {user?.name || 'Partner'} · {user?.isVerified ? 'QStudy Verified Agent' : 'Agent'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
@@ -292,7 +306,7 @@ const AgentDashboard = () => {
                 <CardTitle className="text-lg font-['Outfit'] text-[#111827]">My Performance</CardTitle>
                 <CardDescription>Monthly registration trends</CardDescription>
               </div>
-              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details ↗</span>
+              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
             </div>
           </CardHeader>
           <CardContent>
@@ -368,7 +382,7 @@ const AgentDashboard = () => {
               <CardDescription>Students you've onboarded recently</CardDescription>
             </div>
             <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-              <Link to="/agent/dashboard">View all ↗</Link>
+              <Link to="/agent/dashboard">View all <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
             </Button>
           </CardHeader>
           <CardContent className="p-0">
@@ -406,7 +420,7 @@ const AgentDashboard = () => {
               <CardDescription>Upcoming recruitment campaigns</CardDescription>
             </div>
             <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-              <Link to="/agent/events-management">Full calendar ↗</Link>
+              <Link to="/agent/events-management">Full calendar <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
             </Button>
           </CardHeader>
           <CardContent className="p-4 px-6">
@@ -436,11 +450,14 @@ const AgentDashboard = () => {
                 </div>
               )}
             </div>
-            <div className="mt-6 p-4 bg-[#F9FAFB] rounded-xl border border-dashed border-gray-300 text-center">
-              <p className="text-[11px] font-semibold text-[#042C53]">
-                Need more events? Contact your admin manager.
+            <button 
+              onClick={handleRequestMoreEvents}
+              className="w-full mt-6 p-4 bg-[#F9FAFB] rounded-xl border border-dashed border-gray-300 text-center hover:bg-gray-50 hover:border-[#042C53] transition-all group focus:outline-none focus:ring-2 focus:ring-[#042C53]/10"
+            >
+              <p className="text-[11px] font-semibold text-[#042C53] group-hover:text-[#0C447C] flex items-center justify-center gap-2">
+                <Ticket className="w-3.5 h-3.5" /> Need more events? Click here to file a request
               </p>
-            </div>
+            </button>
           </CardContent>
         </Card>
       </div>
@@ -504,7 +521,7 @@ const AgentDashboard = () => {
             <CardDescription>Recent helpdesk tickets and updates</CardDescription>
           </div>
           <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-            <Link to="/agent/support">Helpdesk ↗</Link>
+            <Link to="/agent/support">Helpdesk <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
           </Button>
         </CardHeader>
         <CardContent className="p-0">

@@ -9,7 +9,8 @@ const {
   updateAgent, 
   deleteAgent,
   uploadVerificationDocument,
-  verifyAgent
+  verifyAgent,
+  downloadVerificationDocument
 } = require('../controllers/agentController');
 const { protect, restrictTo } = require('../middleware/auth');
 
@@ -49,6 +50,7 @@ router.post('/admin', restrictTo('admin'), createAdmin);
 router.put('/:id', restrictTo('admin'), updateAgent);
 router.delete('/:id', restrictTo('admin'), deleteAgent);
 router.patch('/:id/verify', restrictTo('admin'), verifyAgent);
+router.get('/:id/documents/:docId', downloadVerificationDocument);
 
 // Agent specific routes
 router.post('/me/documents', restrictTo('agent'), upload.single('file'), uploadVerificationDocument);

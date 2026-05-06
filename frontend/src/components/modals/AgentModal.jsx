@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '../ui/badge';
+import { Card, CardContent } from '../ui/card';
 import { Textarea } from '../ui/textarea';
 
 const agentSchema = z.object({
@@ -55,7 +56,7 @@ const agentSchema = z.object({
 });
 
 const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
-  const { createAgent, updateAgent, agents, verifyAgent } = useData();
+  const { createAgent, updateAgent, agents, verifyAgent, viewAgentDocument } = useData();
   const isEditing = !!agent;
 
   const {
@@ -425,7 +426,7 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
                                 variant="ghost" 
                                 size="sm" 
                                 className="h-6 text-primary hover:text-primary"
-                                onClick={() => window.open(doc.fileUrl, '_blank')}
+                                onClick={() => viewAgentDocument(agent.id, doc._id || doc.id)}
                               >
                                 <ExternalLink className="w-3 h-3 mr-1" />
                                 View

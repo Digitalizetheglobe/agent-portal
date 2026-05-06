@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { FileText, CheckCircle2, XCircle, Clock, Search, Filter } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, Clock, Search, Filter, ArrowUpRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { Input } from '../../components/ui/input';
 
@@ -140,7 +140,7 @@ const AdminInvoicesPage = () => {
         </div>
         <div className="flex gap-3">
           <Button variant="outline" size="sm" className="text-xs font-semibold h-10 px-4 border-[#E5E7EB] hover:bg-white transition-all">
-            Export Report ↗
+            Export Report <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
           </Button>
         </div>
       </div>

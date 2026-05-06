@@ -23,7 +23,6 @@ const documentSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['Passport', 'Transcript', 'LanguageTest', 'Other'],
     default: 'Other'
   },
   status: {
@@ -103,9 +102,9 @@ const studentSchema = new mongoose.Schema({
   timestamps: true,
   toJSON: {
     transform: function(doc, ret) {
-      ret.id = ret._id.toString();
-      ret.eventId = ret.eventId.toString();
-      ret.agentId = ret.agentId.toString();
+      if (ret._id) ret.id = ret._id.toString();
+      if (ret.eventId) ret.eventId = ret.eventId.toString();
+      if (ret.agentId) ret.agentId = ret.agentId.toString();
       ret.submittedAt = ret.createdAt;
       
       // Convert customFields Map to plain object

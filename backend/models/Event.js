@@ -55,7 +55,7 @@ const eventSchema = new mongoose.Schema({
     type: {
       type: String,
       required: true,
-      enum: ['text', 'paragraph', 'radio', 'date', 'select']
+      enum: ['text', 'paragraph', 'radio', 'date', 'select', 'phone', 'email', 'number']
     },
     required: {
       type: Boolean,
@@ -76,6 +76,21 @@ const eventSchema = new mongoose.Schema({
     regexError: {
       type: String,
       default: 'Invalid format'
+    }
+  }],
+  // Document requirements for this event
+  requiredDocuments: [{
+    label: {
+      type: String,
+      required: true
+    },
+    value: {
+      type: String,
+      required: true
+    },
+    mandatory: {
+      type: Boolean,
+      default: true
     }
   }],
   // Notification settings

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   Search,
@@ -20,7 +21,8 @@ import {
   X,
   Bell,
   TrendingUp,
-  MapPin
+  MapPin,
+  ArrowUpRight
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Button } from '../../components/ui/button';
@@ -56,6 +58,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
 const AgentsPage = () => {
+  const navigate = useNavigate();
   const {
     agents,
     deleteAgent,
@@ -63,7 +66,9 @@ const AgentsPage = () => {
     students,
     events,
     invoices,
-    verifyAgent
+    verifyAgent,
+    viewAgentDocument,
+    updateAgent
   } = useData();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -140,7 +145,7 @@ const AgentsPage = () => {
   }, [processedAgents, searchQuery, currentFilter]);
 
   const pendingVerificationAgents = useMemo(() => {
-    return processedAgents.filter(agent => !agent.isVerified).slice(0, 3);
+    return processedAgents.filter(agent => !agent.isVerified);
   }, [processedAgents]);
 
   // Event handlers
@@ -186,6 +191,35 @@ const AgentsPage = () => {
     }
   };
 
+  const handleDeactivate = async (agent) => {
+    try {
+      await updateAgent(agent.id, { status: 'inactive' });
+      toast.success('Agent deactivated', {
+        description: `${agent.name} is now inactive.`
+      });
+      setDrawerOpen(false);
+    } catch (error) {
+      console.error('Failed to deactivate agent', error);
+    }
+  };
+
+  const handleSendNotification = (agent) => {
+    toast.info('Notification system', {
+      description: `Sending notification to ${agent.name}... (Feature coming soon)`
+    });
+  };
+
+  const handleAssignEvents = (agent) => {
+    setSelectedAgent(agent);
+    setViewMode(false);
+    setModalOpen(true);
+    setDrawerOpen(false);
+  };
+
+  const handlePerformanceReport = (agent) => {
+    navigate(`/admin/agents/${agent.id}/report`);
+  };
+
   const handleReject = async (agentId) => {
     const reason = prompt('Please enter a reason for rejection:');
     if (reason) {
@@ -196,7 +230,9 @@ const AgentsPage = () => {
         console.error('Failed to reject agent', error);
       }
     }
-  }; return (
+  };
+
+  return (
     <div className="space-y-6 p-6 bg-[#F9FAFB] min-h-screen font-['Inter']" data-testid="agents-page">
       {/* Top Row */}
       <div className="flex items-center justify-between">
@@ -272,11 +308,11 @@ const AgentsPage = () => {
           <div className="bg-[#F9FAFB] border-b border-[#E5E7EB] px-4 py-2">
             <h3 className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Verification queue · {agents.filter(a => !a.isVerified).length} new</h3>
           </div>
-          <div className="p-4 space-y-4">
+          <div className="p-4 flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
             {pendingVerificationAgents.map((agent) => {
               const styles = getAvatarStyles(agent.name);
               return (
-                <div key={agent.id} className="p-4 rounded-xl border border-[#E5E7EB] bg-white group hover:border-[#042C53]/20 transition-all">
+                <div key={agent.id} className="flex-shrink-0 w-full md:w-[calc((100%-32px)/3)] min-w-[320px] p-4 rounded-xl border border-[#E5E7EB] bg-white group hover:border-[#042C53]/20 transition-all snap-start">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className={cn("w-10 h-10 rounded-full flex items-center justify-center font-semibold text-xs", styles.bg, styles.text)}>
                       {getInitials(agent.name)}
@@ -294,9 +330,13 @@ const AgentsPage = () => {
 
                   <div className="flex flex-wrap gap-2 mt-4">
                     {(agent.verificationDocuments || []).map((doc, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] text-[10px] text-[#6B7280]">
+                      <button 
+                        key={idx} 
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] text-[10px] text-[#6B7280] hover:bg-gray-100 transition-colors"
+                        onClick={() => viewAgentDocument(agent.id, doc._id || doc.id)}
+                      >
                         <FileText className="w-3 h-3" /> {doc.docType} {doc.status === 'approved' ? <span className="text-emerald-600">✓</span> : <span className="text-amber-600">!</span>}
-                      </div>
+                      </button>
                     ))}
                     {(!agent.verificationDocuments || agent.verificationDocuments.length === 0) && (
                       <div className="text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 flex items-center gap-1">
@@ -328,7 +368,7 @@ const AgentsPage = () => {
                       className="h-8 text-[11px] font-medium border-[#E5E7EB]"
                       onClick={() => handleEdit(agent)}
                     >
-                      View Details ↗
+                      View Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                     </Button>
                   </div>
                 </div>
@@ -517,8 +557,8 @@ const AgentsPage = () => {
                         </div>
                         <div className="flex items-center gap-3">
                           <Badge className={cn("text-[10px] h-5", doc.status === 'approved' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600")}>{doc.status}</Badge>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(doc.fileUrl, '_blank')}>
-                            <ChevronRight className="w-4 h-4" />
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => viewAgentDocument(agentInDrawer.id, doc._id)}>
+                            <Eye className="w-4 h-4 text-[#6B7280]" />
                           </Button>
                         </div>
                       </div>
@@ -535,18 +575,33 @@ const AgentsPage = () => {
               <div className="p-6 border-t border-[#E5E7EB] bg-white mt-auto">
                 <div className="flex flex-col gap-2">
                   <div className="flex gap-2">
-                    <Button className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-xs h-10">
+                    <Button 
+                      className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-xs h-10"
+                      onClick={() => handlePerformanceReport(agentInDrawer)}
+                    >
                       Full performance report
                     </Button>
-                    <Button variant="outline" className="flex-1 border-[#E5E7EB] text-xs h-10">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 border-[#E5E7EB] text-xs h-10"
+                      onClick={() => handleAssignEvents(agentInDrawer)}
+                    >
                       Assign events
                     </Button>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 border-[#E5E7EB] text-xs h-10">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 border-[#E5E7EB] text-xs h-10"
+                      onClick={() => handleSendNotification(agentInDrawer)}
+                    >
                       Send notification
                     </Button>
-                    <Button variant="outline" className="flex-1 border-red-100 text-red-600 hover:bg-red-50 text-xs h-10">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 border-red-100 text-red-600 hover:bg-red-50 text-xs h-10"
+                      onClick={() => handleDeactivate(agentInDrawer)}
+                    >
                       Deactivate agent
                     </Button>
                   </div>

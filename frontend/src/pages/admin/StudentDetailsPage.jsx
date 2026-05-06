@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, MapPin, Phone, Mail, User, BookOpen, Globe, Clock, Upload, FileText, Download, Trash2, Plus, Check, X, Shield, AlertCircle, Edit, Eye } from 'lucide-react';
 import { useData } from '../../context/DataContext';
@@ -63,6 +63,25 @@ const StudentDetailsPage = () => {
     fetchStudent();
   }, [id, getStudentById, students]);
 
+  const event = useMemo(() => {
+    if (!student?.eventId) return null;
+    return events.find(e => e.id === student.eventId || e._id === student.eventId);
+  }, [events, student?.eventId]);
+
+  const agent = useMemo(() => {
+    if (!student?.agentId) return null;
+    return agents.find(a => a.id === student.agentId || a._id === student.agentId);
+  }, [agents, student?.agentId]);
+
+  const requiredDocs = useMemo(() => {
+    const DEFAULT_DOC_CATEGORIES = [
+      { label: 'Passport', value: 'Passport', mandatory: true },
+      { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
+      { label: 'Language Test', value: 'LanguageTest', mandatory: false }
+    ];
+    return event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
+  }, [event]);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -100,8 +119,7 @@ const StudentDetailsPage = () => {
     );
   }
 
-  const event = events.find(e => e.id === student.eventId);
-  const agent = agents.find(a => a.id === student.agentId);
+
 
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -123,14 +141,31 @@ const StudentDetailsPage = () => {
 
   // Helper function to get student data from custom fields or legacy fields
   const getStudentFieldValue = (fieldKey, fallbackKey = null) => {
-    // Try custom fields first
-    if (student.customFields && student.customFields[fieldKey]) {
-      return student.customFields[fieldKey];
-    }
-
-    // Try legacy fields as fallback
+    // 1. Try legacy fields as priority (direct properties)
     if (fallbackKey && student[fallbackKey]) {
       return student[fallbackKey];
+    }
+    if (student[fieldKey]) {
+      return student[fieldKey];
+    }
+
+    // 2. Try to find in custom fields by label matching
+    if (event?.formFields) {
+      const field = event.formFields.find(f => 
+        f.label.toLowerCase().trim() === fieldKey.toLowerCase().trim() || 
+        (fallbackKey && f.label.toLowerCase().trim() === fallbackKey.toLowerCase().trim()) ||
+        // Check for partial matches like "Full Name" matching "name"
+        f.label.toLowerCase().includes(fieldKey.toLowerCase())
+      );
+      
+      if (field && student.customFields && (student.customFields[field.id] || student.customFields[`field_${field.id}`])) {
+        return student.customFields[field.id] || student.customFields[`field_${field.id}`];
+      }
+    }
+
+    // 3. Try custom fields directly by key
+    if (student.customFields && student.customFields[fieldKey]) {
+      return student.customFields[fieldKey];
     }
 
     return 'Not specified';
@@ -142,13 +177,28 @@ const StudentDetailsPage = () => {
 
     const fields = [];
 
-    // Add standard fields from customFields if they exist
-    const standardFields = ['name', 'email', 'phone', 'country', 'education', 'courseInterested', 'notes'];
+    // Define standard field keys to skip in the "Other" section
+    const standardFieldKeys = ['name', 'email', 'phone', 'country', 'education', 'courseInterested', 'notes'];
+    
+    // Also skip fields that are already matched by label in standard sections
+    const standardLabels = ['Full Name', 'Email Address', 'Phone Number', 'Country of Interest', 'Target Course', 'Education Level', 'Internal Notes'];
 
     Object.entries(student.customFields).forEach(([key, value]) => {
-      if (!standardFields.includes(key) && value) {
+      if (!value) return;
+
+      // Find the label from event formFields if possible
+      const fieldId = key.replace(/^field_/, '');
+      const formField = event?.formFields?.find(f => f.id === fieldId || `field_${f.id}` === key);
+      
+      const label = formField ? formField.label : key.replace(/^field_/, '').replace(/_/g, ' ');
+
+      // Skip if it's a standard field or already displayed
+      const isStandardKey = standardFieldKeys.includes(key);
+      const isStandardLabel = standardLabels.some(l => label.toLowerCase().includes(l.toLowerCase()));
+
+      if (!isStandardKey && !isStandardLabel) {
         fields.push({
-          key: key.replace(/^field_/, '').replace(/_/g, ' '),
+          key: label,
           value: value
         });
       }
@@ -556,9 +606,9 @@ const StudentDetailsPage = () => {
                     onChange={(e) => setSelectedCategory(e.target.value)}
                     className="w-full text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg border border-[#E5E7EB] bg-white focus:ring-1 focus:ring-[#042C53] outline-none"
                   >
-                    <option value="Passport">Passport</option>
-                    <option value="Transcript">Transcript</option>
-                    <option value="LanguageTest">Language Test</option>
+                    {requiredDocs.map(doc => (
+                      <option key={doc.value} value={doc.value}>{doc.label}</option>
+                    ))}
                     <option value="Other">Other Category</option>
                   </select>
 

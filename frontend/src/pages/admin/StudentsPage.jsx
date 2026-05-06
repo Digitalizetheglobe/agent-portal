@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Download, Flag, User, Mail, Phone,
   ChevronRight, FileText, CheckCircle2, AlertCircle,
-  X, MessageSquare, Bell
+  X, MessageSquare, Bell, ArrowUpRight
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { toast } from 'sonner';
@@ -24,10 +24,10 @@ const STAGE_PILLS = {
   'Converted': 'bg-[#E1F5EE] text-[#085041]'
 };
 
-const DOC_CATEGORIES = [
-  { label: 'Passport', value: 'Passport' },
-  { label: 'Academic Transcripts', value: 'Transcript' },
-  { label: 'IELTS Score Card', value: 'LanguageTest' }
+const DEFAULT_DOC_CATEGORIES = [
+  { label: 'Passport', value: 'Passport', mandatory: true },
+  { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
+  { label: 'IELTS Score Card', value: 'LanguageTest', mandatory: false }
 ];
 
 const StudentsPage = () => {
@@ -51,6 +51,10 @@ const StudentsPage = () => {
   const [docFilter, setDocFilter] = useState('all');
   const [curStage, setCurStage] = useState('all');
   const [selectedStudentId, setSelectedStudentId] = useState(null);
+
+  const hasFilters = useMemo(() => {
+    return searchQuery.trim() !== '' || eventFilter !== 'all' || countryFilter !== 'all' || docFilter !== 'all';
+  }, [searchQuery, eventFilter, countryFilter, docFilter]);
 
   useEffect(() => {
     fetchStudents();
@@ -134,14 +138,31 @@ const StudentsPage = () => {
   }, [students]);
 
   // Helper Functions
-  function getDocStatus(student) {
-    if (!student.documents || student.documents.length === 0) return 'missing';
-    const hasRejected = student.documents.some(d => d.status === 'rejected');
-    if (hasRejected) return 'missing';
-    const hasPending = student.documents.some(d => d.status === 'pending');
+  const getDocStatus = useCallback((student) => {
+    if (!student) return 'missing';
+    
+    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
+    const required = event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
+    
+    if (required.length === 0) return 'complete';
+
+    const uploadedDocs = student.documents || [];
+    
+    // Check if any mandatory document is missing or rejected
+    const mandatoryDocs = required.filter(d => d.mandatory !== false);
+    const hasMissingMandatory = mandatoryDocs.some(req => {
+      const doc = uploadedDocs.find(d => d.category === req.value);
+      return !doc || doc.status === 'rejected';
+    });
+
+    if (hasMissingMandatory) return 'missing';
+
+    // Check if any document is pending
+    const hasPending = uploadedDocs.some(d => d.status === 'pending');
     if (hasPending) return 'pending';
+
     return 'complete';
-  }
+  }, [events]);
 
   const getEventName = (eventId) => {
     const event = events.find(e => e.id === eventId || e._id === eventId);
@@ -182,6 +203,12 @@ const StudentsPage = () => {
     return students.find(s => (s.id === selectedStudentId || s._id === selectedStudentId));
   }, [students, selectedStudentId]);
 
+  const requiredDocs = useMemo(() => {
+    if (!selectedStudent) return [];
+    const event = events.find(e => e.id === selectedStudent.eventId || e._id === selectedStudent.eventId);
+    return event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
+  }, [selectedStudent, events]);
+
   if (loading && students.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -205,12 +232,12 @@ const StudentsPage = () => {
           <button
             className="flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
             onClick={() => toast.info('Export started...')}>
-            <Download size={14} /> Export ↗
+            <Download size={14} /> Export <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
           </button>
           <button 
             className="flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-[#FAC775] bg-[#FAEEDA] text-[#633806] transition-all hover:bg-[#FAC775]" 
             onClick={() => toast.info('Stale students flagged')}>
-            <Flag size={14} /> Flag stale ↗
+            <Flag size={14} /> Flag stale <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
           </button>
           <button
             className="flex items-center gap-2 text-xs font-bold h-10 px-5 rounded-lg bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10 transition-all active:scale-95"
@@ -221,21 +248,23 @@ const StudentsPage = () => {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-        {[
-          { label: 'Total Students', val: kpis.total, sub: eventFilter !== 'all' ? 'Event reach' : 'Global reach', color: '#0C447C' },
-          { label: 'Doc Missing', val: kpis.missingDocs, sub: 'Needs follow-up', color: '#791F1F' },
-          { label: 'Confirmed', val: kpis.confirmed, sub: `${kpis.confirmedPerc}% of current`, color: '#3C3489' },
-          { label: 'Attended', val: kpis.attended, sub: `${kpis.attendedPerc}% of current`, color: '#27500A' },
-          { label: 'Converted', val: kpis.converted, sub: `${kpis.convRate}% conv. rate`, color: '#085041' }
-        ].map((kpi, i) => (
-          <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm">
-            <div className="text-[10px] text-[#6B7280] mb-1.5 uppercase font-bold tracking-wider">{kpi.label}</div>
-            <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpi.val.toLocaleString()}</div>
-            <div className="text-[10px] mt-1 font-semibold" style={{ color: kpi.color }}>{kpi.sub}</div>
-          </div>
-        ))}
-      </div>
+      {hasFilters && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+          {[
+            { label: 'Total Students', val: kpis.total, sub: eventFilter !== 'all' ? 'Event reach' : 'Global reach', color: '#0C447C' },
+            { label: 'Doc Missing', val: kpis.missingDocs, sub: 'Needs follow-up', color: '#791F1F' },
+            { label: 'Confirmed', val: kpis.confirmed, sub: `${kpis.confirmedPerc}% of current`, color: '#3C3489' },
+            { label: 'Attended', val: kpis.attended, sub: `${kpis.attendedPerc}% of current`, color: '#27500A' },
+            { label: 'Converted', val: kpis.converted, sub: `${kpis.convRate}% conv. rate`, color: '#085041' }
+          ].map((kpi, i) => (
+            <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm">
+              <div className="text-[10px] text-[#6B7280] mb-1.5 uppercase font-bold tracking-wider">{kpi.label}</div>
+              <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpi.val.toLocaleString()}</div>
+              <div className="text-[10px] mt-1 font-semibold" style={{ color: kpi.color }}>{kpi.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Pipeline Strip */}
       {/* <div className="flex mb-6 rounded-xl overflow-hidden border border-[#E5E7EB] bg-white shadow-sm">
@@ -305,74 +334,86 @@ const StudentsPage = () => {
       </div>
 
       {/* Table Panel */}
-      <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm mb-6">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[22%]">Student</th>
-              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[15%]">Event</th>
-              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Country</th>
-              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[14%]">Pipeline Status</th>
-              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Documents</th>
-              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Agent</th>
-              <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[13%]">Registered</th>
-              <th className="w-[5%]"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredStudents.length === 0 ? (
-              <tr>
-                <td colSpan="8" className="text-center py-16 text-[#6B7280]">
-                  <User size={48} className="mx-auto mb-4 opacity-20" />
-                  <p>No students match the current filters</p>
-                </td>
+      {hasFilters ? (
+        <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[22%]">Student</th>
+                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[15%]">Event</th>
+                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Country</th>
+                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[14%]">Pipeline Status</th>
+                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Documents</th>
+                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Agent</th>
+                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[13%]">Registered</th>
+                <th className="w-[5%]"></th>
               </tr>
-            ) : (
-              filteredStudents.map(s => {
-                const docStatus = getDocStatus(s);
-                return (
-                  <tr
-                    key={s.id || s._id}
-                    className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors"
-                    onClick={() => setSelectedStudentId(s.id || s._id)}
-                  >
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-[#E6F1FB] text-[#0C447C]">
-                          {getInitials(getStudentName(s))}
+            </thead>
+            <tbody>
+              {filteredStudents.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-16 text-[#6B7280]">
+                    <User size={48} className="mx-auto mb-4 opacity-20" />
+                    <p>No students match the current filters</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredStudents.map(s => {
+                  const docStatus = getDocStatus(s);
+                  return (
+                    <tr
+                      key={s.id || s._id}
+                      className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors"
+                      onClick={() => setSelectedStudentId(s.id || s._id)}
+                    >
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-[#E6F1FB] text-[#0C447C]">
+                            {getInitials(getStudentName(s))}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-[#111827] truncate">{getStudentName(s)}</div>
+                            <div className="text-[10px] text-[#6B7280] truncate">{s.email || s.customFields?.email}</div>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-[#111827] truncate">{getStudentName(s)}</div>
-                          <div className="text-[10px] text-[#6B7280] truncate">{s.email || s.customFields?.email}</div>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs">{getEventName(s.eventId)}</td>
+                      <td className="px-4 py-3.5 text-xs">{s.country || s.customFields?.country || 'N/A'}</td>
+                      <td className="px-4 py-3.5">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
+                          {s.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {docStatus === 'complete' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#EAF3DE] text-[#27500A]">Complete</span>}
+                        {docStatus === 'missing' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FCEBEB] text-[#791F1F]">Missing</span>}
+                        {docStatus === 'pending' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FAEEDA] text-[#633806]">Pending</span>}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs">{getAgentName(s.agentId).split(' ')[0]}</td>
+                      <td className="px-4 py-3.5 text-xs">{new Date(s.createdAt || s.submittedAt).toLocaleDateString()}</td>
+                      <td className="px-4 py-3.5">
+                        <div className="w-7 h-7 rounded-lg border border-[#D1D5DB] flex items-center justify-center text-[#6B7280] hover:text-[#111827] hover:border-[#111827] transition-all">
+                          <ChevronRight size={14} />
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-xs">{getEventName(s.eventId)}</td>
-                    <td className="px-4 py-3.5 text-xs">{s.country || s.customFields?.country || 'N/A'}</td>
-                    <td className="px-4 py-3.5">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
-                        {s.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {docStatus === 'complete' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#EAF3DE] text-[#27500A]">Complete</span>}
-                      {docStatus === 'missing' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FCEBEB] text-[#791F1F]">Missing</span>}
-                      {docStatus === 'pending' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FAEEDA] text-[#633806]">Pending</span>}
-                    </td>
-                    <td className="px-4 py-3.5 text-xs">{getAgentName(s.agentId).split(' ')[0]}</td>
-                    <td className="px-4 py-3.5 text-xs">{new Date(s.createdAt || s.submittedAt).toLocaleDateString()}</td>
-                    <td className="px-4 py-3.5">
-                      <div className="w-7 h-7 rounded-lg border border-[#D1D5DB] flex items-center justify-center text-[#6B7280] hover:text-[#111827] hover:border-[#111827] transition-all">
-                        <ChevronRight size={14} />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-16 text-center shadow-sm mb-6 animate-in fade-in zoom-in-95 duration-500">
+          <div className="w-20 h-20 bg-[#F3F4F6] rounded-full flex items-center justify-center mx-auto mb-6">
+            <Search size={32} className="text-[#9CA3AF]" />
+          </div>
+          <h3 className="text-xl font-bold text-[#111827] font-['Outfit'] mb-2">Search Students</h3>
+          <p className="text-[#6B7280] max-w-sm mx-auto">
+            Use the search bar or filters above to find specific student records and view their registration statistics.
+          </p>
+        </div>
+      )}
 
       {/* Detail Panel */}
       {selectedStudent && (
@@ -458,15 +499,19 @@ const StudentsPage = () => {
 
             <div className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-4 font-['Outfit']">Documents</div>
             <div className="flex flex-col gap-2.5 mb-6">
-              {DOC_CATEGORIES.map(docType => {
+              {requiredDocs.map(docType => {
                 const doc = selectedStudent.documents?.find(d => d.category === docType.value);
+                const isMandatory = docType.mandatory !== false;
                 return (
                   <div key={docType.value} className="flex items-center gap-3 p-3 border border-[#F3F4F6] rounded-xl bg-white shadow-sm">
                     <div className="w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center text-[#6B7280]">
                       <FileText size={18} />
                     </div>
                     <div className="flex-1">
-                      <div className="text-[13px] font-bold text-[#111827]">{docType.label}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-[13px] font-bold text-[#111827]">{docType.label}</div>
+                        {isMandatory && <span className="text-[8px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Mandatory</span>}
+                      </div>
                       <div className="text-[10px] text-[#6B7280] mt-0.5">
                         {doc ? `Uploaded ${new Date(doc.uploadedAt).toLocaleDateString()}` : 'Not uploaded'}
                       </div>
@@ -509,12 +554,14 @@ const StudentsPage = () => {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-[#FCEBEB] text-[#791F1F]">Missing</span>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${isMandatory ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-gray-100 text-gray-400'}`}>
+                          {isMandatory ? 'Missing' : 'Optional'}
+                        </span>
                         <button 
                           className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" 
                           onClick={() => requestStudentDocument(selectedStudent.id || selectedStudent._id, docType.label)}
                         >
-                          Request ↗
+                          Request <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                         </button>
                       </div>
                     )}
@@ -525,17 +572,17 @@ const StudentsPage = () => {
 
             <div className="flex flex-wrap gap-2 pt-5 border-t border-[#F3F4F6]">
               <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => toast.success('Follow-up message sent')}>
-                <MessageSquare size={14} /> Message Student ↗
+                <MessageSquare size={14} /> Message Student <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
               </button>
               <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => toast.success('Agent notified')}>
-                <Bell size={14} /> Alert Agent ↗
+                <Bell size={14} /> Alert Agent <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
               </button>
               <div className="w-full flex gap-2">
                 <button className="flex-1 px-4 py-2 text-[11px] font-bold rounded-lg bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:opacity-90 transition-all" onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Attended')}>
                   Mark Attended
                 </button>
                 <button className="flex-1 px-4 py-2 text-[11px] font-bold rounded-lg bg-[#042C53] text-[#B5D4F4] hover:opacity-90 transition-all" onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Converted')}>
-                  Mark Converted ↗
+                  Mark Converted <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                 </button>
               </div>
               <button

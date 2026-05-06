@@ -75,6 +75,7 @@ exports.createEvent = async (req, res) => {
       location, 
       seatCapacity, 
       assignedAgents, 
+      requiredDocuments,
       formFields, 
       notifyAgents, 
       notificationMessage 
@@ -87,6 +88,7 @@ exports.createEvent = async (req, res) => {
       location,
       seatCapacity,
       assignedAgents: assignedAgents || [],
+      requiredDocuments: requiredDocuments || [],
       formFields: formFields || [],
       notifyAgents: notifyAgents !== false,
       notificationMessage: notificationMessage || '',
@@ -127,6 +129,7 @@ exports.updateEvent = async (req, res) => {
       location, 
       seatCapacity, 
       assignedAgents, 
+      requiredDocuments,
       formFields, 
       notifyAgents, 
       notificationMessage 
@@ -151,6 +154,7 @@ exports.updateEvent = async (req, res) => {
     if (location !== undefined) event.location = location;
     if (seatCapacity !== undefined) event.seatCapacity = seatCapacity;
     if (assignedAgents !== undefined) event.assignedAgents = assignedAgents;
+    if (requiredDocuments !== undefined) event.requiredDocuments = requiredDocuments;
     if (formFields !== undefined) event.formFields = formFields;
     if (notifyAgents !== undefined) event.notifyAgents = notifyAgents;
     if (notificationMessage !== undefined) event.notificationMessage = notificationMessage;

@@ -23,7 +23,9 @@ import AgentStudentsPage from "./pages/agent/AgentStudentsPage";
 
 import AdminInvoicesPage from "./pages/admin/AdminInvoicesPage";
 import AdminSupportPage from "./pages/admin/AdminSupportPage";
+import AgentReportPage from "./pages/admin/AgentReportPage";
 import SettingsPage from "./pages/shared/SettingsPage";
+import NotificationsPage from "./pages/shared/NotificationsPage";
 
 // Layouts
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -44,6 +46,7 @@ function App() {
                   <Route index element={<Navigate to="/admin/dashboard" replace />} />
                   <Route path="dashboard" element={<AdminDashboard />} />
                   <Route path="agents" element={<AgentsPage />} />
+                  <Route path="agents/:agentId/report" element={<AgentReportPage />} />
                   <Route path="events" element={<EventsPage />} />
                   <Route path="events/:eventId" element={<EventDetailsPage />} />
                   <Route path="students" element={<StudentsPage />} />
@@ -52,6 +55,7 @@ function App() {
                   <Route path="invoices" element={<AdminInvoicesPage />} />
                   <Route path="support" element={<AdminSupportPage />} />
                   <Route path="settings" element={<SettingsPage />} />
+                  <Route path="notifications" element={<NotificationsPage />} />
                 </Route>
 
                 {/* Agent Routes */}
@@ -66,6 +70,7 @@ function App() {
                   <Route path="invoices" element={<InvoicesPage />} />
                   <Route path="support" element={<SupportPage />} />
                   <Route path="settings" element={<SettingsPage />} />
+                  <Route path="notifications" element={<NotificationsPage />} />
                 </Route>
 
                 {/* Default Route */}

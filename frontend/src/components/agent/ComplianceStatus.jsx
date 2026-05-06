@@ -27,6 +27,8 @@ const ComplianceStatus = () => {
   const documents = user?.verificationDocuments || [];
   const isVerified = user?.isVerified;
 
+  if (isVerified) return null;
+
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {

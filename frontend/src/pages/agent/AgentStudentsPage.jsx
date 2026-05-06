@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Download, GraduationCap, Mail, Phone,
   ChevronRight, FileText, CheckCircle2, AlertCircle,
   X, MessageSquare, LayoutGrid, List, Filter,
-  ArrowRight, User, Calendar, MapPin, Upload
+  ArrowRight, User, Calendar, MapPin, Upload, ArrowUpRight
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -29,10 +29,10 @@ const STAGE_COLORS = {
   'Converted': '#1D9E75'
 };
 
-const DOC_CATEGORIES = [
-  { label: 'Passport', value: 'Passport' },
-  { label: 'Academic Transcripts', value: 'Transcript' },
-  { label: 'English Proficiency', value: 'LanguageTest' }
+const DEFAULT_DOC_CATEGORIES = [
+  { label: 'Passport', value: 'Passport', mandatory: true },
+  { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
+  { label: 'English Proficiency', value: 'LanguageTest', mandatory: false }
 ];
 
 const AgentStudentsPage = () => {
@@ -70,7 +70,8 @@ const AgentStudentsPage = () => {
     education: "Bachelor's degree",
     city: '',
     eventId: '',
-    notes: ''
+    notes: '',
+    customFields: {}
   });
 
   useEffect(() => {
@@ -94,12 +95,21 @@ const AgentStudentsPage = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name.startsWith('field_')) {
+      const fieldId = name.replace('field_', '');
+      setFormData(prev => ({
+        ...prev,
+        customFields: { ...prev.customFields, [fieldId]: value }
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const event = events.find(e => e.id === formData.eventId || e._id === formData.eventId);
       await addStudent({
         ...formData,
         agentId: user?.id,
@@ -117,23 +127,42 @@ const AgentStudentsPage = () => {
         education: "Bachelor's degree",
         city: '',
         eventId: assignedEvents[0]?.id || assignedEvents[0]?._id || '',
-        notes: ''
+        notes: '',
+        customFields: {}
       });
     } catch (error) {
       toast.error('Failed to register student');
     }
   };
 
-  const getStudentName = (s) => {
-    if (!s) return 'N/A';
-    const name = s.name || s.fullName || (s.firstName && s.lastName ? `${s.firstName} ${s.lastName}` : (s.firstName || s.lastName || null));
-    if (name) return name;
-
-    const cf = s.customFields || {};
-    const cfName = cf.name || cf.fullName || (cf.firstName && cf.lastName ? `${cf.firstName} ${cf.lastName}` : (cf.firstName || cf.lastName || null));
-    if (cfName) return cfName;
-
+  const getStudentValue = (student, key, fallbackLabel) => {
+    if (!student) return 'N/A';
+    
+    // Direct property
+    if (student[key] && student[key] !== 'Not specified') return student[key];
+    
+    // Custom field by exact key
+    if (student.customFields?.[key]) return student.customFields[key];
+    
+    // Custom field by label lookup
+    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
+    if (event?.formFields) {
+      const field = event.formFields.find(f => 
+        f.label.toLowerCase().trim() === fallbackLabel.toLowerCase().trim() ||
+        f.label.toLowerCase().includes(fallbackLabel.toLowerCase())
+      );
+      if (field) {
+        const val = student.customFields?.[field.id] || student.customFields?.[`field_${field.id}`];
+        if (val) return val;
+      }
+    }
+    
     return 'N/A';
+  };
+
+  const getStudentName = (s) => {
+    const val = getStudentValue(s, 'name', 'Full Name');
+    return val === 'N/A' ? 'Unknown Student' : val;
   };
 
   const getInitials = (name) => {
@@ -141,14 +170,31 @@ const AgentStudentsPage = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  function getDocStatus(student) {
-    if (!student.documents || student.documents.length === 0) return 'missing';
-    const hasRejected = student.documents.some(d => d.status === 'rejected');
-    if (hasRejected) return 'missing';
-    const hasPending = student.documents.some(d => d.status === 'pending');
+  const getDocStatus = useCallback((student) => {
+    if (!student) return 'missing';
+    
+    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
+    const required = event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
+    
+    if (required.length === 0) return 'complete';
+
+    const uploadedDocs = student.documents || [];
+    
+    // Check if any mandatory document is missing or rejected
+    const mandatoryDocs = required.filter(d => d.mandatory !== false);
+    const hasMissingMandatory = mandatoryDocs.some(req => {
+      const doc = uploadedDocs.find(d => d.category === req.value);
+      return !doc || doc.status === 'rejected';
+    });
+
+    if (hasMissingMandatory) return 'missing';
+
+    // Check if any document is pending
+    const hasPending = uploadedDocs.some(d => d.status === 'pending');
     if (hasPending) return 'pending';
+
     return 'complete';
-  }
+  }, [events]);
 
   const getEventName = (eventId) => {
     const event = events.find(e => e.id === eventId || e._id === eventId);
@@ -220,6 +266,12 @@ const AgentStudentsPage = () => {
     return myStudents.find(s => (s.id === selectedStudentId || s._id === selectedStudentId));
   }, [myStudents, selectedStudentId]);
 
+  const requiredDocs = useMemo(() => {
+    if (!selectedStudent) return [];
+    const event = events.find(e => e.id === selectedStudent.eventId || e._id === selectedStudent.eventId);
+    return event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
+  }, [selectedStudent, events]);
+
   if (loading && myStudents.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -244,7 +296,7 @@ const AgentStudentsPage = () => {
             className="h-10 text-xs font-bold border-gray-200"
             onClick={() => toast.info('Exporting student list...')}
           >
-            <Download size={14} className="mr-2" /> Export ↗
+            <Download size={14} className="mr-2" /> Export <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
           </Button>
           <Button
             className="h-10 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10"
@@ -484,6 +536,7 @@ const AgentStudentsPage = () => {
             <form onSubmit={handleSubmit}>
               <div className="p-6 max-h-[70vh] overflow-y-auto bg-[#F9FAFB]">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Standard Fields */}
                   <div className="md:col-span-2 space-y-1.5">
                     <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Full Name (as per ID)</label>
                     <input
@@ -514,236 +567,65 @@ const AgentStudentsPage = () => {
                       name="country" value={formData.country} onChange={handleInputChange}
                       className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white appearance-none"
                     >
-
-                      <option value="">Select a country</option>
-                      <option value="Afghanistan">Afghanistan</option>
-                      <option value="Albania">Albania</option>
-                      <option value="Algeria">Algeria</option>
-                      <option value="Andorra">Andorra</option>
-                      <option value="Angola">Angola</option>
-                      <option value="Antigua and Barbuda">Antigua and Barbuda</option>
-                      <option value="Argentina">Argentina</option>
-                      <option value="Armenia">Armenia</option>
-                      <option value="Australia">Australia</option>
-                      <option value="Austria">Austria</option>
-                      <option value="Azerbaijan">Azerbaijan</option>
-                      <option value="Bahamas">Bahamas</option>
-                      <option value="Bahrain">Bahrain</option>
-                      <option value="Bangladesh">Bangladesh</option>
-                      <option value="Barbados">Barbados</option>
-                      <option value="Belarus">Belarus</option>
-                      <option value="Belgium">Belgium</option>
-                      <option value="Belize">Belize</option>
-                      <option value="Benin">Benin</option>
-                      <option value="Bhutan">Bhutan</option>
-                      <option value="Bolivia">Bolivia</option>
-                      <option value="Bosnia and Herzegovina">Bosnia and Herzegovina</option>
-                      <option value="Botswana">Botswana</option>
-                      <option value="Brazil">Brazil</option>
-                      <option value="Brunei">Brunei</option>
-                      <option value="Bulgaria">Bulgaria</option>
-                      <option value="Burkina Faso">Burkina Faso</option>
-                      <option value="Burundi">Burundi</option>
-                      <option value="Cabo Verde">Cabo Verde</option>
-                      <option value="Cambodia">Cambodia</option>
-                      <option value="Cameroon">Cameroon</option>
-                      <option value="Canada">Canada</option>
-                      <option value="Central African Republic">Central African Republic</option>
-                      <option value="Chad">Chad</option>
-                      <option value="Chile">Chile</option>
-                      <option value="China">China</option>
-                      <option value="Colombia">Colombia</option>
-                      <option value="Comoros">Comoros</option>
-                      <option value="Congo (Congo-Brazzaville)">Congo (Congo-Brazzaville)</option>
-                      <option value="Congo (DRC)">Congo (DRC)</option>
-                      <option value="Costa Rica">Costa Rica</option>
-                      <option value="Croatia">Croatia</option>
-                      <option value="Cuba">Cuba</option>
-                      <option value="Cyprus">Cyprus</option>
-                      <option value="Czechia (Czech Republic)">Czechia (Czech Republic)</option>
-                      <option value="Denmark">Denmark</option>
-                      <option value="Djibouti">Djibouti</option>
-                      <option value="Dominica">Dominica</option>
-                      <option value="Dominican Republic">Dominican Republic</option>
-                      <option value="Ecuador">Ecuador</option>
-                      <option value="Egypt">Egypt</option>
-                      <option value="El Salvador">El Salvador</option>
-                      <option value="Equatorial Guinea">Equatorial Guinea</option>
-                      <option value="Eritrea">Eritrea</option>
-                      <option value="Estonia">Estonia</option>
-                      <option value="Eswatini">Eswatini</option>
-                      <option value="Ethiopia">Ethiopia</option>
-                      <option value="Fiji">Fiji</option>
-                      <option value="Finland">Finland</option>
-                      <option value="France">France</option>
-                      <option value="Gabon">Gabon</option>
-                      <option value="Gambia">Gambia</option>
-                      <option value="Georgia">Georgia</option>
-                      <option value="Germany">Germany</option>
-                      <option value="Ghana">Ghana</option>
-                      <option value="Greece">Greece</option>
-                      <option value="Grenada">Grenada</option>
-                      <option value="Guatemala">Guatemala</option>
-                      <option value="Guinea">Guinea</option>
-                      <option value="Guinea-Bissau">Guinea-Bissau</option>
-                      <option value="Guyana">Guyana</option>
-                      <option value="Haiti">Haiti</option>
-                      <option value="Honduras">Honduras</option>
-                      <option value="Hungary">Hungary</option>
-                      <option value="Iceland">Iceland</option>
-                      <option value="India">India</option>
-                      <option value="Indonesia">Indonesia</option>
-                      <option value="Iran">Iran</option>
-                      <option value="Iraq">Iraq</option>
-                      <option value="Ireland">Ireland</option>
-                      <option value="Israel">Israel</option>
-                      <option value="Italy">Italy</option>
-                      <option value="Jamaica">Jamaica</option>
-                      <option value="Japan">Japan</option>
-                      <option value="Jordan">Jordan</option>
-                      <option value="Kazakhstan">Kazakhstan</option>
-                      <option value="Kenya">Kenya</option>
-                      <option value="Kiribati">Kiribati</option>
-                      <option value="Kosovo">Kosovo</option>
-                      <option value="Kuwait">Kuwait</option>
-                      <option value="Kyrgyzstan">Kyrgyzstan</option>
-                      <option value="Laos">Laos</option>
-                      <option value="Latvia">Latvia</option>
-                      <option value="Lebanon">Lebanon</option>
-                      <option value="Lesotho">Lesotho</option>
-                      <option value="Liberia">Liberia</option>
-                      <option value="Libya">Libya</option>
-                      <option value="Liechtenstein">Liechtenstein</option>
-                      <option value="Lithuania">Lithuania</option>
-                      <option value="Luxembourg">Luxembourg</option>
-                      <option value="Madagascar">Madagascar</option>
-                      <option value="Malawi">Malawi</option>
-                      <option value="Malaysia">Malaysia</option>
-                      <option value="Maldives">Maldives</option>
-                      <option value="Mali">Mali</option>
-                      <option value="Malta">Malta</option>
-                      <option value="Marshall Islands">Marshall Islands</option>
-                      <option value="Mauritania">Mauritania</option>
-                      <option value="Mauritius">Mauritius</option>
-                      <option value="Mexico">Mexico</option>
-                      <option value="Micronesia">Micronesia</option>
-                      <option value="Moldova">Moldova</option>
-                      <option value="Monaco">Monaco</option>
-                      <option value="Mongolia">Mongolia</option>
-                      <option value="Montenegro">Montenegro</option>
-                      <option value="Morocco">Morocco</option>
-                      <option value="Mozambique">Mozambique</option>
-                      <option value="Myanmar">Myanmar</option>
-                      <option value="Namibia">Namibia</option>
-                      <option value="Nauru">Nauru</option>
-                      <option value="Nepal">Nepal</option>
-                      <option value="Netherlands">Netherlands</option>
-                      <option value="New Zealand">New Zealand</option>
-                      <option value="Nicaragua">Nicaragua</option>
-                      <option value="Niger">Niger</option>
-                      <option value="Nigeria">Nigeria</option>
-                      <option value="North Korea">North Korea</option>
-                      <option value="North Macedonia">North Macedonia</option>
-                      <option value="Norway">Norway</option>
-                      <option value="Oman">Oman</option>
-                      <option value="Pakistan">Pakistan</option>
-                      <option value="Palau">Palau</option>
-                      <option value="Palestine">Palestine</option>
-                      <option value="Panama">Panama</option>
-                      <option value="Papua New Guinea">Papua New Guinea</option>
-                      <option value="Paraguay">Paraguay</option>
-                      <option value="Peru">Peru</option>
-                      <option value="Philippines">Philippines</option>
-                      <option value="Poland">Poland</option>
-                      <option value="Portugal">Portugal</option>
-                      <option value="Qatar">Qatar</option>
-                      <option value="Romania">Romania</option>
-                      <option value="Russia">Russia</option>
-                      <option value="Rwanda">Rwanda</option>
-                      <option value="Saint Kitts and Nevis">Saint Kitts and Nevis</option>
-                      <option value="Saint Lucia">Saint Lucia</option>
-                      <option value="Saint Vincent and the Grenadines">Saint Vincent and the Grenadines</option>
-                      <option value="Samoa">Samoa</option>
-                      <option value="San Marino">San Marino</option>
-                      <option value="Sao Tome and Principe">Sao Tome and Principe</option>
-                      <option value="Saudi Arabia">Saudi Arabia</option>
-                      <option value="Senegal">Senegal</option>
-                      <option value="Serbia">Serbia</option>
-                      <option value="Seychelles">Seychelles</option>
-                      <option value="Sierra Leone">Sierra Leone</option>
-                      <option value="Singapore">Singapore</option>
-                      <option value="Slovakia">Slovakia</option>
-                      <option value="Slovenia">Slovenia</option>
-                      <option value="Solomon Islands">Solomon Islands</option>
-                      <option value="Somalia">Somalia</option>
-                      <option value="South Africa">South Africa</option>
-                      <option value="South Korea">South Korea</option>
-                      <option value="South Sudan">South Sudan</option>
-                      <option value="Spain">Spain</option>
-                      <option value="Sri Lanka">Sri Lanka</option>
-                      <option value="Sudan">Sudan</option>
-                      <option value="Suriname">Suriname</option>
-                      <option value="Sweden">Sweden</option>
-                      <option value="Switzerland">Switzerland</option>
-                      <option value="Syria">Syria</option>
-                      <option value="Taiwan">Taiwan</option>
-                      <option value="Tajikistan">Tajikistan</option>
-                      <option value="Tanzania">Tanzania</option>
-                      <option value="Thailand">Thailand</option>
-                      <option value="Timor-Leste">Timor-Leste</option>
-                      <option value="Togo">Togo</option>
-                      <option value="Tonga">Tonga</option>
-                      <option value="Trinidad and Tobago">Trinidad and Tobago</option>
-                      <option value="Tunisia">Tunisia</option>
-                      <option value="Turkey">Turkey</option>
-                      <option value="Turkmenistan">Turkmenistan</option>
-                      <option value="Tuvalu">Tuvalu</option>
-                      <option value="Uganda">Uganda</option>
-                      <option value="Ukraine">Ukraine</option>
-                      <option value="United Arab Emirates">United Arab Emirates</option>
                       <option value="United Kingdom">United Kingdom</option>
-                      <option value="United States">United States</option>
-                      <option value="Uruguay">Uruguay</option>
-                      <option value="Uzbekistan">Uzbekistan</option>
-                      <option value="Vanuatu">Vanuatu</option>
-                      <option value="Vatican City">Vatican City</option>
-                      <option value="Venezuela">Venezuela</option>
-                      <option value="Vietnam">Vietnam</option>
-                      <option value="Yemen">Yemen</option>
-                      <option value="Zambia">Zambia</option>
-                      <option value="Zimbabwe">Zimbabwe</option>
-
-
+                      <option value="Canada">Canada</option>
+                      <option value="USA">USA</option>
+                      <option value="Australia">Australia</option>
+                      <option value="Germany">Germany</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Course Interest</label>
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">City</label>
                     <input
-                      type="text" name="courseInterested" value={formData.courseInterested} onChange={handleInputChange}
-                      placeholder="e.g. MBA, MS Computer Science"
+                      type="text" required name="city" value={formData.city} onChange={handleInputChange}
+                      placeholder="e.g. Delhi"
                       className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Highest Education</label>
-                    <select
-                      name="education" value={formData.education} onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white appearance-none"
-                    >
-                      <option>HSC / 12th</option>
-                      <option>Bachelor's degree</option>
-                      <option>Master's degree</option>
-                      <option>Diploma</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Current City</label>
-                    <input
-                      type="text" name="city" value={formData.city} onChange={handleInputChange}
-                      placeholder="e.g. Pune"
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
-                    />
-                  </div>
+
+                  {/* Custom Event Fields */}
+                  {assignedEvents.find(e => e.id === formData.eventId || e._id === formData.eventId)?.formFields?.map(field => (
+                    <div key={field.id} className={cn("space-y-1.5", field.type === 'paragraph' ? "md:col-span-2" : "")}>
+                      <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                        {field.label} {field.required && <span className="text-red-500">*</span>}
+                      </label>
+                      {field.type === 'select' ? (
+                        <select
+                          name={`field_${field.id}`}
+                          value={formData.customFields[field.id] || ''}
+                          onChange={handleInputChange}
+                          required={field.required}
+                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white appearance-none"
+                        >
+                          <option value="">Select option</option>
+                          {field.options?.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : field.type === 'paragraph' ? (
+                        <textarea
+                          name={`field_${field.id}`}
+                          value={formData.customFields[field.id] || ''}
+                          onChange={handleInputChange}
+                          required={field.required}
+                          placeholder={field.placeholder}
+                          rows={3}
+                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
+                        />
+                      ) : (
+                        <input
+                          type={field.type === 'date' ? 'date' : 'text'}
+                          name={`field_${field.id}`}
+                          value={formData.customFields[field.id] || ''}
+                          onChange={handleInputChange}
+                          required={field.required}
+                          placeholder={field.placeholder}
+                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
+                        />
+                      )}
+                    </div>
+                  ))}
+
                   <div className="md:col-span-2 space-y-1.5">
                     <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Select Event</label>
                     <select
@@ -806,9 +688,9 @@ const AgentStudentsPage = () => {
                   <div>
                     <h3 className="text-2xl font-bold text-[#111827] font-['Outfit']">{getStudentName(selectedStudent)}</h3>
                     <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-gray-500 font-medium">
-                      <span className="flex items-center gap-1.5"><Mail size={14} /> {selectedStudent.email || selectedStudent.customFields?.email || 'No email provided'}</span>
+                      <span className="flex items-center gap-1.5"><Mail size={14} /> {getStudentValue(selectedStudent, 'email', 'Email Address')}</span>
                       <span className="text-gray-300">•</span>
-                      <span className="flex items-center gap-1.5"><Phone size={14} /> {selectedStudent.phone || selectedStudent.customFields?.phone || 'No phone provided'}</span>
+                      <span className="flex items-center gap-1.5"><Phone size={14} /> {getStudentValue(selectedStudent, 'phone', 'Phone Number')}</span>
                     </div>
                   </div>
                 </div>
@@ -875,10 +757,10 @@ const AgentStudentsPage = () => {
                 <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-[0.2em] mb-6">Metadata & Context</h4>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-6">
                   {[
-                    { label: 'Preferred Country', value: selectedStudent.country || selectedStudent.customFields?.country || 'N/A' },
-                    { label: 'Course Interest', value: selectedStudent.courseInterested || selectedStudent.customFields?.courseInterested || 'N/A' },
-                    { label: 'Education Level', value: selectedStudent.education || selectedStudent.customFields?.education || 'N/A' },
-                    { label: 'Registered City', value: selectedStudent.city || selectedStudent.customFields?.city || 'N/A' },
+                    { label: 'Preferred Country', value: getStudentValue(selectedStudent, 'country', 'Country of Interest') },
+                    { label: 'Course Interest', value: getStudentValue(selectedStudent, 'courseInterested', 'Course Interested') },
+                    { label: 'Education Level', value: getStudentValue(selectedStudent, 'education', 'Highest Qualification') },
+                    { label: 'Registered City', value: getStudentValue(selectedStudent, 'city', 'City') },
                     { label: 'Assigned Event', value: getEventName(selectedStudent.eventId) },
                     { label: 'Onboarding Date', value: new Date(selectedStudent.createdAt || selectedStudent.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) }
                   ].map((item, i) => (
@@ -894,18 +776,22 @@ const AgentStudentsPage = () => {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Required Documents</h4>
-                  <Badge variant="outline" className="text-[9px] font-bold border-gray-200">3 TOTAL</Badge>
+                  <Badge variant="outline" className="text-[9px] font-bold border-gray-200">{requiredDocs.length} TOTAL</Badge>
                 </div>
                 <div className="space-y-3">
-                  {DOC_CATEGORIES.map(docType => {
+                  {requiredDocs.map(docType => {
                     const doc = selectedStudent.documents?.find(d => d.category === docType.value);
+                    const isMandatory = docType.mandatory !== false;
                     return (
                       <div key={docType.value} className="flex items-center gap-4 p-4 border border-gray-100 rounded-2xl bg-[#F9FAFB] hover:bg-white hover:border-[#042C53]/20 hover:shadow-sm transition-all group">
                         <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 group-hover:text-[#042C53] transition-colors">
                           <FileText size={20} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-bold text-[#111827]">{docType.label}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-[13px] font-bold text-[#111827]">{docType.label}</p>
+                            {isMandatory && <span className="text-[8px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Mandatory</span>}
+                          </div>
                           <p className="text-[10px] text-gray-500 font-medium mt-0.5">
                             {doc ? `Uploaded on ${new Date(doc.uploadedAt).toLocaleDateString()}` : 'No file uploaded yet'}
                           </p>
@@ -929,7 +815,9 @@ const AgentStudentsPage = () => {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-[#FCEBEB] text-[#791F1F]">Missing</span>
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${isMandatory ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-gray-100 text-gray-400'}`}>
+                              {isMandatory ? 'Missing' : 'Optional'}
+                            </span>
                             <Button
                               variant="outline"
                               size="sm"
@@ -976,7 +864,7 @@ const AgentStudentsPage = () => {
                     className="h-11 text-xs font-bold bg-[#042C53] text-white hover:bg-[#0C447C]"
                     onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Converted')}
                   >
-                    Mark Converted ↗
+                    Mark Converted <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                   </Button>
                 </div>
               </div>

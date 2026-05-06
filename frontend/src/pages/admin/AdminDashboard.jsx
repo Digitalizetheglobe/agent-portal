@@ -11,7 +11,8 @@ import {
   Ticket,
   FileText,
   Filter,
-  ChevronDown
+  ChevronDown,
+  ArrowUpRight
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -82,33 +83,35 @@ const AdminDashboard = () => {
       bgColor: '#EEEDFE',
       trend: 'up'
     },
+
     {
-      title: 'Total students',
-      value: filteredStudents.length.toLocaleString(),
-      subValue: `+${filteredStudents.length} in selected range`,
-      icon: GraduationCap,
-      color: '#185FA5',
+      title: 'Total Events',
+      value: events.length.toLocaleString(),
+      subValue: `${events.filter(e => new Date(e.date) >= new Date()).length} upcoming sessions`,
+      icon: Calendar,
+      color: '#B25E09',
+      bgColor: '#FFF7ED',
+      trend: 'up'
+    },
+    {
+      title: 'Events Completed',
+      value: events.filter(e => new Date(e.date) < new Date()).length.toLocaleString(),
+      subValue: 'Past event sessions',
+      icon: Ticket,
+      color: '#3C3489',
+      bgColor: '#EEEDFE',
+      trend: 'up'
+    },
+    {
+      title: 'Events Live/Upcoming',
+      value: events.filter(e => new Date(e.date) >= new Date()).length.toLocaleString(),
+      subValue: 'Active & scheduled',
+      icon: Calendar,
+      color: '#0C447C',
       bgColor: '#E6F1FB',
       trend: 'up'
-    },
-    {
-      title: 'Revenue (Period)',
-      value: revenueDisplay,
-      subValue: `${convertedStudents.length} conversions`,
-      icon: DollarSign,
-      color: '#3B6D11',
-      bgColor: '#EAF3DE',
-      trend: 'up'
-    },
-    {
-      title: 'Avg seat fill rate',
-      value: `${avgFillRate}%`,
-      subValue: `${avgFillRate > 70 ? 'Above' : 'Below'} period target`,
-      icon: BarChart3,
-      color: '#854F0B',
-      bgColor: '#FAEEDA',
-      trend: avgFillRate > 70 ? 'up' : 'dn'
     }
+
   ];
 
   // Adaptive Chart Logic: Show days for 1 week, months for others
@@ -262,7 +265,7 @@ const AdminDashboard = () => {
           <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 px-7">
             <div className="flex items-center justify-between mb-5">
               <span className="text-lg font-medium text-slate-900 font-['Outfit']">Registration Performance</span>
-              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">By agent ↗</span>
+              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">By agent <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
             </div>
             <div className="flex gap-4 mb-4">
               <span className="flex items-center gap-1.5 text-[12px] text-slate-500 font-medium">
@@ -292,7 +295,7 @@ const AdminDashboard = () => {
           <div className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 px-7">
             <div className="flex items-center justify-between mb-5">
               <span className="text-lg font-medium text-slate-900 font-['Outfit']">Student Status</span>
-              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details ↗</span>
+              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
             </div>
             <div className="flex flex-col items-center gap-6">
               <div className="w-full h-[140px] relative shrink-0">
@@ -324,7 +327,7 @@ const AdminDashboard = () => {
         <div className="bg-white border border-slate-200 rounded-xl p-6 px-7 mb-6">
           <div className="flex items-center justify-between mb-5">
             <span className="text-lg font-medium text-slate-900 font-['Outfit']">Top Performing Agents</span>
-            <Link to="/admin/agents" className="text-[12px] text-slate-500 hover:text-slate-900 font-medium">View all agents ↗</Link>
+            <Link to="/admin/agents" className="text-[12px] text-slate-500 hover:text-slate-900 font-medium">View all agents <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[12px]">
@@ -373,7 +376,7 @@ const AdminDashboard = () => {
                         </span>
                       </td>
                       <td className="py-4 px-3 text-right">
-                        <Link to={`/admin/agents?id=${agent.id}`} className="text-slate-400 font-medium text-xs hover:text-slate-900">View ↗</Link>
+                        <Link to={`/admin/agents?id=${agent.id}`} className="text-slate-400 font-medium text-xs hover:text-slate-900">View <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
                       </td>
                     </tr>
                   );
@@ -388,7 +391,7 @@ const AdminDashboard = () => {
           <div className="bg-white border border-slate-200 rounded-xl p-6 px-7">
             <div className="flex items-center justify-between mb-5">
               <span className="text-lg font-medium text-slate-900 font-['Outfit']">Event Seat Occupancy</span>
-              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Analytics ↗</span>
+              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Analytics <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
             </div>
             <div className="space-y-4 mb-6">
               {events.slice(0, 5).map((event, idx) => {
@@ -417,7 +420,7 @@ const AdminDashboard = () => {
           <div className="bg-white border border-slate-200 rounded-xl p-6 px-7">
             <div className="flex items-center justify-between mb-5">
               <span className="text-lg font-medium text-slate-900 font-['Outfit']">Invoice Queue</span>
-              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Review All ↗</span>
+              <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Review All <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
             </div>
             <div className="divide-y divide-slate-100 mb-6">
               {invoices.length > 0 ? invoices.slice(0, 5).map((inv) => (
@@ -450,7 +453,7 @@ const AdminDashboard = () => {
         <div className="bg-white border border-slate-200 rounded-xl p-6 px-7 mb-6">
           <div className="flex items-center justify-between mb-5">
             <span className="text-lg font-medium text-slate-900 font-['Outfit']">System Helpdesk</span>
-            <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Manage ↗</span>
+            <span className="text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Manage <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
           </div>
           <div className="divide-y divide-slate-100">
             {tickets.length > 0 ? tickets.slice(0, 4).map((ticket) => (

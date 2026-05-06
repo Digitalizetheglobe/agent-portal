@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const Event = require('../models/Event');
 const { sendEmail, templates } = require('../utils/email');
-const { putObject, generateStoragePath } = require('../utils/storage');
+const { putObject, getObject, generateStoragePath } = require('../utils/storage');
 const { v4: uuidv4 } = require('uuid');
 const { createNotification } = require('./notificationController');
 
@@ -333,6 +333,54 @@ exports.verifyAgent = async (req, res) => {
     res.status(200).json(agent.toJSON());
   } catch (error) {
     console.error('Verify agent error:', error);
+    res.status(500).json({
+      success: false,
+      detail: 'Server error'
+    });
+  }
+};
+
+// @desc    Download verification document
+// @route   GET /api/agents/:id/documents/:docId
+// @access  Private (Admin or Agent themselves)
+exports.downloadVerificationDocument = async (req, res) => {
+  try {
+    const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
+
+    if (!agent) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Agent not found'
+      });
+    }
+
+    // Check access (Admins can download all, agents only their own)
+    if (req.user.role === 'agent' && agent._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        detail: 'Access denied'
+      });
+    }
+
+    // Find document
+    const doc = agent.verificationDocuments.id(req.params.docId);
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Document not found'
+      });
+    }
+
+    // Download from storage
+    const { data, contentType } = await getObject(doc.fileUrl);
+
+    res.setHeader('Content-Type', contentType);
+    const disposition = req.query.inline === 'true' ? 'inline' : 'attachment';
+    res.setHeader('Content-Disposition', `${disposition}; filename="${doc.fileName}"`);
+    res.send(Buffer.from(data));
+  } catch (error) {
+    console.error('Download agent document error:', error);
     res.status(500).json({
       success: false,
       detail: 'Server error'

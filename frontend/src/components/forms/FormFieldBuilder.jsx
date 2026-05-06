@@ -9,7 +9,12 @@ import {
   RadioIcon, 
   Calendar, 
   ChevronDown,
-  X
+  X,
+  Zap,
+  Phone,
+  Settings2,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -23,6 +28,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +54,7 @@ const fieldTypeIcons = {
   radio: RadioIcon,
   date: Calendar,
   select: ChevronDown,
+  phone: Phone,
 };
 
 const fieldTypeLabels = {
@@ -49,40 +63,166 @@ const fieldTypeLabels = {
   radio: 'Radio',
   date: 'Date',
   select: 'Select',
+  phone: 'Phone',
 };
+
+const PRESET_FIELDS = [
+  {
+    label: 'Full Name',
+    type: 'text',
+    required: true,
+    placeholder: 'Enter full name',
+  },
+  {
+    label: 'Email Address',
+    type: 'text',
+    required: true,
+    placeholder: 'Enter email address',
+    regex: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$',
+    regexError: 'Please enter a valid email address',
+  },
+  {
+    label: 'Phone Number',
+    type: 'phone',
+    required: true,
+    placeholder: '+1 123 456 7890',
+    regex: '^\\+?[1-9]\\d{1,14}$',
+    regexError: 'Please enter a valid international phone number with country code',
+  },
+  {
+    label: 'International Phone',
+    type: 'phone',
+    required: true,
+    placeholder: '123 456 7890',
+    useCountryCode: true,
+    defaultCountry: 'IN',
+    regex: '^[0-9]{10,15}$',
+    regexError: 'Please enter a valid phone number',
+  },
+  {
+    label: 'Date of Birth',
+    type: 'date',
+    required: true,
+  },
+  {
+    label: 'Gender',
+    type: 'select',
+    required: true,
+    options: ['Male', 'Female', 'Other'],
+  },
+  {
+    label: 'Address',
+    type: 'paragraph',
+    required: true,
+    placeholder: 'Enter complete address',
+  },
+  {
+    label: 'Passport Number',
+    type: 'text',
+    required: false,
+    placeholder: 'Enter passport number',
+  },
+  {
+    label: 'Country of Interest',
+    type: 'select',
+    required: true,
+    options: ['UK', 'USA', 'Canada', 'Australia', 'Germany', 'France'],
+  },
+  {
+    label: 'Preferred Intake',
+    type: 'select',
+    required: true,
+    options: ['September 2024', 'January 2025', 'May 2025', 'September 2025'],
+  },
+  {
+    label: 'Highest Qualification',
+    type: 'select',
+    required: true,
+    options: ['High School', 'Bachelor\'s Degree', 'Master\'s Degree', 'PhD'],
+  },
+  {
+    label: 'English Proficiency',
+    type: 'select',
+    required: false,
+    options: ['IELTS', 'TOEFL', 'PTE', 'Duolingo', 'None'],
+  },
+  {
+    label: 'Work Experience',
+    type: 'paragraph',
+    required: false,
+    placeholder: 'Describe your work experience',
+  }
+];
 
 const FormFieldBuilder = ({ value = [], onChange, className }) => {
   const [newFieldDialogOpen, setNewFieldDialogOpen] = useState(false);
+  const [editingFieldId, setEditingFieldId] = useState(null);
   const [newField, setNewField] = useState({
     label: '',
     type: 'text',
     required: false,
     placeholder: '',
+    useCountryCode: false,
+    defaultCountry: 'US',
     options: [''],
     regex: '',
     regexError: 'Invalid format'
   });
 
+  const openEditDialog = (field) => {
+    setEditingFieldId(field.id);
+    setNewField({
+      label: field.label,
+      type: field.type,
+      required: field.required,
+      placeholder: field.placeholder || '',
+      useCountryCode: field.useCountryCode || false,
+      defaultCountry: field.defaultCountry || 'US',
+      options: field.options.length > 0 ? field.options : [''],
+      regex: field.regex || '',
+      regexError: field.regexError || 'Invalid format'
+    });
+    setNewFieldDialogOpen(true);
+  };
+
   const addField = () => {
     if (!newField.label.trim()) return;
 
-    const field = {
-      id: `field_${Date.now()}`,
-      label: newField.label.trim(),
-      type: newField.type,
-      required: newField.required,
-      placeholder: newField.placeholder.trim(),
-      options: (newField.type === 'radio' || newField.type === 'select') 
-        ? newField.options.filter(opt => opt.trim()).length > 0 
+    if (editingFieldId) {
+      updateField(editingFieldId, {
+        label: newField.label.trim(),
+        type: newField.type,
+        required: newField.required,
+        placeholder: newField.placeholder.trim(),
+        useCountryCode: newField.useCountryCode,
+        defaultCountry: newField.defaultCountry,
+        options: (newField.type === 'radio' || newField.type === 'select') 
           ? newField.options.filter(opt => opt.trim()) 
-          : ['Option 1', 'Option 2']
-        : [],
-      regex: newField.regex.trim(),
-      regexError: newField.regexError.trim() || 'Invalid format',
-      order: value.length
-    };
-
-    onChange([...value, field]);
+          : [],
+        regex: newField.regex.trim(),
+        regexError: newField.regexError.trim() || 'Invalid format',
+      });
+      setEditingFieldId(null);
+    } else {
+      const field = {
+        id: `field_${Date.now()}`,
+        label: newField.label.trim(),
+        type: newField.type,
+        required: newField.required,
+        placeholder: newField.placeholder.trim(),
+        useCountryCode: newField.useCountryCode,
+        defaultCountry: newField.defaultCountry,
+        options: (newField.type === 'radio' || newField.type === 'select') 
+          ? newField.options.filter(opt => opt.trim()).length > 0 
+            ? newField.options.filter(opt => opt.trim()) 
+            : ['Option 1', 'Option 2']
+          : [],
+        regex: newField.regex.trim(),
+        regexError: newField.regexError.trim() || 'Invalid format',
+        order: value.length
+      };
+      onChange([...value, field]);
+    }
     
     // Reset form
     setNewField({
@@ -90,6 +230,8 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
       type: 'text',
       required: false,
       placeholder: '',
+      useCountryCode: false,
+      defaultCountry: 'US',
       options: [''],
       regex: '',
       regexError: 'Invalid format'
@@ -99,6 +241,24 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
 
   const removeField = (fieldId) => {
     onChange(value.filter(field => field.id !== fieldId));
+  };
+
+  const addPresetField = (preset) => {
+    const field = {
+      id: `field_${Date.now()}`,
+      label: preset.label,
+      type: preset.type,
+      required: preset.required || false,
+      placeholder: preset.placeholder || '',
+      useCountryCode: preset.useCountryCode || false,
+      defaultCountry: preset.defaultCountry || 'US',
+      options: preset.options || [],
+      regex: preset.regex || '',
+      regexError: preset.regexError || 'Invalid format',
+      order: value.length
+    };
+
+    onChange([...value, field]);
   };
 
   const updateField = (fieldId, updates) => {
@@ -153,18 +313,56 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
     <div className={cn('space-y-4', className)}>
       <div className="flex items-center justify-between">
         <Label className="text-base font-medium">Custom Form Fields</Label>
-        <Dialog open={newFieldDialogOpen} onOpenChange={setNewFieldDialogOpen}>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="bg-primary/5 hover:bg-primary/10 border-primary/20">
+              <Zap className="w-4 h-4 mr-2 text-primary" />
+              Quick Add
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Common Fields</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {PRESET_FIELDS.map((preset) => (
+              <DropdownMenuItem 
+                key={preset.label}
+                onClick={() => addPresetField(preset)}
+              >
+                {preset.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <Dialog open={newFieldDialogOpen} onOpenChange={(open) => {
+          setNewFieldDialogOpen(open);
+          if (!open) {
+            setEditingFieldId(null);
+            setNewField({
+              label: '',
+              type: 'text',
+              required: false,
+              placeholder: '',
+              useCountryCode: false,
+              defaultCountry: 'US',
+              options: [''],
+              regex: '',
+              regexError: 'Invalid format'
+            });
+          }
+        }}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm">
               <Plus className="w-4 h-4 mr-2" />
-              Add Field
+              Custom Field
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Add Form Field</DialogTitle>
+              <DialogTitle>{editingFieldId ? 'Edit Form Field' : 'Add Form Field'}</DialogTitle>
               <DialogDescription>
-                Create a custom field for student registration
+                {editingFieldId ? 'Update your custom field settings' : 'Create a custom field for student registration'}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -250,6 +448,44 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
                 </div>
               )}
 
+              {newField.type === 'phone' && (
+                <div className="space-y-4 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="use-country-code">Enable Country Code</Label>
+                      <p className="text-xs text-muted-foreground">Add country flag and selector</p>
+                    </div>
+                    <Switch
+                      id="use-country-code"
+                      checked={newField.useCountryCode}
+                      onCheckedChange={(checked) => setNewField({ ...newField, useCountryCode: checked })}
+                    />
+                  </div>
+                  
+                  {newField.useCountryCode && (
+                    <div className="space-y-2">
+                      <Label htmlFor="default-country">Default Country</Label>
+                      <Select 
+                        value={newField.defaultCountry} 
+                        onValueChange={(value) => setNewField({ ...newField, defaultCountry: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="US">🇺🇸 United States (+1)</SelectItem>
+                          <SelectItem value="GB">🇬🇧 United Kingdom (+44)</SelectItem>
+                          <SelectItem value="IN">🇮🇳 India (+91)</SelectItem>
+                          <SelectItem value="CA">🇨🇦 Canada (+1)</SelectItem>
+                          <SelectItem value="AU">🇦🇺 Australia (+61)</SelectItem>
+                          <SelectItem value="NG">🇳🇬 Nigeria (+234)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center space-x-2">
                 <Switch
                   id="field-required"
@@ -285,18 +521,22 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
               )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setNewFieldDialogOpen(false)}>
+              <Button variant="outline" onClick={() => {
+                setNewFieldDialogOpen(false);
+                setEditingFieldId(null);
+              }}>
                 Cancel
               </Button>
               <Button onClick={addField} disabled={!newField.label.trim()}>
-                Add Field
+                {editingFieldId ? 'Update Field' : 'Add Field'}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
+    </div>
 
-      {value.length === 0 ? (
+    {value.length === 0 ? (
         <div className="text-center py-8 border-2 border-dashed border-muted rounded-lg">
           <p className="text-muted-foreground">
             No custom fields added yet. Click "Add Field" to create custom form fields.
@@ -343,8 +583,38 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
                         {fieldTypeLabels[field.type]}
                       </Badge>
                       {field.required && (
-                        <Badge variant="destructive" className="text-xs">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] gap-1 text-destructive hover:text-destructive/80 bg-destructive/5"
+                          onClick={() => updateField(field.id, { required: false })}
+                        >
+                          <Lock className="w-3 h-3" />
                           Required
+                        </Button>
+                      )}
+                      {!field.required && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] gap-1 text-muted-foreground hover:text-foreground bg-muted/5"
+                          onClick={() => updateField(field.id, { required: true })}
+                        >
+                          <Unlock className="w-3 h-3" />
+                          Optional
+                        </Button>
+                      )}
+                      {field.type === 'phone' && field.useCountryCode && (
+                        <Badge variant="secondary" className="text-[10px] h-6 px-2">
+                          <span className="mr-1">
+                            {field.defaultCountry === 'IN' ? '🇮🇳' : 
+                             field.defaultCountry === 'GB' ? '🇬🇧' : 
+                             field.defaultCountry === 'US' ? '🇺🇸' : 
+                             field.defaultCountry === 'CA' ? '🇨🇦' : 
+                             field.defaultCountry === 'AU' ? '🇦🇺' : 
+                             field.defaultCountry === 'NG' ? '🇳🇬' : '🌐'}
+                          </span>
+                          Intl Support
                         </Badge>
                       )}
                     </div>
@@ -360,14 +630,24 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
                     )}
                   </div>
                   
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeField(field.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openEditDialog(field)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Settings2 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeField(field.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               );
             })}

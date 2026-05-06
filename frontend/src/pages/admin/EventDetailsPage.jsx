@@ -112,6 +112,30 @@ const EventDetailsPage = () => {
     });
   };
 
+  const getStudentValue = (student, key, fallbackLabel) => {
+    if (!student) return 'N/A';
+    
+    // Direct property
+    if (student[key] && student[key] !== 'Not specified') return student[key];
+    
+    // Custom field by exact key
+    if (student.customFields?.[key]) return student.customFields[key];
+    
+    // Custom field by label lookup
+    if (event?.formFields) {
+      const field = event.formFields.find(f => 
+        f.label.toLowerCase().trim() === fallbackLabel.toLowerCase().trim() ||
+        f.label.toLowerCase().includes(fallbackLabel.toLowerCase())
+      );
+      if (field) {
+        const val = student.customFields?.[field.id] || student.customFields?.[`field_${field.id}`];
+        if (val) return val;
+      }
+    }
+    
+    return 'N/A';
+  };
+
   const isUpcoming = new Date(event.date) >= new Date();
 
   const handleSaveFormFields = () => {
@@ -480,16 +504,15 @@ const EventDetailsPage = () => {
                             <div className="flex items-center gap-4">
                               <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
                                 <span className="text-slate-500 font-bold text-xs uppercase">
-                                  {student.name?.charAt(0) || 'S'}
+                                  {getStudentValue(student, 'name', 'Full Name')?.charAt(0) || 'S'}
                                 </span>
                               </div>
                               <div className="min-w-0">
-                                <span className="text-sm font-bold text-[#111827] block truncate">{student.name || 'Candidate'}</span>
-                                <p className="text-[10px] text-muted-foreground font-semibold  tracking-widest mt-0.5 opacity-80">
-                                  {(() => {
-                                    const firstField = event.formFields?.sort((a, b) => a.order - b.order)[0];
-                                    return firstField ? (student.customFields?.[firstField.id] || student.email) : student.email;
-                                  })()}
+                                <span className="text-sm font-bold text-[#111827] block truncate">
+                                  {getStudentValue(student, 'name', 'Full Name') === 'N/A' ? 'Candidate' : getStudentValue(student, 'name', 'Full Name')}
+                                </span>
+                                <p className="text-[10px] text-muted-foreground font-semibold tracking-widest mt-0.5 opacity-80">
+                                  {getStudentValue(student, 'email', 'Email Address')}
                                 </p>
                               </div>
                             </div>
@@ -498,7 +521,7 @@ const EventDetailsPage = () => {
                             <select
                               value={student.status || 'Registered'}
                               onChange={(e) => handleStatusChange(student.id, e.target.value)}
-                              disabled={updatingStatus === student.id}
+                              disabled={updatingStatus === student.id || !isAdmin()}
                               className={cn(
                                 "text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border-none focus:ring-0 cursor-pointer transition-all",
                                 student.status === 'Converted' ? "bg-emerald-100 text-emerald-700" :

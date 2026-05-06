@@ -332,6 +332,41 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  const viewAgentDocument = async (agentId, docId) => {
+    try {
+      toast.loading('Opening document...');
+      const response = await agentAPI.downloadDocument(agentId, docId, { inline: true });
+      
+      // If response is not a blob (e.g. error JSON), it will still be in response.data as a blob
+      // We check the content type to be sure
+      const contentType = response.headers['content-type'];
+      
+      if (contentType.includes('application/json')) {
+        // Error returned as JSON but caught as Blob
+        const text = await response.data.text();
+        const error = JSON.parse(text);
+        throw new Error(error.detail || 'Failed to load document');
+      }
+
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Open in new tab
+      const newWindow = window.open(url, '_blank');
+      if (!newWindow) {
+        toast.dismiss();
+        toast.error('Pop-up blocked. Please allow pop-ups to view documents.');
+      } else {
+        toast.dismiss();
+        toast.success('Document opened');
+      }
+    } catch (error) {
+      console.error('Error viewing agent document:', error);
+      toast.dismiss();
+      toast.error(error.message || 'Failed to view document');
+    }
+  };
+
   // Event CRUD operations
   const createEvent = async (eventData) => {
     try {
@@ -481,18 +516,32 @@ export const DataProvider = ({ children }) => {
 
   const viewStudentDocument = async (studentId, docId) => {
     try {
+      toast.loading('Opening document...');
       const response = await studentAPI.downloadDocument(studentId, docId);
       const contentType = response.headers['content-type'];
-      const blob = new Blob([response.data], { type: contentType });
+      
+      if (contentType.includes('application/json')) {
+        const text = await response.data.text();
+        const error = JSON.parse(text);
+        throw new Error(error.detail || 'Failed to load document');
+      }
+
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: contentType });
       const url = window.URL.createObjectURL(blob);
       
       // Open in new tab
       const newWindow = window.open(url, '_blank');
       if (!newWindow) {
+        toast.dismiss();
         toast.error('Pop-up blocked. Please allow pop-ups to view documents.');
+      } else {
+        toast.dismiss();
+        toast.success('Document opened');
       }
     } catch (error) {
-      toast.error('Failed to view document');
+      console.error('Error viewing student document:', error);
+      toast.dismiss();
+      toast.error(error.message || 'Failed to view document');
     }
   };
 
@@ -620,6 +669,7 @@ export const DataProvider = ({ children }) => {
     getAgentById,
     verifyAgent,
     uploadVerificationDocument,
+    viewAgentDocument,
     // Event operations
     createEvent,
     updateEvent,

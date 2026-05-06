@@ -7,7 +7,7 @@ exports.getNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({ recipient: req.user._id })
       .sort({ createdAt: -1 })
-      .limit(50);
+      .limit(200);
 
     res.status(200).json(notifications);
   } catch (error) {

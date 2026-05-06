@@ -3,7 +3,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import { CalendarIcon, X, MapPin, Users } from 'lucide-react';
+import { CalendarIcon, X, MapPin, Users, Plus } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -45,6 +45,11 @@ const eventSchema = z.object({
   type: z.enum(['physical', 'virtual']).default('physical'),
   seatCapacity: z.number().min(1, 'Seat capacity must be at least 1').optional(),
   assignedAgents: z.array(z.string()).min(0),
+  requiredDocuments: z.array(z.object({
+    label: z.string(),
+    value: z.string(),
+    mandatory: z.boolean().default(true)
+  })).optional(),
   formFields: z.array(z.object({
     id: z.string(),
     label: z.string(),
@@ -86,6 +91,11 @@ const EventModal = ({ open, onOpenChange, event }) => {
       type: 'physical',
       seatCapacity: 50,
       assignedAgents: [],
+      requiredDocuments: [
+        { label: 'Passport', value: 'Passport', mandatory: true },
+        { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
+        { label: 'English Proficiency', value: 'LanguageTest', mandatory: false }
+      ],
       formFields: [],
       notifyAgents: true,
       notificationMessage: ''
@@ -103,6 +113,11 @@ const EventModal = ({ open, onOpenChange, event }) => {
         type: event.type || 'physical',
         seatCapacity: event.seatCapacity || 50,
         assignedAgents: event.assignedAgents,
+        requiredDocuments: event.requiredDocuments || [
+          { label: 'Passport', value: 'Passport', mandatory: true },
+          { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
+          { label: 'English Proficiency', value: 'LanguageTest', mandatory: false }
+        ],
         formFields: event.formFields || [],
         notifyAgents: event.notifyAgents !== false,
         notificationMessage: event.notificationMessage || ''
@@ -120,6 +135,11 @@ const EventModal = ({ open, onOpenChange, event }) => {
         type: 'physical',
         seatCapacity: 50,
         assignedAgents: [],
+        requiredDocuments: [
+          { label: 'Passport', value: 'Passport', mandatory: true },
+          { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
+          { label: 'English Proficiency', value: 'LanguageTest', mandatory: false }
+        ],
         formFields: [],
         notifyAgents: true,
         notificationMessage: ''
@@ -135,7 +155,7 @@ const EventModal = ({ open, onOpenChange, event }) => {
     const newSelection = selectedAgents.includes(agentId)
       ? selectedAgents.filter(id => id !== agentId)
       : [...selectedAgents, agentId];
-    
+
     setSelectedAgents(newSelection);
     setValue('assignedAgents', newSelection);
   };
@@ -184,8 +204,8 @@ const EventModal = ({ open, onOpenChange, event }) => {
             {isEditing ? 'Edit Event' : 'Create New Event'}
           </DialogTitle>
           <DialogDescription>
-            {isEditing 
-              ? 'Update the event information below' 
+            {isEditing
+              ? 'Update the event information below'
               : 'Fill in the details to create a new event'}
           </DialogDescription>
         </DialogHeader>
@@ -289,117 +309,195 @@ const EventModal = ({ open, onOpenChange, event }) => {
 
             <div className="space-y-2">
               <Label>Event Date</Label>
+              <Controller
+                name="date"
+                control={control}
+                render={({ field }) => (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !field.value && 'text-muted-foreground'
+                        )}
+                        data-testid="event-date-trigger"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {field.value ? format(field.value, 'PPP') : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        initialFocus
+                        data-testid="event-date-calendar"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )}
+              />
+              {errors.date && (
+                <p className="text-sm text-destructive">{errors.date.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Assign Agents</Label>
+              <Popover open={agentSearchOpen} onOpenChange={setAgentSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                    data-testid="event-agents-trigger"
+                  >
+                    {selectedAgents.length > 0
+                      ? `${selectedAgents.length} agent(s) selected`
+                      : 'Select agents...'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search agents..." />
+                    <CommandList>
+                      <CommandEmpty>No agents found.</CommandEmpty>
+                      <CommandGroup>
+                        {activeAgents.map((agent) => (
+                          <CommandItem
+                            key={agent.id}
+                            value={agent.name}
+                            onSelect={() => handleAgentSelect(agent.id)}
+                            data-testid={`agent-option-${agent.id}`}
+                          >
+                            <div className={cn(
+                              'mr-2 h-4 w-4 rounded-sm border border-primary',
+                              selectedAgents.includes(agent.id)
+                                ? 'bg-primary text-primary-foreground'
+                                : 'opacity-50'
+                            )}>
+                              {selectedAgents.includes(agent.id) && (
+                                <span className="flex items-center justify-center text-xs">✓</span>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{agent.name}</p>
+                              <p className="text-xs text-muted-foreground">{agent.email}</p>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {/* Selected Agents Display */}
+              {selectedAgents.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedAgents.map((agentId) => (
+                    <Badge
+                      key={agentId}
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {getAgentName(agentId)}
+                      <button
+                        type="button"
+                        onClick={() => removeAgent(agentId)}
+                        className="ml-1 hover:bg-muted rounded-full p-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Document Requirements */}
+          <div className="space-y-4 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-base font-medium">Required Documents</Label>
+                <p className="text-sm text-muted-foreground">
+                  Select which documents students need to upload for this event
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const currentDocs = control._formValues.requiredDocuments || [];
+                  setValue('requiredDocuments', [
+                    ...currentDocs,
+                    { label: 'New Document', value: 'NewDoc', mandatory: true }
+                  ]);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" /> Add Document
+              </Button>
+            </div>
+
             <Controller
-              name="date"
+              name="requiredDocuments"
               control={control}
               render={({ field }) => (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-start text-left font-normal',
-                        !field.value && 'text-muted-foreground'
-                      )}
-                      data-testid="event-date-trigger"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? format(field.value, 'PPP') : 'Pick a date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      initialFocus
-                      data-testid="event-date-calendar"
-                    />
-                  </PopoverContent>
-                </Popover>
+                <div className="space-y-3">
+                  {(field.value || []).map((doc, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 border rounded-lg bg-slate-50/50">
+                      <div className="flex-1 grid grid-cols-2 gap-3">
+                        <Input
+                          placeholder="Document Label (e.g. Passport)"
+                          value={doc.label}
+                          onChange={(e) => {
+                            const newValue = [...field.value];
+                            newValue[index] = { ...doc, label: e.target.value, value: e.target.value.replace(/\s+/g, '') };
+                            field.onChange(newValue);
+                          }}
+                        />
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={doc.mandatory}
+                            onCheckedChange={(checked) => {
+                              const newValue = [...field.value];
+                              newValue[index] = { ...doc, mandatory: checked };
+                              field.onChange(newValue);
+                            }}
+                          />
+                          <span className="text-xs font-medium">Mandatory</span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          const newValue = field.value.filter((_, i) => i !== index);
+                          field.onChange(newValue);
+                        }}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  {(field.value || []).length === 0 && (
+                    <div className="text-center py-6 border-2 border-dashed rounded-lg text-muted-foreground text-sm">
+                      No documents required for this event.
+                    </div>
+                  )}
+                </div>
               )}
             />
-            {errors.date && (
-              <p className="text-sm text-destructive">{errors.date.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Assign Agents</Label>
-            <Popover open={agentSearchOpen} onOpenChange={setAgentSearchOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                  data-testid="event-agents-trigger"
-                >
-                  {selectedAgents.length > 0 
-                    ? `${selectedAgents.length} agent(s) selected`
-                    : 'Select agents...'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search agents..." />
-                  <CommandList>
-                    <CommandEmpty>No agents found.</CommandEmpty>
-                    <CommandGroup>
-                      {activeAgents.map((agent) => (
-                        <CommandItem
-                          key={agent.id}
-                          value={agent.name}
-                          onSelect={() => handleAgentSelect(agent.id)}
-                          data-testid={`agent-option-${agent.id}`}
-                        >
-                          <div className={cn(
-                            'mr-2 h-4 w-4 rounded-sm border border-primary',
-                            selectedAgents.includes(agent.id) 
-                              ? 'bg-primary text-primary-foreground' 
-                              : 'opacity-50'
-                          )}>
-                            {selectedAgents.includes(agent.id) && (
-                              <span className="flex items-center justify-center text-xs">✓</span>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{agent.name}</p>
-                            <p className="text-xs text-muted-foreground">{agent.email}</p>
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-
-            {/* Selected Agents Display */}
-            {selectedAgents.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {selectedAgents.map((agentId) => (
-                  <Badge 
-                    key={agentId} 
-                    variant="secondary"
-                    className="flex items-center gap-1"
-                  >
-                    {getAgentName(agentId)}
-                    <button
-                      type="button"
-                      onClick={() => removeAgent(agentId)}
-                      className="ml-1 hover:bg-muted rounded-full p-0.5"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
           </div>
 
           {/* Custom Form Fields */}
-          <FormFieldBuilder 
-            value={formFields} 
+          <FormFieldBuilder
+            value={formFields}
             onChange={setFormFields}
             className="mt-6"
           />
@@ -437,16 +535,16 @@ const EventModal = ({ open, onOpenChange, event }) => {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button 
-              type="button" 
-              variant="outline" 
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => onOpenChange(false)}
               data-testid="event-modal-cancel"
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isSubmitting}
               data-testid="event-modal-submit"
             >

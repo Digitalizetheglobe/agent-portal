@@ -130,7 +130,11 @@ export const agentAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
-  verify: (id, data) => api.patch(`/agents/${id}/verify`, data)
+  verify: (id, data) => api.patch(`/agents/${id}/verify`, data),
+  downloadDocument: (agentId, docId, params = {}) => api.get(`/agents/${agentId}/documents/${docId}`, {
+    params,
+    responseType: 'blob'
+  })
 };
 
 // Event APIs
