@@ -12,7 +12,10 @@ import {
   FileText,
   Filter,
   ChevronDown,
-  ArrowUpRight
+  ArrowUpRight,
+  CalendarDays,
+  CalendarCheck,
+  CalendarClock
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -88,7 +91,7 @@ const AdminDashboard = () => {
       title: 'Total Events',
       value: events.length.toLocaleString(),
       subValue: `${events.filter(e => new Date(e.date) >= new Date()).length} upcoming sessions`,
-      icon: Calendar,
+      icon: CalendarDays,
       color: '#B25E09',
       bgColor: '#FFF7ED',
       trend: 'up'
@@ -97,7 +100,7 @@ const AdminDashboard = () => {
       title: 'Events Completed',
       value: events.filter(e => new Date(e.date) < new Date()).length.toLocaleString(),
       subValue: 'Past event sessions',
-      icon: Ticket,
+      icon: CalendarCheck,
       color: '#3C3489',
       bgColor: '#EEEDFE',
       trend: 'up'
@@ -106,7 +109,7 @@ const AdminDashboard = () => {
       title: 'Events Live/Upcoming',
       value: events.filter(e => new Date(e.date) >= new Date()).length.toLocaleString(),
       subValue: 'Active & scheduled',
-      icon: Calendar,
+      icon: CalendarClock,
       color: '#0C447C',
       bgColor: '#E6F1FB',
       trend: 'up'
@@ -189,7 +192,7 @@ const AdminDashboard = () => {
 
   return (
     <div className="bg-[#FDFDFF] min-h-screen font-sans" data-testid="admin-dashboard">
-      <div className="max-w-[1400px] mx-auto p-7">
+      <div className="p-7">
         {/* Topbar */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-2">
           <div>
@@ -265,7 +268,7 @@ const AdminDashboard = () => {
           <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 px-7">
             <div className="flex items-center justify-between mb-5">
               <span className="text-lg font-medium text-slate-900 font-['Outfit']">Registration Performance</span>
-              <Link to="/admin/students" className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">By agent <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
+              <Link to="/admin/students" className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">View All Students <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
             </div>
             <div className="flex gap-4 mb-4">
               <span className="flex items-center gap-1.5 text-[12px] text-slate-500 font-medium">
@@ -295,7 +298,7 @@ const AdminDashboard = () => {
           <div className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 px-7">
             <div className="flex items-center justify-between mb-5">
               <span className="text-lg font-medium text-slate-900 font-['Outfit']">Student Status</span>
-              <span className="flex items-center justify-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
+              <Link to="/admin/students" className="flex items-center justify-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
             </div>
             <div className="flex flex-col items-center gap-6">
               <div className="w-full h-[140px] relative shrink-0">
@@ -327,19 +330,19 @@ const AdminDashboard = () => {
         <div className="bg-white border border-slate-200 rounded-xl p-6 px-7 mb-6">
           <div className="flex items-center justify-between mb-5">
             <span className="text-lg font-medium text-slate-900 font-['Outfit']">Top Performing Agents</span>
-            <Link to="/admin/agents" className="flex items-center text-[12px] text-slate-500 hover:text-slate-900 font-medium">View all agents <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
+            <Link to="/admin/agents" className="flex items-center text-[12px] text-slate-500 hover:text-slate-900 font-medium">View All Agents <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="text-left font-medium text-slate-400 py-3 px-3 uppercase tracking-wider">Agent</th>
-                  <th className="text-left font-medium text-slate-400 py-3 px-3 uppercase tracking-wider">Registrations</th>
-                  <th className="text-left font-medium text-slate-400 py-3 px-3 uppercase tracking-wider">Confirmed</th>
-                  <th className="text-left font-medium text-slate-400 py-3 px-3 uppercase tracking-wider">Converted</th>
-                  <th className="text-left font-medium text-slate-400 py-3 px-3 uppercase tracking-wider">Rate</th>
-                  <th className="text-left font-medium text-slate-400 py-3 px-3 uppercase tracking-wider">Status</th>
-                  <th className="text-right font-medium text-slate-400 py-3 px-3 uppercase tracking-wider">Action</th>
+                  <th className="text-left font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Agent</th>
+                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Registrations</th>
+                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Confirmed</th>
+                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Converted</th>
+                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Rate</th>
+                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Status</th>
+                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -362,21 +365,21 @@ const AdminDashboard = () => {
                           <span className="text-sm font-medium text-slate-900">{agent.name}</span>
                         </div>
                       </td>
-                      <td className="py-4 px-3 text-sm text-slate-600">{agent.registrations}</td>
-                      <td className="py-4 px-3 text-sm text-slate-600">{agent.confirmed}</td>
-                      <td className="py-4 px-3 text-sm text-slate-600">{agent.converted}</td>
+                      <td className="py-4 px-3 text-sm text-slate-600 text-center">{agent.registrations}</td>
+                      <td className="py-4 px-3 text-sm text-slate-600 text-center">{agent.confirmed}</td>
+                      <td className="py-4 px-3 text-sm text-slate-600 text-center">{agent.converted}</td>
                       <td className="py-4 px-3">
-                        <span className="text-sm font-medium" style={{ color: parseFloat(agent.rate) > 15 ? '#27500A' : parseFloat(agent.rate) > 10 ? '#BA7517' : '#A32D2D' }}>
+                        <span className="text-sm font-medium flex justify-center" style={{ color: parseFloat(agent.rate) > 15 ? '#27500A' : parseFloat(agent.rate) > 10 ? '#BA7517' : '#A32D2D' }}>
                           {agent.rate}%
                         </span>
                       </td>
                       <td className="py-4 px-3">
-                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${agent.status === 'active' ? 'bg-[#EAF3DE] text-[#27500A]' : 'bg-[#FAEEDA] text-[#633806]'}`}>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full flex justify-center font-medium uppercase tracking-wider ${agent.status === 'active' ? 'bg-[#EAF3DE] text-[#27500A]' : 'bg-[#FAEEDA] text-[#633806]'}`}>
                           {agent.status}
                         </span>
                       </td>
-                      <td className="py-4 px-3 text-right">
-                        <Link to={`/admin/agents?id=${agent.id}`} className="flex items-center  text-slate-400 font-medium text-xs hover:text-slate-900">View <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
+                      <td className="py-4 px-3 text-center">
+                        <Link to={`/admin/agents/${agent.id}/report`} className="flex items-center justify-center text-slate-400 font-medium text-xs hover:text-slate-900">View <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
                       </td>
                     </tr>
                   );
@@ -391,7 +394,7 @@ const AdminDashboard = () => {
           <div className="bg-white border border-slate-200 rounded-xl p-6 px-7">
             <div className="flex items-center justify-between mb-5">
               <span className="text-lg font-medium text-slate-900 font-['Outfit']">Event Seat Occupancy</span>
-              <span className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Analytics <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
+              <Link to="/admin/events" className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Analytics <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
             </div>
             <div className="space-y-4 mb-6">
               {events.slice(0, 5).map((event, idx) => {
@@ -420,7 +423,7 @@ const AdminDashboard = () => {
           <div className="bg-white border border-slate-200 rounded-xl p-6 px-7">
             <div className="flex items-center justify-between mb-5">
               <span className="text-lg font-medium text-slate-900 font-['Outfit']">Invoice Queue</span>
-              <span className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Review All <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
+              <Link to="/admin/invoices" className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Review All <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
             </div>
             <div className="divide-y divide-slate-100 mb-6">
               {invoices.length > 0 ? invoices.slice(0, 5).map((inv) => (
@@ -453,7 +456,7 @@ const AdminDashboard = () => {
         <div className="bg-white border border-slate-200 rounded-xl p-6 px-7 mb-6">
           <div className="flex items-center justify-between mb-5">
             <span className="text-lg font-medium text-slate-900 font-['Outfit']">System Helpdesk</span>
-            <span className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Manage <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
+            <Link to="/admin/support" className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Manage <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
           </div>
           <div className="divide-y divide-slate-100">
             {tickets.length > 0 ? tickets.slice(0, 4).map((ticket) => (

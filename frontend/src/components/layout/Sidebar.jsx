@@ -1,10 +1,10 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Calendar, 
-  GraduationCap, 
+import {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  GraduationCap,
   CalendarCheck,
   ChevronLeft,
   ChevronRight,
@@ -44,27 +44,27 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     <aside
       data-testid="sidebar"
       className={cn(
-        'fixed left-0 top-0 h-full bg-card border-r border-border z-50 transition-all duration-300 ease-in-out flex flex-col',
+        'fixed left-0 top-0 h-full bg-slate-900/95 border-r border-slate-900/85 z-50 transition-all duration-300 ease-in-out flex flex-col',
         collapsed ? 'w-18' : 'w-64'
       )}
     >
       {/* Logo */}
       <div className={cn(
-        'h-20 flex items-center border-b border-border px-4',
+        'h-20 flex items-center border-b border-slate-900/85 px-4',
         collapsed ? 'justify-center' : 'justify-center'
       )}>
         {!collapsed && (
-          <img 
-            src="/assets/QStudylogo(blue).png" 
-            alt="QStudy Logo" 
-            className="h-10 w-auto"
+          <img
+            src="/assets/QStudylogo(blue).png"
+            alt="QStudy Logo"
+            className="h-10 w-auto brightness-0 invert"
           />
         )}
         {collapsed && (
-          <img 
-            src="/assets/QStudylogo(blue).png" 
-            alt="QStudy Logo" 
-            className="h-10 w-auto"
+          <img
+            src="/assets/QStudylogo(blue).png"
+            alt="QStudy Logo"
+            className="h-10 w-auto brightness-0 invert"
           />
         )}
       </div>
@@ -74,7 +74,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
         {links.map((link) => {
           const Icon = link.icon;
           const isActive = location.pathname === link.to;
-          
+
           return (
             <NavLink
               key={link.to}
@@ -82,9 +82,9 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
               data-testid={`nav-${link.label.toLowerCase()}`}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
-                isActive 
-                  ? 'bg-primary text-primary-foreground shadow-sm' 
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                isActive
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-50',
                 collapsed && 'justify-center px-2'
               )}
             >
@@ -96,12 +96,12 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       </nav>
 
       {/* Collapse Toggle */}
-      <div className="p-2 border-t border-border">
+      <div className="p-2 border-t border-slate-800">
         <button
           onClick={() => setCollapsed(!collapsed)}
           data-testid="sidebar-toggle"
           className={cn(
-            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors',
+            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-50 transition-colors',
             collapsed && 'justify-center px-2'
           )}
         >

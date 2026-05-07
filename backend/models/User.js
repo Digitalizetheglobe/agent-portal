@@ -45,6 +45,7 @@ const userSchema = new mongoose.Schema({
   agencyName: String,
   businessRegistrationNumber: String,
   fullAddress: String,
+  region: String,
   avatar: {
     type: String,
     default: null
@@ -52,6 +53,15 @@ const userSchema = new mongoose.Schema({
   isVerified: {
     type: Boolean,
     default: false
+  },
+  verificationStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  verificationRemarks: {
+    type: String,
+    default: ''
   },
   verificationDocuments: [{
     docType: {

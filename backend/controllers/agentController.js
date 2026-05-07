@@ -50,7 +50,7 @@ exports.getAgent = async (req, res) => {
 // @access  Private (Admin only)
 exports.createAgent = async (req, res) => {
   try {
-    const { name, email, userId, password, phone, status } = req.body;
+    const { name, email, userId, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress } = req.body;
 
     // Check if email or userId already exists
     const existingUser = await User.findOne({
@@ -76,7 +76,12 @@ exports.createAgent = async (req, res) => {
       phone,
       status: status || 'active',
       role: 'agent',
-      isVerified: false
+      isVerified: false,
+      verificationStatus: 'pending',
+      region,
+      agencyName,
+      businessRegistrationNumber,
+      fullAddress
     });
 
     // Send welcome email
@@ -131,7 +136,8 @@ exports.createAdmin = async (req, res) => {
       phone,
       role: 'admin',
       status: 'active',
-      isVerified: true
+      isVerified: true,
+      verificationStatus: 'approved'
     });
 
     res.status(201).json(admin.toJSON());
@@ -149,7 +155,7 @@ exports.createAdmin = async (req, res) => {
 // @access  Private (Admin only)
 exports.updateAgent = async (req, res) => {
   try {
-    const { name, email, password, phone, status } = req.body;
+    const { name, email, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress } = req.body;
 
     const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
 
@@ -177,6 +183,10 @@ exports.updateAgent = async (req, res) => {
     if (phone) agent.phone = phone;
     if (status) agent.status = status;
     if (password) agent.password = password;
+    if (region !== undefined) agent.region = region;
+    if (agencyName !== undefined) agent.agencyName = agencyName;
+    if (businessRegistrationNumber !== undefined) agent.businessRegistrationNumber = businessRegistrationNumber;
+    if (fullAddress !== undefined) agent.fullAddress = fullAddress;
 
     await agent.save();
 
@@ -281,7 +291,7 @@ exports.uploadVerificationDocument = async (req, res) => {
 // @access  Private (Admin only)
 exports.verifyAgent = async (req, res) => {
   try {
-    const { isVerified, remarks, documentId, documentStatus } = req.body;
+    const { isVerified, verificationStatus, remarks, documentId, documentStatus } = req.body;
     
     const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
     
@@ -295,6 +305,10 @@ exports.verifyAgent = async (req, res) => {
     if (isVerified !== undefined) {
       agent.isVerified = isVerified;
     }
+    
+    if (verificationStatus !== undefined) {
+      agent.verificationStatus = verificationStatus;
+    }
 
     if (documentId && documentStatus) {
       const doc = agent.verificationDocuments.id(documentId);
@@ -302,6 +316,8 @@ exports.verifyAgent = async (req, res) => {
         doc.status = documentStatus;
         if (remarks) doc.remarks = remarks;
       }
+    } else if (remarks !== undefined) {
+      agent.verificationRemarks = remarks;
     }
 
     await agent.save();
@@ -384,6 +400,48 @@ exports.downloadVerificationDocument = async (req, res) => {
     res.status(500).json({
       success: false,
       detail: 'Server error'
+    });
+  }
+};
+
+// @desc    Delete verification document
+// @route   DELETE /api/agents/me/documents/:docId
+// @access  Private (Agent only)
+exports.deleteVerificationDocument = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    
+    if (!user || user.role !== 'agent') {
+      return res.status(403).json({
+        success: false,
+        detail: 'Only agents can delete their own verification documents'
+      });
+    }
+
+    // Find document
+    const doc = user.verificationDocuments.id(req.params.docId);
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Document not found'
+      });
+    }
+
+    // Delete from storage
+    await deleteObject(doc.fileUrl);
+
+    // Remove from verificationDocuments
+    user.verificationDocuments.pull(req.params.docId);
+
+    await user.save();
+
+    res.status(200).json(user.toJSON());
+  } catch (error) {
+    console.error('Delete verification document error:', error);
+    res.status(500).json({
+      success: false,
+      detail: error.message || 'Server error'
     });
   }
 };

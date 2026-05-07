@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Edit2, 
-  Trash2, 
-  Eye, 
-  Calendar, 
-  MapPin, 
-  Users, 
+import { useNavigate } from 'react-router-dom';
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Eye,
+  Calendar,
+  MapPin,
+  Users,
   ArrowUpRight,
   ChevronRight,
   CheckCircle2,
@@ -17,7 +18,9 @@ import {
   BarChart2,
   FileText,
   X,
-  Bell
+  Bell,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Button } from '../../components/ui/button';
@@ -29,7 +32,8 @@ import { toast } from 'sonner';
 import { format, isPast, isToday, isFuture, parseISO } from 'date-fns';
 
 const EventsPage = () => {
-  const { events, agents, students, deleteEvent } = useData();
+  const navigate = useNavigate();
+  const { events, agents, students, deleteEvent, notifyAgents } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
@@ -38,6 +42,7 @@ const EventsPage = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState(null);
+  const [displayMode, setDisplayMode] = useState('grid');
 
   // Status mapping logic
   const getEventStatus = (event) => {
@@ -54,28 +59,41 @@ const EventsPage = () => {
     const live = events.filter(e => getEventStatus(e) === 'live').length;
     const upcoming = events.filter(e => getEventStatus(e) === 'upcoming').length;
     const past = events.filter(e => getEventStatus(e) === 'completed').length;
-    
+
     const totalSeats = events.reduce((acc, curr) => acc + (curr.seatCapacity || 0), 0);
-    const totalFilled = students.length; 
+    const totalFilled = students.length;
     const fillRate = totalSeats > 0 ? Math.round((totalFilled / totalSeats) * 100) : 0;
 
-    return { live, upcoming, past, fillRate };
+    return { live, upcoming, past, fillRate, total: events.length };
   }, [events, students]);
 
   // Filtered Events
   const filteredEvents = useMemo(() => {
     return events.filter(event => {
-      const matchesSearch = 
+      const matchesSearch =
         event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (event.location && event.location.toLowerCase().includes(searchQuery.toLowerCase()));
-      
+
       const matchesType = typeFilter === 'all' || (event.type && event.type.toLowerCase() === typeFilter);
       // Country filter placeholder logic
       const matchesCountry = countryFilter === 'all' || (event.location && event.location.toLowerCase().includes(countryFilter.toLowerCase()));
-      
+
       return matchesSearch && matchesType && matchesCountry;
     });
   }, [events, searchQuery, typeFilter, countryFilter]);
+
+  // Dynamic Countries from events
+  const availableCountries = useMemo(() => {
+    const set = new Set();
+    events.forEach(e => {
+      if (e.location) {
+        const parts = e.location.split(',');
+        const country = parts[parts.length - 1].trim();
+        if (country) set.add(country);
+      }
+    });
+    return Array.from(set).sort();
+  }, [events]);
 
   // Data helpers
   const getEnhancedEvent = (event) => {
@@ -84,7 +102,7 @@ const EventsPage = () => {
     const seats = event.seatCapacity || 50;
     const p = Math.round(seats > 0 ? (filled / seats) * 100 : 0);
     const status = getEventStatus(event);
-    
+
     return {
       ...event,
       filled,
@@ -141,7 +159,7 @@ const EventsPage = () => {
   };
 
   const getTypePill = (type) => {
-    return type === 'virtual' 
+    return type === 'virtual'
       ? <span className="pill p-vir">Virtual</span>
       : <span className="pill p-phy">Physical</span>;
   };
@@ -151,10 +169,10 @@ const EventsPage = () => {
     const p = enhanced.p;
     const bc = barColor(p);
     const status = enhanced.status;
-    
+
     return (
-      <div 
-        key={event.id} 
+      <div
+        key={event.id}
         className={cn(
           "ev-card transition-all duration-200",
           status === 'live' ? 'live-card' : status === 'upcoming' ? 'upcoming-card' : 'past-card'
@@ -171,7 +189,7 @@ const EventsPage = () => {
               {getTypePill(event.type)}
             </div>
           </div>
-          
+
           <div className="ev-meta">
             <div className="em-row">
               {status === 'live' ? (
@@ -193,8 +211,8 @@ const EventsPage = () => {
 
           <div className="seat-section">
             <div className="seat-bar-bg">
-              <div 
-                className="seat-bar-fill transition-all duration-500" 
+              <div
+                className="seat-bar-fill transition-all duration-500"
                 style={{ width: `${p}%`, background: bc }}
               />
             </div>
@@ -204,7 +222,7 @@ const EventsPage = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="ev-card-bot">
           <div className="uni-chips">
             {/* Using mock unis as they are not in the current data structure */}
@@ -213,19 +231,19 @@ const EventsPage = () => {
             ))}
           </div>
           <div className="card-actions">
-            <button 
-              className="ibtn" 
+            <button
+              className="ibtn"
               title="Edit"
               onClick={(e) => handleEdit(e, event)}
             >
               <Edit2 className="w-3 h-3 text-slate-500" />
             </button>
-            <button 
-              className="ibtn" 
+            <button
+              className="ibtn"
               title="Notify agents"
               onClick={(e) => {
                 e.stopPropagation();
-                toast.info(`Notification triggered for ${event.title}`);
+                notifyAgents(event.id);
               }}
             >
               <Bell className="w-3 h-3 text-slate-500" />
@@ -297,11 +315,13 @@ const EventsPage = () => {
         .section-label-wrap { display: flex; align-items: center; gap: 10px; }
         .section-line-label { font-size: 14px; font-weight: 600; color: var(--color-text-primary); font-family: 'Outfit'; }
         .section-count { font-size: 11px; padding: 2px 10px; border-radius: 20px; font-weight: 700; }
+        .sc-all { background: #f1f5f9; color: #475569; }
         .sc-live { background: #EAF3DE; color: #27500A; }
         .sc-up { background: #E6F1FB; color: #0C447C; }
         .sc-past { background: #F1EFE8; color: #5F5E5A; }
         
         .section-divider { height: 2px; border-radius: 2px; margin-bottom: 20px; }
+        .div-all { background: linear-gradient(90deg, #042C53 0%, #042C53 20%, transparent 100%); opacity: 0.8; }
         .div-live { background: linear-gradient(90deg, #639922 0%, #639922 20%, transparent 100%); opacity: 0.8; }
         .div-up { background: linear-gradient(90deg, #378ADD 0%, #378ADD 20%, transparent 100%); opacity: 0.8; }
         .div-past { background: linear-gradient(90deg, #B4B2A9 0%, #B4B2A9 20%, transparent 100%); opacity: 0.8; }
@@ -371,6 +391,7 @@ const EventsPage = () => {
         .tab-btn { display: flex; align-items: center; padding: 8px 18px; border-radius: 9px; border: none; background: transparent; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; transition: all 0.18s; white-space: nowrap; }
         .tab-btn:hover { color: #1e293b; background: rgba(255,255,255,0.6); }
         .tab-btn-active { background: #ffffff !important; color: #1e293b !important; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .tab-btn-all.tab-btn-active { color: #042C53 !important; }
         .tab-btn-live.tab-btn-active { color: #27500A !important; }
         .tab-btn-upcoming.tab-btn-active { color: #0C447C !important; }
         .tab-btn-completed.tab-btn-active { color: #3C3489 !important; }
@@ -384,15 +405,15 @@ const EventsPage = () => {
           <p>All events — live, upcoming, and past</p>
         </div>
         <div className="flex gap-3">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          {/* <Button
+            variant="outline"
+            size="sm"
             className="inline-flex items-center text-xs font-semibold h-9 px-4 border-slate-200"
             onClick={() => toast.info('Notification broadcast system')}
           >
             Notify agents <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
-          </Button>
-          <Button 
+          </Button> */}
+          <Button
             className="bg-[#042C53] hover:bg-[#0C447C] text-[#B5D4F4] text-xs font-bold h-9 px-5 rounded-lg transition-all"
             onClick={handleCreate}
           >
@@ -411,7 +432,7 @@ const EventsPage = () => {
         <div className="kpi">
           <div className="kpi-label">Upcoming</div>
           <div className="kpi-val" style={{ color: '#0C447C' }}>{kpis.upcoming}</div>
-          <div className="kpi-sub text-[#0C447C]">Next: {events.filter(e => isFuture(parseISO(e.date))).sort((a,b) => parseISO(a.date) - parseISO(b.date))[0]?.date || 'TBD'}</div>
+          <div className="kpi-sub text-[#0C447C]">Next: {events.filter(e => isFuture(parseISO(e.date))).sort((a, b) => parseISO(a.date) - parseISO(b.date))[0]?.date || 'TBD'}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Past events</div>
@@ -430,9 +451,10 @@ const EventsPage = () => {
         {/* Tab Strip */}
         <div className="tab-strip">
           {[
-            { key: 'live',     label: 'Live now',        countClass: 'sc-live',  count: kpis.live },
-            { key: 'upcoming', label: 'Upcoming',         countClass: 'sc-up',   count: kpis.upcoming },
-            { key: 'completed',label: 'Past events',     countClass: 'sc-past', count: kpis.past },
+            { key: 'all', label: 'All', countClass: 'sc-all', count: kpis.total },
+            { key: 'live', label: 'Live now', countClass: 'sc-live', count: kpis.live },
+            { key: 'upcoming', label: 'Upcoming', countClass: 'sc-up', count: kpis.upcoming },
+            { key: 'completed', label: 'Past events', countClass: 'sc-past', count: kpis.past },
           ].map(tab => (
             <button
               key={tab.key}
@@ -474,22 +496,52 @@ const EventsPage = () => {
             onChange={(e) => setCountryFilter(e.target.value)}
           >
             <option value="all">All countries</option>
-            <option value="UK">UK</option>
-            <option value="Canada">Canada</option>
-            <option value="Germany">Germany</option>
-            <option value="Australia">Australia</option>
-            <option value="USA">USA</option>
-            <option value="Ireland">Ireland</option>
+            {availableCountries.map(country => (
+              <option key={country} value={country}>{country}</option>
+            ))}
           </select>
+        </div>
+        <div className="flex bg-white border border-slate-200 rounded-xl p-1 gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setDisplayMode('table')}
+            className={cn(
+              "h-8 w-8 p-0 rounded-lg transition-all",
+              displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+            )}
+          >
+            <List className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setDisplayMode('grid')}
+            className={cn(
+              "h-8 w-8 p-0 rounded-lg transition-all",
+              displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+            )}
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
       {/* Active Tab Divider */}
-      <div className={cn('section-divider', activeTab === 'live' ? 'div-live' : activeTab === 'upcoming' ? 'div-up' : 'div-past')} style={{ marginBottom: 24 }} />
+      <div className={cn(
+        'section-divider',
+        activeTab === 'all' ? 'div-all' :
+          activeTab === 'live' ? 'div-live' :
+            activeTab === 'upcoming' ? 'div-up' :
+              'div-past'
+      )} style={{ marginBottom: 24 }} />
 
       {/* Active Tab Content */}
       {(() => {
-        const tabItems = filteredEvents.filter(e => getEventStatus(e) === activeTab);
+        const tabItems = activeTab === 'all'
+          ? filteredEvents
+          : filteredEvents.filter(e => getEventStatus(e) === activeTab);
+        
         if (tabItems.length === 0) return (
           <div className="flex flex-col items-center justify-center py-20 bg-white border border-dashed border-slate-200 rounded-2xl">
             <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-4">
@@ -499,9 +551,86 @@ const EventsPage = () => {
             <p className="text-xs text-slate-500 mt-1">Try adjusting your filters or search query</p>
           </div>
         );
+
+        if (displayMode === 'grid') {
+          return (
+            <div className="card-grid">
+              {tabItems.map(event => renderEventCard(event))}
+            </div>
+          );
+        }
+
         return (
-          <div className="card-grid">
-            {tabItems.map(event => renderEventCard(event))}
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Event</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Date & Type</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Location</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Capacity</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Agents</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-right"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {tabItems.map(event => {
+                  const enhanced = getEnhancedEvent(event);
+                  return (
+                    <tr key={event.id} className="hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => openDetail(event)}>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-900 text-sm">{event.title}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 truncate max-w-[200px]">{event.description || 'No description'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-semibold text-slate-700">{format(parseISO(event.date), 'dd MMM yyyy')}</div>
+                        <div className="mt-1">{getTypePill(event.type)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                          <MapPin className="w-3 h-3 text-slate-400" />
+                          <span className="truncate max-w-[150px]">{event.location || 'Virtual'}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="text-xs font-bold text-slate-700">{enhanced.filled}/{enhanced.seats}</div>
+                          <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full" style={{ width: `${enhanced.p}%`, backgroundColor: barColor(enhanced.p) }} />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex -space-x-2">
+                          {enhanced.assignedAgentObjects.slice(0, 3).map((agent, i) => (
+                            <div key={i} className="w-7 h-7 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">
+                              {agent.name.split(' ').map(n => n[0]).join('')}
+                            </div>
+                          ))}
+                          {enhanced.assignedAgentObjects.length > 3 && (
+                            <div className="w-7 h-7 rounded-full border-2 border-white bg-slate-50 flex items-center justify-center text-[9px] font-bold text-slate-400">
+                              +{enhanced.assignedAgentObjects.length - 3}
+                            </div>
+                          )}
+                          {enhanced.assignedAgentObjects.length === 0 && <span className="text-xs text-slate-400 italic">None</span>}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn("pill", getStatusClass(enhanced.status))}>
+                          {enhanced.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600">
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         );
       })()}
@@ -522,7 +651,7 @@ const EventsPage = () => {
               </div>
               <h3 className="text-xl font-bold text-slate-900 font-['Outfit']">{selectedEvent.title}</h3>
               <p className="text-sm text-slate-500 mt-1 font-medium flex items-center gap-2">
-                {selectedEvent.type === 'physical' ? 'Physical' : 'Virtual'} • {selectedEvent.location || 'Online'} • {format(parseISO(selectedEvent.date), 'dd MMM yyyy')}
+                {selectedEvent.type === 'virtual' ? 'Virtual' : 'Physical'} • {selectedEvent.location || 'Online'} • {format(parseISO(selectedEvent.date), 'dd MMM yyyy')}
               </p>
             </div>
 
@@ -552,9 +681,9 @@ const EventsPage = () => {
                   <span className="text-sm font-bold text-slate-900">{selectedEvent.p}%</span>
                 </div>
                 <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full rounded-full transition-all duration-1000" 
-                    style={{ width: `${selectedEvent.p}%`, backgroundColor: barColor(selectedEvent.p) }} 
+                  <div
+                    className="h-full rounded-full transition-all duration-1000"
+                    style={{ width: `${selectedEvent.p}%`, backgroundColor: barColor(selectedEvent.p) }}
                   />
                 </div>
               </div>
@@ -595,16 +724,23 @@ const EventsPage = () => {
             </div>
 
             <div className="dp-footer">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl font-bold text-xs h-10"
+                onClick={() => navigate(`/admin/events/${selectedEvent.id}`)}
+              >
+                View Event <ArrowUpRight className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
                 className="flex-1 rounded-xl font-bold text-xs h-10"
                 onClick={(e) => handleEdit(e, selectedEvent)}
               >
                 Edit Event
               </Button>
-              <Button 
+              <Button
                 className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-[#B5D4F4] rounded-xl font-bold text-xs h-10"
-                onClick={() => toast.info('Notification broadcast sent')}
+                onClick={() => notifyAgents(selectedEvent.id)}
               >
                 Notify Agents
               </Button>

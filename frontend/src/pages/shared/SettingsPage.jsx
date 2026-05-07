@@ -270,23 +270,23 @@ export default function SettingsPage() {
 
                   {/* Verification status row */}
                   <div className={cn(
-                    "flex items-center gap-4 p-4 rounded-lg border mt-5",
+                    "flex items-center gap-4  rounded-lg mt-5",
                     user?.isVerified
-                      ? "bg-[#EAF3DE] border-[#BFD49A] text-[#27500A]"
-                      : "bg-[#FAEEDA] border-[#F5C98A] text-[#633806]"
+                      ? "bg-[#EAF3DE] border-[#BFD49A] text-[#27500A] p-4"
+                      : ""
                   )}>
                     {user?.isVerified
                       ? <ShieldCheck className="w-5 h-5 shrink-0" />
-                      : <Clock className="w-5 h-5 shrink-0" />
+                      : ''
                     }
                     <div className="">
                       <p className="text-xs font-semibold uppercase tracking-wider">
-                        {user?.isVerified ? 'Account Verified' : 'Verification Pending'}
+                        {user?.isVerified ? 'Account Verified' : ''}
                       </p>
                       <p className="text-[11px] font-medium opacity-80 mt-0.5">
                         {user?.isVerified
                           ? 'Your agency has been fully verified and is compliant.'
-                          : 'Our team is reviewing your registration. Usually 1–2 business days.'}
+                          : ''}
                       </p>
                     </div>
                   </div>

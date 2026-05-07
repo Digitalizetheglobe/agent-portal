@@ -100,8 +100,8 @@ const NotificationCenter = () => {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5 text-muted-foreground" />
+        <Button variant="ghost" size="icon" className="relative text-slate-300 hover:bg-slate-800 hover:text-slate-100">
+          <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
             <Badge 
               className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-rose-500 hover:bg-rose-600 border-2 border-background animate-in zoom-in duration-300"

@@ -21,11 +21,11 @@ const StudentEditPage = () => {
   const { studentId: id } = useParams();
   const navigate = useNavigate();
   const { students, events, agents, updateStudent, getStudentById } = useData();
-  
+
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -45,25 +45,52 @@ const StudentEditPage = () => {
       try {
         setLoading(true);
         setError(null);
-        
+
         // First try to find in local state
         let foundStudent = students.find(s => s.id === id);
-        
+
         // If not found locally, fetch from API
         if (!foundStudent) {
           foundStudent = await getStudentById(id);
         }
-        
+
         if (foundStudent) {
           setStudent(foundStudent);
+
+          const event = events.find(e => e.id === foundStudent.eventId || e._id === foundStudent.eventId);
+
+          const getField = (fieldKey, fallbackKey = null) => {
+            if (fallbackKey && foundStudent[fallbackKey]) return foundStudent[fallbackKey];
+            if (foundStudent[fieldKey]) return foundStudent[fieldKey];
+
+            if (event?.formFields) {
+              const field = event.formFields.find(f =>
+                f.label.toLowerCase().trim() === fieldKey.toLowerCase().trim() ||
+                (fallbackKey && f.label.toLowerCase().trim() === fallbackKey.toLowerCase().trim()) ||
+                f.label.toLowerCase().includes(fieldKey.toLowerCase())
+              );
+
+              if (field && foundStudent.customFields) {
+                const cleanFieldId = String(field.id).replace(/^field_/, '');
+                if (foundStudent.customFields[cleanFieldId] !== undefined) return foundStudent.customFields[cleanFieldId];
+                if (foundStudent.customFields[`field_${cleanFieldId}`] !== undefined) return foundStudent.customFields[`field_${cleanFieldId}`];
+              }
+            }
+
+            if (foundStudent.customFields && foundStudent.customFields[fieldKey]) {
+              return foundStudent.customFields[fieldKey];
+            }
+            return '';
+          };
+
           setFormData({
-            name: foundStudent.name || '',
-            email: foundStudent.email || '',
-            phone: foundStudent.phone || '',
-            country: foundStudent.country || '',
-            courseInterested: foundStudent.courseInterested || '',
-            currentEducation: foundStudent.currentEducation || '',
-            additionalInfo: foundStudent.additionalInfo || '',
+            name: getField('name', 'Full Name'),
+            email: getField('email', 'Email Address'),
+            phone: getField('phone', 'Phone Number'),
+            country: getField('country', 'Country of Interest'),
+            courseInterested: getField('courseInterested', 'Target Course'),
+            currentEducation: getField('currentEducation', 'Education Level') || getField('education', 'Highest Qualification'),
+            additionalInfo: getField('additionalInfo', 'Internal Notes') || getField('notes'),
             eventId: foundStudent.eventId || '',
             agentId: foundStudent.agentId || '',
           });
@@ -129,14 +156,14 @@ const StudentEditPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.name || !formData.email || !formData.phone || !formData.country) {
       toast.error('Please fill in all required fields');
       return;
     }
 
     setIsSubmitting(true);
-    
+
     try {
       await updateStudent(id, formData);
       toast.success('Student information updated successfully');
@@ -157,7 +184,7 @@ const StudentEditPage = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-start gap-4">
-          <Button 
+          {/* <Button 
             variant="outline" 
             size="sm"
             className="mt-1 h-9 border-[#E5E7EB] bg-white hover:bg-gray-50"
@@ -165,25 +192,25 @@ const StudentEditPage = () => {
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
-          </Button>
+          </Button> */}
           <div>
             <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
               Edit Student Details
             </h1>
-            <p className="text-sm font-medium text-[#6B7280] mt-1">Update registration records for {student.name}</p>
+            <p className="text-sm font-medium text-[#6B7280] mt-1">Update registration records for {formData.name || 'Student'}</p>
           </div>
         </div>
         <div className="flex gap-3">
-          <Button 
-            variant="outline" 
-            className="h-10 px-6 border-[#E5E7EB] bg-white hover:bg-gray-50 font-bold"
+          <Button
+            variant="outline"
+            className="h-10 px-6 border-[#E5E7EB] hover:text-[#6B7280] bg-white hover:bg-gray-50 font-bold"
             onClick={handleCancel}
           >
             Cancel
           </Button>
-          <Button 
+          <Button
             className="h-10 px-6 bg-[#042C53] hover:bg-[#0C447C] font-bold rounded-lg shadow-sm"
-            onClick={handleSubmit} 
+            onClick={handleSubmit}
             disabled={isSubmitting}
             data-testid="save-student-btn"
           >
@@ -365,8 +392,8 @@ const StudentEditPage = () => {
             {/* Sticky Actions */}
             <Card className="border-[#E5E7EB] shadow-md bg-white">
               <CardContent className="p-6 space-y-3">
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full h-11 bg-[#042C53] hover:bg-[#0C447C] font-bold"
                   disabled={isSubmitting}
                   onClick={handleSubmit}
@@ -374,10 +401,10 @@ const StudentEditPage = () => {
                 >
                   {isSubmitting ? 'Updating...' : 'Commit Changes'}
                 </Button>
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
-                  className="w-full h-11 border-[#E5E7EB] font-bold hover:bg-gray-50"
+                  variant="outline"
+                  className="w-full h-11 border-[#E5E7EB] hover:text-[#6B7280] font-bold hover:bg-gray-50"
                   onClick={handleCancel}
                   disabled={isSubmitting}
                 >

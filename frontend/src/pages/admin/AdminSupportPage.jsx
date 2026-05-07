@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useData } from '../../context/DataContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -6,6 +8,12 @@ import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../components/ui/dropdown-menu';
 import {
   MessageSquare,
   AlertCircle,
@@ -23,15 +31,19 @@ import {
   Reply,
   CheckCircle,
   Download,
-  ArrowUpRight
+  ArrowUpRight,
+  Trash2,
+  ExternalLink
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
 
 const AdminSupportPage = () => {
-  const { tickets, addTicketResponse, updateTicketStatus, loading } = useData();
+  const navigate = useNavigate();
+  const { tickets, addTicketResponse, updateTicketStatus, deleteTicket, loading } = useData();
 
-  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedTicketId, setSelectedTicketId] = useState(null);
+  const selectedTicket = tickets.find(t => t.id === selectedTicketId);
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -58,18 +70,64 @@ const AdminSupportPage = () => {
   };
 
   const handleUpdateStatus = async (status) => {
-    if (!selectedTicket) return;
+    if (!selectedTicketId) return;
     try {
-      await updateTicketStatus(selectedTicket.id, status);
+      await updateTicketStatus(selectedTicketId, status);
     } catch (error) {
       console.error('Failed to update status:', error);
     }
   };
 
+  const handleDeleteTicket = async () => {
+    if (!selectedTicketId) return;
+    if (window.confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) {
+      try {
+        await deleteTicket(selectedTicketId);
+        setSelectedTicketId(null);
+      } catch (error) {
+        console.error('Failed to delete ticket:', error);
+      }
+    }
+  };
+
+  const handleViewAgent = () => {
+    if (selectedTicket?.agentId?._id || selectedTicket?.agentId?.id) {
+      navigate(`/admin/agents/${selectedTicket.agentId._id || selectedTicket.agentId.id}/report`);
+    } else {
+      toast.error('Agent details not found');
+    }
+  };
+
+  const avgResponseTime = (() => {
+    const respondedTickets = tickets.filter(t =>
+      t.responses && t.responses.some(r => r.senderId?.role === 'admin')
+    );
+
+    if (respondedTickets.length === 0) return '0h';
+
+    let totalMs = 0;
+    respondedTickets.forEach(ticket => {
+      const firstAdminResponse = ticket.responses.find(r => r.senderId?.role === 'admin');
+      const responseTime = new Date(firstAdminResponse.timestamp) - new Date(ticket.createdAt);
+      totalMs += responseTime;
+    });
+
+    const avgMs = totalMs / respondedTickets.length;
+    const avgHours = avgMs / (1000 * 60 * 60);
+
+    if (avgHours < 1) {
+      const avgMins = Math.round(avgMs / (1000 * 60));
+      return `${avgMins}m`;
+    }
+
+    return `${avgHours.toFixed(1)}h`;
+  })();
+
   const stats = [
     { label: 'Total Tickets', value: tickets.length, sub: 'This month', icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'Open', value: tickets.filter(t => t.status === 'Open').length, sub: 'Needs action', icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50' },
-    { label: 'Avg Response', value: '4.8h', sub: 'Target: 6h', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+    // { label: 'Avg Response', value: avgResponseTime, sub: 'Target: 6h', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'In Progress', value: tickets.filter(t => t.status === 'In Progress').length, sub: 'Needs attention', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
     { label: 'Resolved', value: tickets.filter(t => t.status === 'Resolved').length, sub: 'All time', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   ];
 
@@ -93,7 +151,7 @@ const AdminSupportPage = () => {
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Support Management</h1>
           <p className="text-sm text-[#6B7280] mt-0.5 font-medium">Respond to agent inquiries and manage help centre content.</p>
         </div>
-        <div className="flex gap-3">
+        {/* <div className="flex gap-3">
           <Button variant="outline" size="sm" className="text-xs font-semibold h-10 px-4 border-[#E5E7EB] hover:bg-slate-50 hover:text-[#042C53] transition-all gap-2">
             <TrendingUp className="w-3.5 h-3.5" />
             Performance report
@@ -103,7 +161,7 @@ const AdminSupportPage = () => {
           >
             <Download size={14} className="mr-2" /> Export data
           </Button>
-        </div>
+        </div> */}
       </div>
 
       {/* KPI Cards */}
@@ -128,10 +186,10 @@ const AdminSupportPage = () => {
         {/* Ticket List Section */}
         <div className="lg:col-span-1 space-y-4">
           <Card className="h-full border-[#E5E7EB] shadow-none bg-white rounded-xl overflow-hidden flex flex-col min-h-[600px]">
-            <div className="bg-[#F9FAFB] border-b border-[#E5E7EB] px-4 py-2 flex items-center justify-between">
+            {/* <div className="bg-[#F9FAFB] border-b border-[#E5E7EB] px-4 py-2 flex items-center justify-between">
               <h3 className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Active tickets · {filteredTickets.length}</h3>
               <Badge className="bg-[#E6F1FB] text-[#0C447C] border-none text-[10px] h-5">{filteredTickets.length}</Badge>
-            </div>
+            </div> */}
             <CardHeader className="p-4 space-y-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
@@ -142,7 +200,7 @@ const AdminSupportPage = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              {/* <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="w-full h-9 border-[#E5E7EB] bg-white text-xs text-[#6B7280]">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
@@ -152,7 +210,7 @@ const AdminSupportPage = () => {
                   <SelectItem value="Payment / Invoice">Payment</SelectItem>
                   <SelectItem value="Student-Related">Student</SelectItem>
                 </SelectContent>
-              </Select>
+              </Select> */}
             </CardHeader>
             <CardContent className="p-0 flex-1 overflow-y-auto">
               {filteredTickets.length === 0 ? (
@@ -165,13 +223,13 @@ const AdminSupportPage = () => {
                   {filteredTickets.map((ticket) => (
                     <div
                       key={ticket.id}
-                      onClick={() => setSelectedTicket(ticket)}
+                      onClick={() => setSelectedTicketId(ticket.id)}
                       className={cn(
                         "p-4 cursor-pointer transition-all hover:bg-[#F9FAFB] relative group",
-                        selectedTicket?.id === ticket.id && "bg-[#E6F1FB]/40"
+                        selectedTicketId === ticket.id && "bg-[#E6F1FB]/40"
                       )}
                     >
-                      {selectedTicket?.id === ticket.id && (
+                      {selectedTicketId === ticket.id && (
                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#042C53]" />
                       )}
                       <div className="flex justify-between items-start mb-1.5">
@@ -225,12 +283,24 @@ const AdminSupportPage = () => {
                         <SelectItem value="Open">Mark Open</SelectItem>
                         <SelectItem value="In Progress">In Progress</SelectItem>
                         <SelectItem value="Resolved">Resolved</SelectItem>
-                        <SelectItem value="Closed">Closed</SelectItem>
+                        {/* <SelectItem value="Closed">Closed</SelectItem> */}
                       </SelectContent>
                     </Select>
-                    <Button variant="ghost" size="icon" className="text-white/60 hover:text-white hover:bg-white/10 h-8 w-8 rounded-lg">
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-white/60 hover:text-white hover:bg-white/10 h-8 w-8 rounded-lg">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={handleViewAgent}>
+                          <User className="w-4 h-4 mr-2" /> View Agent
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-red-600" onClick={handleDeleteTicket}>
+                          <Trash2 className="w-4 h-4 mr-2" /> Delete Ticket
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </CardHeader>
@@ -316,7 +386,7 @@ const AdminSupportPage = () => {
               </Card>
 
               {/* FAQ Management Mini-Section */}
-              <Card className="border-[#E5E7EB] shadow-none bg-white rounded-xl overflow-hidden">
+              {/* <Card className="border-[#E5E7EB] shadow-none bg-white rounded-xl overflow-hidden">
                 <div className="bg-[#F9FAFB] border-b border-[#E5E7EB] px-4 py-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="w-3.5 h-3.5 text-[#042C53]" />
@@ -342,7 +412,7 @@ const AdminSupportPage = () => {
                     </button>
                   </div>
                 </CardContent>
-              </Card>
+              </Card> */}
             </div>
           )}
         </div>

@@ -158,8 +158,14 @@ const StudentDetailsPage = () => {
         f.label.toLowerCase().includes(fieldKey.toLowerCase())
       );
 
-      if (field && student.customFields && (student.customFields[field.id] || student.customFields[`field_${field.id}`])) {
-        return student.customFields[field.id] || student.customFields[`field_${field.id}`];
+      if (field && student.customFields) {
+        const cleanFieldId = String(field.id).replace(/^field_/, '');
+        if (student.customFields[cleanFieldId] !== undefined) {
+          return student.customFields[cleanFieldId];
+        }
+        if (student.customFields[`field_${cleanFieldId}`] !== undefined) {
+          return student.customFields[`field_${cleanFieldId}`];
+        }
       }
     }
 
@@ -181,20 +187,23 @@ const StudentDetailsPage = () => {
     const standardFieldKeys = ['name', 'email', 'phone', 'country', 'education', 'courseInterested', 'notes'];
 
     // Also skip fields that are already matched by label in standard sections
-    const standardLabels = ['Full Name', 'Email Address', 'Phone Number', 'Country of Interest', 'Target Course', 'Education Level', 'Internal Notes'];
+    const standardLabels = ['Full Name', 'Email Address', 'Phone Number', 'Country of Interest', 'Target Course', 'Education Level', 'Highest Qualification', 'Internal Notes'];
 
     Object.entries(student.customFields).forEach(([key, value]) => {
       if (!value) return;
 
       // Find the label from event formFields if possible
-      const fieldId = key.replace(/^field_/, '');
-      const formField = event?.formFields?.find(f => f.id === fieldId || `field_${f.id}` === key);
+      const cleanKey = key.replace(/^field_/, '');
+      const formField = event?.formFields?.find(f => String(f.id).replace(/^field_/, '') === cleanKey);
 
       const label = formField ? formField.label : key.replace(/^field_/, '').replace(/_/g, ' ');
 
       // Skip if it's a standard field or already displayed
       const isStandardKey = standardFieldKeys.includes(key);
-      const isStandardLabel = standardLabels.some(l => label.toLowerCase().includes(l.toLowerCase()));
+      const isStandardLabel = standardLabels.some(l => 
+        label.toLowerCase().includes(l.toLowerCase()) || 
+        l.toLowerCase().includes(label.toLowerCase())
+      );
 
       if (!isStandardKey && !isStandardLabel) {
         fields.push({

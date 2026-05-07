@@ -9,6 +9,7 @@ const {
   updateAgent, 
   deleteAgent,
   uploadVerificationDocument,
+  deleteVerificationDocument,
   verifyAgent,
   downloadVerificationDocument
 } = require('../controllers/agentController');
@@ -54,5 +55,6 @@ router.get('/:id/documents/:docId', downloadVerificationDocument);
 
 // Agent specific routes
 router.post('/me/documents', restrictTo('agent'), upload.single('file'), uploadVerificationDocument);
+router.delete('/me/documents/:docId', restrictTo('agent'), deleteVerificationDocument);
 
 module.exports = router;

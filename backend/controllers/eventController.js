@@ -1,6 +1,7 @@
 const Event = require('../models/Event');
 const Student = require('../models/Student');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { sendEmail, templates } = require('../utils/email');
 
 // @desc    Get all events
@@ -18,10 +19,9 @@ exports.getEvents = async (req, res) => {
     const events = await Event.find(query).sort({ date: -1 });
     res.status(200).json(events.map(event => event.toJSON()));
   } catch (error) {
-    console.error('Get events error:', error);
     res.status(500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };
@@ -55,10 +55,9 @@ exports.getEvent = async (req, res) => {
 
     res.status(200).json(event.toJSON());
   } catch (error) {
-    console.error('Get event error:', error);
     res.status(500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };
@@ -73,6 +72,7 @@ exports.createEvent = async (req, res) => {
       description, 
       date, 
       location, 
+      type,
       seatCapacity, 
       assignedAgents, 
       requiredDocuments,
@@ -86,6 +86,7 @@ exports.createEvent = async (req, res) => {
       description,
       date,
       location,
+      type: type || 'physical',
       seatCapacity,
       assignedAgents: assignedAgents || [],
       requiredDocuments: requiredDocuments || [],
@@ -127,6 +128,7 @@ exports.updateEvent = async (req, res) => {
       description, 
       date, 
       location, 
+      type,
       seatCapacity, 
       assignedAgents, 
       requiredDocuments,
@@ -152,6 +154,7 @@ exports.updateEvent = async (req, res) => {
     if (description !== undefined) event.description = description;
     if (date !== undefined) event.date = date;
     if (location !== undefined) event.location = location;
+    if (type !== undefined) event.type = type;
     if (seatCapacity !== undefined) event.seatCapacity = seatCapacity;
     if (assignedAgents !== undefined) event.assignedAgents = assignedAgents;
     if (requiredDocuments !== undefined) event.requiredDocuments = requiredDocuments;
@@ -176,10 +179,9 @@ exports.updateEvent = async (req, res) => {
 
     res.status(200).json(event.toJSON());
   } catch (error) {
-    console.error('Update event error:', error);
     res.status(500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };
@@ -209,10 +211,61 @@ exports.deleteEvent = async (req, res) => {
       message: 'Event deleted successfully'
     });
   } catch (error) {
-    console.error('Delete event error:', error);
     res.status(500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Notify assigned agents for an event
+// @route   POST /api/events/:id/notify
+// @access  Private (Admin only)
+exports.notifyAgents = async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Event not found'
+      });
+    }
+
+    if (!event.assignedAgents || event.assignedAgents.length === 0) {
+      return res.status(400).json({
+        success: false,
+        detail: 'No agents assigned to this event'
+      });
+    }
+
+    const { message } = req.body;
+    const notificationTitle = `Event Update: ${event.title}`;
+    const notificationMessage = message || `Important update regarding the event "${event.title}". Please check the details.`;
+
+    // Create notifications for each assigned agent
+    const notificationPromises = event.assignedAgents.map(agentId => {
+      return Notification.create({
+        recipient: agentId,
+        title: notificationTitle,
+        message: notificationMessage,
+        type: 'info',
+        relatedId: event._id,
+        relatedModel: 'Event'
+      });
+    });
+
+    await Promise.all(notificationPromises);
+
+    res.status(200).json({
+      success: true,
+      message: `Notifications sent to ${event.assignedAgents.length} agents`
+    });
+  } catch (error) {
+    console.error('Notify agents error:', error);
+    res.status(500).json({
+      success: false,
+      detail: error.message || 'Server error'
     });
   }
 };

@@ -10,7 +10,6 @@ import {
   UserCheck,
   Clock,
   CheckCircle2,
-  DollarSign,
   Ticket,
   ChevronDown,
   ArrowUpRight
@@ -73,16 +72,7 @@ const AgentDashboard = () => {
   const myTickets = getFilteredData(rawMyTickets, 'createdAt');
 
   const upcomingEvents = assignedEvents.filter(e => new Date(e.date) >= new Date());
-
-  // Calculate earnings (Assume ₹22.5k per converted student)
   const convertedCount = myStudents.filter(s => s.status === 'Converted').length;
-  const earningsValue = convertedCount * 22500;
-  const earningsDisplay = earningsValue >= 100000
-    ? `₹${(earningsValue / 100000).toFixed(1)}L`
-    : `₹${earningsValue.toLocaleString()}`;
-
-  // Action items: Students with status 'Registered' but no docs, or 'Review' status
-  const actionItems = myStudents.filter(s => s.status === 'Registered' || s.status === 'Review').length;
 
   const statCards = [
     {
@@ -102,20 +92,20 @@ const AgentDashboard = () => {
       bgColor: 'bg-[#E6F1FB]',
     },
     {
-      title: 'MTD Earnings',
-      value: earningsDisplay,
-      trend: `${convertedCount} conversions`,
-      icon: DollarSign,
-      color: 'text-[#3B6D11]',
-      bgColor: 'bg-[#EAF3DE]',
+      title: 'Converted Students',
+      value: convertedCount,
+      trend: `${myStudents.length > 0 ? ((convertedCount / myStudents.length) * 100).toFixed(0) : 0}% conversion rate`,
+      icon: UserCheck,
+      color: 'text-[#10B981]',
+      bgColor: 'bg-[#ECFDF5]',
     },
     {
-      title: 'Action Items',
-      value: actionItems,
-      trend: 'Needs document review',
+      title: 'Support Tickets',
+      value: rawMyTickets.filter(t => t.status === 'open' || t.status === 'pending').length,
+      trend: 'Awaiting response',
       icon: Ticket,
-      color: 'text-[#854F0B]',
-      bgColor: 'bg-[#FAEEDA]',
+      color: 'text-[#92400E]',
+      bgColor: 'bg-[#FEF3C7]',
     }
   ];
 
@@ -306,7 +296,7 @@ const AgentDashboard = () => {
                 <CardTitle className="text-lg font-['Outfit'] text-[#111827]">My Performance</CardTitle>
                 <CardDescription>Monthly registration trends</CardDescription>
               </div>
-              <span className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></span>
+              <Link to='/agent/students' className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
             </div>
           </CardHeader>
           <CardContent>
@@ -382,7 +372,7 @@ const AgentDashboard = () => {
               <CardDescription>Students you've onboarded recently</CardDescription>
             </div>
             <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-              <Link to="/agent/dashboard">View all <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
+              <Link to="/agent/students">View all <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
             </Button>
           </CardHeader>
           <CardContent className="p-0">

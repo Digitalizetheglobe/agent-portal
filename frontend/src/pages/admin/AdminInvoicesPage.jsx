@@ -173,11 +173,11 @@ const AdminInvoicesPage = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex bg-white border border-[#E5E7EB] rounded-lg p-1 gap-1">
+        {/* <div className="flex bg-white border border-[#E5E7EB] rounded-lg p-1 gap-1">
           <Button variant="outline" size="sm" className="h-8 text-xs gap-2 border-none hover:bg-gray-50 hover:text-[#042C53]">
             <Filter className="w-3.5 h-3.5" /> More Filters
           </Button>
-        </div>
+        </div> */}
       </div>
 
       <Tabs defaultValue="all" className="w-full">

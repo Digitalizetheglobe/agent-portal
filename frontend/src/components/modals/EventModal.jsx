@@ -53,7 +53,7 @@ const eventSchema = z.object({
   formFields: z.array(z.object({
     id: z.string(),
     label: z.string(),
-    type: z.enum(['text', 'paragraph', 'radio', 'date', 'select']),
+    type: z.enum(['text', 'paragraph', 'radio', 'date', 'select', 'phone', 'country', 'qualification']),
     required: z.boolean(),
     options: z.array(z.string()),
     placeholder: z.string().optional(),
@@ -140,12 +140,22 @@ const EventModal = ({ open, onOpenChange, event }) => {
           { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
           { label: 'English Proficiency', value: 'LanguageTest', mandatory: false }
         ],
-        formFields: [],
+        formFields: [
+          { id: 'field_name', label: 'Full Name', type: 'text', required: true, placeholder: 'Enter full name', order: 0 },
+          { id: 'field_email', label: 'Email Address', type: 'email', required: true, placeholder: 'Enter email address', order: 1 },
+          { id: 'field_phone', label: 'Phone Number', type: 'phone', required: true, placeholder: 'Enter phone number', order: 2 },
+          { id: 'field_country', label: 'Country', type: 'country', required: true, order: 3 },
+        ],
         notifyAgents: true,
         notificationMessage: ''
       });
       setSelectedAgents([]);
-      setFormFields([]);
+      setFormFields([
+        { id: 'field_name', label: 'Full Name', type: 'text', required: true, placeholder: 'Enter full name', order: 0 },
+        { id: 'field_email', label: 'Email Address', type: 'email', required: true, placeholder: 'Enter email address', order: 1 },
+        { id: 'field_phone', label: 'Phone Number', type: 'phone', required: true, placeholder: 'Enter phone number', order: 2 },
+        { id: 'field_country', label: 'Country', type: 'country', required: true, order: 3 },
+      ]);
       setNotifyAgents(true);
       setNotificationMessage('');
     }

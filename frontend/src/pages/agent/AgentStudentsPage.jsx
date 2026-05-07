@@ -13,6 +13,9 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Card, CardContent } from '../../components/ui/card';
 
+import { cn } from '../../lib/utils';
+import StudentRegistrationModal from '../../components/modals/StudentRegistrationModal';
+
 const STAGES = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
 const STAGE_PILLS = {
   'Registered': 'bg-[#E6F1FB] text-[#0C447C]',
@@ -55,23 +58,14 @@ const AgentStudentsPage = () => {
   const [eventFilter, setEventFilter] = useState('all');
   const [docFilter, setDocFilter] = useState('all');
   const [curStage, setCurStage] = useState('all');
-  const [viewType, setViewType] = useState('table'); // 'table' or 'grid'
+  const [displayMode, setDisplayMode] = useState('table'); // 'table' or 'grid'
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCategory, setUploadCategory] = useState(null);
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    country: 'United Kingdom',
-    courseInterested: '',
-    education: "Bachelor's degree",
-    city: '',
     eventId: '',
-    notes: '',
-    customFields: {}
   });
 
   useEffect(() => {
@@ -107,32 +101,7 @@ const AgentStudentsPage = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const event = events.find(e => e.id === formData.eventId || e._id === formData.eventId);
-      await addStudent({
-        ...formData,
-        agentId: user?.id,
-        status: 'Registered',
-        submittedAt: new Date().toISOString()
-      });
-      toast.success('Student registered successfully');
-      setShowAddModal(false);
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        country: 'United Kingdom',
-        courseInterested: '',
-        education: "Bachelor's degree",
-        city: '',
-        eventId: assignedEvents[0]?.id || assignedEvents[0]?._id || '',
-        notes: '',
-        customFields: {}
-      });
-    } catch (error) {
-      toast.error('Failed to register student');
-    }
+    // This is now handled by DynamicStudentForm inside the modal
   };
 
   const getStudentValue = (student, key, fallbackLabel) => {
@@ -149,10 +118,11 @@ const AgentStudentsPage = () => {
     if (event?.formFields) {
       const field = event.formFields.find(f =>
         f.label.toLowerCase().trim() === fallbackLabel.toLowerCase().trim() ||
-        f.label.toLowerCase().includes(fallbackLabel.toLowerCase())
+        f.label.toLowerCase().includes(fallbackLabel.toLowerCase()) ||
+        f.label.toLowerCase().includes(key.toLowerCase())
       );
       if (field) {
-        const val = student.customFields?.[field.id] || student.customFields?.[`field_${field.id}`];
+        const val = student.customFields?.[field.id] || student.customFields?.[`field_${field.id}`] || student.customFields?.[String(field.id).replace(/^field_/, '')];
         if (val) return val;
       }
     }
@@ -375,25 +345,35 @@ const AgentStudentsPage = () => {
             <option value="missing">Missing</option>
             <option value="pending">Pending</option>
           </select>
-          <div className="flex bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
-            <button
-              className={`p-1.5 rounded-lg transition-all ${viewType === 'table' ? 'bg-[#F3F4F6] text-[#042C53]' : 'text-gray-400 hover:text-gray-600'}`}
-              onClick={() => setViewType('table')}
+          <div className="flex bg-white border border-slate-200 rounded-xl p-1 gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDisplayMode('table')}
+              className={cn(
+                "h-8 w-8 p-0 rounded-lg transition-all",
+                displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+              )}
             >
-              <List size={16} />
-            </button>
-            <button
-              className={`p-1.5 rounded-lg transition-all ${viewType === 'grid' ? 'bg-[#F3F4F6] text-[#042C53]' : 'text-gray-400 hover:text-gray-600'}`}
-              onClick={() => setViewType('grid')}
+              <List className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDisplayMode('grid')}
+              className={cn(
+                "h-8 w-8 p-0 rounded-lg transition-all",
+                displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+              )}
             >
-              <LayoutGrid size={16} />
-            </button>
+              <LayoutGrid className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Main Content View */}
-      {viewType === 'table' ? (
+      {displayMode === 'table' ? (
         <Card className="border-gray-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm text-left">
@@ -522,152 +502,11 @@ const AgentStudentsPage = () => {
       )}
 
       {/* Registration Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[2000] flex items-center justify-center p-4">
-          <Card className="w-full max-w-[650px] shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
-              <h3 className="text-xl font-bold text-[#111827] font-['Outfit']">Register New Student</h3>
-              <button
-                className="p-2 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
-                onClick={() => setShowAddModal(false)}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <div className="p-6 max-h-[70vh] overflow-y-auto bg-[#F9FAFB]">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Standard Fields */}
-                  <div className="md:col-span-2 space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Full Name (as per ID)</label>
-                    <input
-                      type="text" required name="name" value={formData.name} onChange={handleInputChange}
-                      placeholder="e.g. Priya Sharma"
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Email Address</label>
-                    <input
-                      type="email" required name="email" value={formData.email} onChange={handleInputChange}
-                      placeholder="student@email.com"
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Phone Number</label>
-                    <input
-                      type="tel" required name="phone" value={formData.phone} onChange={handleInputChange}
-                      placeholder="+91 98200 00000"
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Preferred Country</label>
-                    <select
-                      name="country" value={formData.country} onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white appearance-none"
-                    >
-                      <option value="United Kingdom">United Kingdom</option>
-                      <option value="Canada">Canada</option>
-                      <option value="USA">USA</option>
-                      <option value="Australia">Australia</option>
-                      <option value="Germany">Germany</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">City</label>
-                    <input
-                      type="text" required name="city" value={formData.city} onChange={handleInputChange}
-                      placeholder="e.g. Delhi"
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
-                    />
-                  </div>
-
-                  {/* Custom Event Fields */}
-                  {assignedEvents.find(e => e.id === formData.eventId || e._id === formData.eventId)?.formFields?.map(field => (
-                    <div key={field.id} className={cn("space-y-1.5", field.type === 'paragraph' ? "md:col-span-2" : "")}>
-                      <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                        {field.label} {field.required && <span className="text-red-500">*</span>}
-                      </label>
-                      {field.type === 'select' ? (
-                        <select
-                          name={`field_${field.id}`}
-                          value={formData.customFields[field.id] || ''}
-                          onChange={handleInputChange}
-                          required={field.required}
-                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white appearance-none"
-                        >
-                          <option value="">Select option</option>
-                          {field.options?.map(opt => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
-                      ) : field.type === 'paragraph' ? (
-                        <textarea
-                          name={`field_${field.id}`}
-                          value={formData.customFields[field.id] || ''}
-                          onChange={handleInputChange}
-                          required={field.required}
-                          placeholder={field.placeholder}
-                          rows={3}
-                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
-                        />
-                      ) : (
-                        <input
-                          type={field.type === 'date' ? 'date' : 'text'}
-                          name={`field_${field.id}`}
-                          value={formData.customFields[field.id] || ''}
-                          onChange={handleInputChange}
-                          required={field.required}
-                          placeholder={field.placeholder}
-                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
-                        />
-                      )}
-                    </div>
-                  ))}
-
-                  <div className="md:col-span-2 space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Select Event</label>
-                    <select
-                      required name="eventId" value={formData.eventId} onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white appearance-none"
-                    >
-                      <option value="">Select an event...</option>
-                      {assignedEvents.map(ev => (
-                        <option key={ev.id || ev._id} value={ev.id || ev._id}>{ev.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="md:col-span-2 space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Additional Notes</label>
-                    <textarea
-                      name="notes" value={formData.notes} onChange={handleInputChange}
-                      placeholder="Any specific requirements or notes about this student…"
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white min-h-[80px]"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 md:p-6 border-t border-gray-100 bg-white flex justify-end gap-3">
-                <Button
-                  type="button" variant="outline"
-                  className="h-10 text-xs font-bold border-gray-200"
-                  onClick={() => setShowAddModal(false)}
-                >
-                  Discard
-                </Button>
-                <Button
-                  type="submit"
-                  className="h-10 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white px-8"
-                >
-                  Register Student
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+      <StudentRegistrationModal 
+        open={showAddModal} 
+        onOpenChange={setShowAddModal} 
+        initialEventId={formData.eventId}
+      />
 
       {/* Detail Panel Overlay */}
       {selectedStudent && (

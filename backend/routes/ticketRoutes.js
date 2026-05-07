@@ -5,7 +5,8 @@ const {
   getTickets, 
   getTicket, 
   addResponse, 
-  updateTicketStatus 
+  updateTicketStatus,
+  deleteTicket
 } = require('../controllers/ticketController');
 const { protect } = require('../middleware/auth');
 
@@ -16,7 +17,8 @@ router.route('/')
   .get(getTickets);
 
 router.route('/:id')
-  .get(getTicket);
+  .get(getTicket)
+  .delete(deleteTicket);
 
 router.post('/:id/responses', addResponse);
 router.patch('/:id/status', updateTicketStatus);

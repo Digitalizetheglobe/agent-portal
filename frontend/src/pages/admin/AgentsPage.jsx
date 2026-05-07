@@ -22,7 +22,9 @@ import {
   Bell,
   TrendingUp,
   MapPin,
-  ArrowUpRight
+  ArrowUpRight,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Button } from '../../components/ui/button';
@@ -80,6 +82,7 @@ const AgentsPage = () => {
   const [agentToDelete, setAgentToDelete] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [agentInDrawer, setAgentInDrawer] = useState(null);
+  const [displayMode, setDisplayMode] = useState('table');
 
   const stats = getStats();
 
@@ -136,16 +139,16 @@ const AgentsPage = () => {
 
       const matchesFilter =
         currentFilter === 'all' ||
-        (currentFilter === 'active' && agent.status === 'active') ||
-        (currentFilter === 'pending' && !agent.isVerified) ||
-        (currentFilter === 'inactive' && agent.status === 'inactive');
+        (currentFilter === 'approved' && (agent.verificationStatus === 'approved' || agent.isVerified)) ||
+        (currentFilter === 'pending' && !agent.isVerified && agent.verificationStatus !== 'rejected') ||
+        (currentFilter === 'rejected' && agent.verificationStatus === 'rejected');
 
       return matchesSearch && matchesFilter;
     });
   }, [processedAgents, searchQuery, currentFilter]);
 
   const pendingVerificationAgents = useMemo(() => {
-    return processedAgents.filter(agent => !agent.isVerified);
+    return processedAgents.filter(agent => !agent.isVerified && agent.verificationStatus !== 'rejected');
   }, [processedAgents]);
 
   // Event handlers
@@ -184,7 +187,7 @@ const AgentsPage = () => {
 
   const handleApprove = async (agentId) => {
     try {
-      await verifyAgent(agentId, { isVerified: true });
+      await verifyAgent(agentId, { isVerified: true, verificationStatus: 'approved' });
       toast.success('Agent verified successfully');
     } catch (error) {
       console.error('Failed to verify agent', error);
@@ -224,7 +227,7 @@ const AgentsPage = () => {
     const reason = prompt('Please enter a reason for rejection:');
     if (reason) {
       try {
-        await verifyAgent(agentId, { isVerified: false, remarks: reason });
+        await verifyAgent(agentId, { isVerified: false, verificationStatus: 'rejected', remarks: reason });
         toast.success('Agent verification rejected');
       } catch (error) {
         console.error('Failed to reject agent', error);
@@ -239,7 +242,7 @@ const AgentsPage = () => {
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Agent Management</h1>
           <p className="text-sm text-[#6B7280] mt-0.5">
-            {agents.length} agents · {agents.filter(a => !a.isVerified).length} pending verification
+            {agents.length} agents · {agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length} pending verification
           </p>
         </div>
         <div className="flex gap-3">
@@ -259,9 +262,10 @@ const AgentsPage = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Total agents', val: agents.length, sub: `${agents.filter(a => a.status === 'active').length} active`, subColor: 'text-[#27500A]' },
-          { label: 'Pending verification', val: agents.filter(a => !a.isVerified).length, sub: 'Needs review', subColor: 'text-[#633806]' },
+          { label: 'Pending verification', val: agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length, sub: 'Needs review', subColor: 'text-[#633806]' },
           { label: 'Avg conversion rate', val: stats.conversionRate + '%', sub: '+2.1% vs last month', subColor: 'text-[#27500A]' },
-          { label: 'Total commissions', val: `₹${(invoices.reduce((s, i) => s + (i.amount || 0), 0) / 100000).toFixed(1)}L`, sub: `₹${(invoices.filter(i => i.status === 'pending').reduce((s, i) => s + (i.amount || 0), 0) / 1000).toFixed(0)}K pending`, subColor: 'text-[#633806]' },
+          // { label: 'Total commissions', val: `₹${(invoices.reduce((s, i) => s + (i.amount || 0), 0) / 100000).toFixed(1)}L`, sub: `₹${(invoices.filter(i => i.status === 'pending').reduce((s, i) => s + (i.amount || 0), 0) / 1000).toFixed(0)}K pending`, subColor: 'text-[#633806]' },
+          { label: 'Total students', val: students.length, sub: `${students.filter(s => s.status === 'Converted').length} conversions`, subColor: 'text-[#27500A]' },
         ].map((kpi, i) => (
           <Card key={i} className="border-[#E5E7EB] bg-white shadow-none">
             <CardContent className="p-4">
@@ -273,40 +277,11 @@ const AgentsPage = () => {
         ))}
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-col md:flex-row items-center gap-4">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
-          <Input
-            placeholder="Search by name, agency, or email…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 h-10 border-[#E5E7EB] bg-white text-sm placeholder:text-[#9CA3AF] focus-visible:ring-[#042C53]/10"
-          />
-        </div>
-        <div className="flex bg-white border border-[#E5E7EB] rounded-lg p-1 gap-1 overflow-x-auto w-full md:w-auto">
-          {['all', 'active', 'pending', 'inactive'].map((f) => (
-            <button
-              key={f}
-              onClick={() => setCurrentFilter(f)}
-              className={cn(
-                "px-3 py-1.5 text-[12px] font-medium rounded-md transition-all whitespace-nowrap",
-                currentFilter === f
-                  ? "bg-[#E6F1FB] text-[#0C447C]"
-                  : "text-[#6B7280] hover:bg-gray-50"
-              )}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)} ({f === 'all' ? agents.length : f === 'pending' ? agents.filter(a => !a.isVerified).length : agents.filter(a => a.status === f).length})
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Verification Queue */}
       {pendingVerificationAgents.length > 0 && (
         <Card className="border-[#E5E7EB] shadow-none overflow-hidden">
           <div className="bg-[#F9FAFB] border-b border-[#E5E7EB] px-4 py-2">
-            <h3 className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Verification queue · {agents.filter(a => !a.isVerified).length} new</h3>
+            <h3 className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Verification queue · {agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length} new</h3>
           </div>
           <div className="p-4 flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
             {pendingVerificationAgents.map((agent) => {
@@ -366,7 +341,7 @@ const AgentsPage = () => {
                       size="sm"
                       variant="outline"
                       className="h-8 text-[11px] font-medium border-[#E5E7EB] inline-flex items-center"
-                      onClick={() => handleEdit(agent)}
+                      onClick={() => handlePerformanceReport(agent)}
                     >
                       View Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                     </Button>
@@ -378,101 +353,253 @@ const AgentsPage = () => {
         </Card>
       )}
 
-      {/* Main Table */}
-      <Card className="border-[#E5E7EB] shadow-none overflow-hidden">
-        <div className="bg-[#F9FAFB] border-b border-[#E5E7EB] px-4 py-2">
-          <h3 className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">All agents</h3>
+      {/* Controls */}
+      <div className="flex flex-col md:flex-row items-center gap-4">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
+          <Input
+            placeholder="Search by name, agency, or email…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 h-10 border-[#E5E7EB] bg-white text-sm placeholder:text-[#9CA3AF] focus-visible:ring-[#042C53]/10"
+          />
         </div>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-[#F9FAFB] hover:bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 pl-6 w-[26%]">Agent</TableHead>
-                <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Status</TableHead>
-                <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Registrations</TableHead>
-                <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Confirmed</TableHead>
-                <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Converted</TableHead>
-                <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Conv. Rate</TableHead>
-                <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Events</TableHead>
-                <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 pr-6 text-right w-[8%]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAgents.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-20">
-                    <div className="flex flex-col items-center gap-3">
-                      <Users className="w-10 h-10 text-gray-200" />
-                      <p className="text-sm text-[#6B7280] font-medium">No agents found matching your criteria.</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredAgents.map((agent) => {
-                  const styles = getAvatarStyles(agent.name);
-                  const rateValue = parseFloat(agent.convRate);
-                  const rateColor = rateValue >= 18 ? 'text-[#27500A]' : rateValue >= 12 ? 'text-[#633806]' : 'text-[#791F1F]';
-
-                  return (
-                    <TableRow key={agent.id} className="group border-b border-[#E5E7EB] hover:bg-[#F9FAFB] transition-colors">
-                      <TableCell className="py-3 pl-6">
-                        <div className="flex items-center gap-3">
-                          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[10px]", styles.bg, styles.text)}>
-                            {getInitials(agent.name)}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-medium text-[#111827] truncate">{agent.name}</p>
-                            <p className="text-[11px] text-[#6B7280] truncate">{agent.agencyName || 'Independent'}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3">
-                        {agent.isVerified ? (
-                          <Badge className="bg-[#EAF3DE] text-[#27500A] border-none text-[10px] font-medium h-5">Verified</Badge>
-                        ) : (
-                          <Badge className="bg-[#FAEEDA] text-[#633806] border-none text-[10px] font-medium h-5">Pending</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-3 text-[13px] text-[#111827]">{agent.registrations}</TableCell>
-                      <TableCell className="py-3 text-[13px] text-[#111827]">{agent.confirmed}</TableCell>
-                      <TableCell className="py-3 text-[13px] text-[#111827]">{agent.converted}</TableCell>
-                      <TableCell className={cn("py-3 text-[13px] font-medium", rateColor)}>{agent.convRate}</TableCell>
-                      <TableCell className="py-3 text-[13px] text-[#6B7280]">{agent.assignedEvents} events</TableCell>
-                      <TableCell className="py-3 pr-6 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-[#6B7280] hover:text-[#111827] hover:bg-gray-100"
-                            onClick={() => handleView(agent)}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-[#6B7280] hover:bg-gray-100">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem onClick={() => handleEdit(agent)}>
-                                <Edit2 className="w-4 h-4 mr-2" /> Edit Profile
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteClick(agent)}>
-                                <Trash2 className="w-4 h-4 mr-2" /> Delete Agent
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
+        <div className="flex bg-white border border-[#E5E7EB] rounded-lg p-1 gap-1 overflow-x-auto w-full md:w-auto">
+          {['all', 'approved', 'pending', 'rejected'].map((f) => (
+            <button
+              key={f}
+              onClick={() => setCurrentFilter(f)}
+              className={cn(
+                "px-3 py-1.5 text-[12px] font-medium rounded-md transition-all whitespace-nowrap",
+                currentFilter === f
+                  ? "bg-[#E6F1FB] text-[#0C447C]"
+                  : "text-[#6B7280] hover:bg-gray-50"
               )}
-            </TableBody>
-          </Table>
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)} ({f === 'all' ? agents.length : f === 'pending' ? agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length : f === 'approved' ? agents.filter(a => a.verificationStatus === 'approved' || a.isVerified).length : agents.filter(a => a.verificationStatus === 'rejected').length})
+            </button>
+          ))}
         </div>
-      </Card>
+
+        <div className="flex bg-white border border-[#E5E7EB] rounded-lg p-1 gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setDisplayMode('table')}
+            className={cn(
+              "h-8 w-8 p-0 rounded-md transition-all",
+              displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-[#6B7280] hover:bg-gray-50"
+            )}
+          >
+            <List className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setDisplayMode('grid')}
+            className={cn(
+              "h-8 w-8 p-0 rounded-md transition-all",
+              displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-[#6B7280] hover:bg-gray-50"
+            )}
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Main List View */}
+      {displayMode === 'table' ? (
+        <Card className="border-[#E5E7EB] shadow-none overflow-hidden">
+          <div className="bg-[#F9FAFB] border-b border-[#E5E7EB] px-4 py-2">
+            <h3 className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">All agents</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-[#F9FAFB] hover:bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 pl-6 w-[26%]">Agent</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Status</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Registrations</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Confirmed</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Converted</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Conv. Rate</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Events</TableHead>
+                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3  text-center w-[8%]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredAgents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-20">
+                      <div className="flex flex-col items-center gap-3">
+                        <Users className="w-10 h-10 text-gray-200" />
+                        <p className="text-sm text-[#6B7280] font-medium">No agents found matching your criteria.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredAgents.map((agent) => {
+                    const styles = getAvatarStyles(agent.name);
+                    const rateValue = parseFloat(agent.convRate);
+                    const rateColor = rateValue >= 18 ? 'text-[#27500A]' : rateValue >= 12 ? 'text-[#633806]' : 'text-[#791F1F]';
+
+                    return (
+                      <TableRow key={agent.id} className="group border-b border-[#E5E7EB] hover:bg-[#F9FAFB] transition-colors">
+                        <TableCell className="py-3 pl-6">
+                          <div className="flex items-center gap-3">
+                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[10px]", styles.bg, styles.text)}>
+                              {getInitials(agent.name)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[13px] font-medium text-[#111827] truncate">{agent.name}</p>
+                              <p className="text-[11px] text-[#6B7280] truncate">{agent.agencyName || 'Independent'}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3 text-center">
+                          {agent.verificationStatus === 'approved' || agent.isVerified ? (
+                            <Badge className="bg-[#EAF3DE] text-[#27500A] border-none text-[10px] font-medium h-5">Approve</Badge>
+                          ) : agent.verificationStatus === 'rejected' ? (
+                            <Badge className="bg-[#FCEBEB] text-[#791F1F] border-none text-[10px] font-medium h-5">Rejected</Badge>
+                          ) : (
+                            <Badge className="bg-[#FAEEDA] text-[#633806] border-none text-[10px] font-medium h-5">Pending</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-3 text-center text-[13px] text-[#111827]">{agent.registrations}</TableCell>
+                        <TableCell className="py-3 text-center text-[13px] text-[#111827]">{agent.confirmed}</TableCell>
+                        <TableCell className="py-3 text-center text-[13px] text-[#111827]">{agent.converted}</TableCell>
+                        <TableCell className={cn("py-3 text-center text-[13px] font-medium", rateColor)}>{agent.convRate}</TableCell>
+                        <TableCell className="py-3 text-center text-[13px] text-[#6B7280]">{agent.assignedEvents} events</TableCell>
+                        <TableCell className="py-3 pr-6 text-right">
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              className="h-8 w-8 flex items-center justify-center rounded-md text-[#6B7280] hover:text-[#111827] hover:bg-gray-100 transition-all"
+                              onClick={() => handleView(agent)}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="h-8 w-8 flex items-center justify-center rounded-md text-[#6B7280] hover:bg-gray-100 transition-all">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => handleEdit(agent)}>
+                                  <Edit2 className="w-4 h-4 mr-2" /> Edit Profile
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteClick(agent)}>
+                                  <Trash2 className="w-4 h-4 mr-2" /> Delete Agent
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredAgents.length === 0 ? (
+            <div className="col-span-full py-20 bg-white rounded-xl border border-[#E5E7EB] flex flex-col items-center gap-3">
+              <Users className="w-10 h-10 text-gray-200" />
+              <p className="text-sm text-[#6B7280] font-medium">No agents found matching your criteria.</p>
+            </div>
+          ) : (
+            filteredAgents.map((agent) => {
+              const styles = getAvatarStyles(agent.name);
+              const rateValue = parseFloat(agent.convRate);
+              const rateColor = rateValue >= 18 ? 'text-[#27500A]' : rateValue >= 12 ? 'text-[#633806]' : 'text-[#791F1F]';
+
+              return (
+                <Card key={agent.id} className="border-[#E5E7EB] shadow-sm hover:shadow-md transition-all group overflow-hidden bg-white">
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center font-bold text-base shadow-sm", styles.bg, styles.text)}>
+                        {getInitials(agent.name)}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          className="h-8 w-8 flex items-center justify-center rounded-md text-[#6B7280] hover:text-[#111827] hover:bg-gray-100 transition-all"
+                          onClick={() => handleView(agent)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="h-8 w-8 flex items-center justify-center rounded-md text-[#6B7280] hover:bg-gray-100 transition-all">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => handleEdit(agent)}>
+                              <Edit2 className="w-4 h-4 mr-2" /> Edit Profile
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteClick(agent)}>
+                              <Trash2 className="w-4 h-4 mr-2" /> Delete Agent
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+
+                    <div className="mb-4">
+                      <h4 className="text-[15px] font-semibold text-[#111827] truncate">{agent.name}</h4>
+                      <p className="text-[12px] text-[#6B7280] truncate mt-0.5">{agent.agencyName || 'Independent Agency'}</p>
+                      <div className="mt-2">
+                        {agent.verificationStatus === 'approved' || agent.isVerified ? (
+                          <Badge className="bg-[#EAF3DE] text-[#27500A] border-none text-[10px] font-medium h-5">Approve</Badge>
+                        ) : agent.verificationStatus === 'rejected' ? (
+                          <Badge className="bg-[#FCEBEB] text-[#791F1F] border-none text-[10px] font-medium h-5">Rejected</Badge>
+                        ) : (
+                          <Badge className="bg-[#FAEEDA] text-[#633806] border-none text-[10px] font-medium h-5">Pending Review</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-4 border-t border-[#F3F4F6]">
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Registrations</p>
+                        <p className="text-sm font-semibold text-[#111827]">{agent.registrations}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Conv. Rate</p>
+                        <p className={cn("text-sm font-bold", rateColor)}>{agent.convRate}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Converted</p>
+                        <p className="text-sm font-semibold text-[#111827]">{agent.converted}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Events</p>
+                        <p className="text-sm font-semibold text-[#6B7280]">{agent.assignedEvents}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                  <div className="px-5 py-3 bg-[#F9FAFB] border-t border-[#F3F4F6] flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[11px] text-[#6B7280]">
+                      <Calendar className="w-3 h-3" />
+                      <span>{new Date(agent.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</span>
+                    </div>
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 text-[11px] font-bold text-[#042C53] hover:text-[#0C447C] decoration-none flex items-center gap-1"
+                      onClick={() => handlePerformanceReport(agent)}
+                    >
+                      Report <ArrowUpRight className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* Agent Detail Drawer */}
       {drawerOpen && agentInDrawer && (
@@ -480,26 +607,36 @@ const AgentsPage = () => {
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
           <div className="absolute inset-y-0 right-0 max-w-lg w-full bg-white shadow-2xl animate-slideIn">
             <div className="h-full flex flex-col">
-              <div className="p-6 border-b border-[#E5E7EB] flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={cn("w-12 h-12 rounded-full flex items-center justify-center font-semibold text-lg", getAvatarStyles(agentInDrawer.name).bg, getAvatarStyles(agentInDrawer.name).text)}>
-                    {getInitials(agentInDrawer.name)}
+              <div className="p-6 border-b border-[#E5E7EB] flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={cn("w-12 h-12 rounded-full flex items-center justify-center font-semibold text-lg", getAvatarStyles(agentInDrawer.name).bg, getAvatarStyles(agentInDrawer.name).text)}>
+                      {getInitials(agentInDrawer.name)}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-[#111827]">{agentInDrawer.name}</h3>
+                      <p className="text-sm text-[#6B7280]">{agentInDrawer.agencyName || 'Independent'} · {agentInDrawer.region || 'Unknown'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-[#111827]">{agentInDrawer.name}</h3>
-                    <p className="text-sm text-[#6B7280]">{agentInDrawer.agencyName || 'Independent'} · {agentInDrawer.region || 'Unknown'}</p>
+                  <div className="flex items-center gap-3">
+                    {agentInDrawer.verificationStatus === 'approved' || agentInDrawer.isVerified ? (
+                      <Badge className="bg-[#EAF3DE] text-[#27500A] h-6">Approve</Badge>
+                    ) : agentInDrawer.verificationStatus === 'rejected' ? (
+                      <Badge className="bg-[#FCEBEB] text-[#791F1F] h-6">Rejected</Badge>
+                    ) : (
+                      <Badge className="bg-[#FAEEDA] text-[#633806] h-6">Pending</Badge>
+                    )}
+                    <Button variant="ghost" size="icon" onClick={() => setDrawerOpen(false)} className="h-8 w-8">
+                      <X className="w-5 h-5" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {agentInDrawer.isVerified ? (
-                    <Badge className="bg-[#EAF3DE] text-[#27500A] h-6">Active</Badge>
-                  ) : (
-                    <Badge className="bg-[#FAEEDA] text-[#633806] h-6">Pending</Badge>
-                  )}
-                  <Button variant="ghost" size="icon" onClick={() => setDrawerOpen(false)} className="h-8 w-8">
-                    <X className="w-5 h-5" />
-                  </Button>
-                </div>
+                {agentInDrawer.verificationStatus === 'rejected' && agentInDrawer.verificationRemarks && (
+                  <div className="text-sm bg-red-50 border border-red-100 text-red-800 p-3 rounded-lg">
+                    <span className="font-semibold">Reason for rejection: </span>
+                    {agentInDrawer.verificationRemarks}
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-8">
@@ -574,6 +711,27 @@ const AgentsPage = () => {
 
               <div className="p-6 border-t border-[#E5E7EB] bg-white mt-auto">
                 <div className="flex flex-col gap-2">
+                  <div className="flex gap-2 pb-3 border-b border-[#E5E7EB] mb-1">
+                    {(agentInDrawer.verificationStatus === 'pending' || agentInDrawer.verificationStatus === 'rejected') && (
+                      <Button
+                        className="flex-1 bg-[#27500A] hover:bg-[#1f3b08] text-white text-xs h-10"
+                        onClick={() => { handleApprove(agentInDrawer.id); setDrawerOpen(false); }}
+                      >
+                        <ShieldCheck className="w-4 h-4 mr-2" />
+                        Approve Agent
+                      </Button>
+                    )}
+                    {(agentInDrawer.verificationStatus === 'pending' || agentInDrawer.verificationStatus === 'approved' || agentInDrawer.isVerified) && (
+                      <Button
+                        variant="outline"
+                        className="flex-1 hover:text-red-600 border-red-200 text-red-700 hover:bg-red-50 text-xs h-10"
+                        onClick={() => { handleReject(agentInDrawer.id); setDrawerOpen(false); }}
+                      >
+                        <ShieldAlert className="w-4 h-4 mr-2" />
+                        Reject Agent
+                      </Button>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <Button
                       className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-xs h-10"
@@ -599,7 +757,7 @@ const AgentsPage = () => {
                     </Button>
                     <Button
                       variant="outline"
-                      className="flex-1 border-red-100 text-red-600 hover:bg-red-50 text-xs h-10"
+                      className="flex-1 hover:text-red-600  border-red-100 text-red-600 hover:bg-red-50 text-xs h-10"
                       onClick={() => handleDeactivate(agentInDrawer)}
                     >
                       Deactivate agent

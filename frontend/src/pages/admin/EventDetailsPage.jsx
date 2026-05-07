@@ -252,6 +252,15 @@ const EventDetailsPage = () => {
             >
               {isUpcoming ? 'Active Campaign' : 'Concluded'}
             </Badge>
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px] px-3 py-1 border-none font-bold uppercase tracking-widest",
+                event.type === 'virtual' ? "bg-[#E1F5EE] text-[#085041]" : "bg-[#FAEEDA] text-[#633806]"
+              )}
+            >
+              {event.type === 'virtual' ? 'Virtual' : 'Physical'}
+            </Badge>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-sm font-medium text-muted-foreground">
             <div className="flex items-center gap-2">

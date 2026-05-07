@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Download, Flag, User, Mail, Phone,
   ChevronRight, FileText, CheckCircle2, AlertCircle,
-  X, MessageSquare, Bell, ArrowUpRight
+  X, MessageSquare, Bell, ArrowUpRight,
+  Pencil, LayoutGrid, List
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { toast } from 'sonner';
+import StudentRegistrationModal from '../../components/modals/StudentRegistrationModal';
+import { cn } from '@/lib/utils';
 
 const STAGES = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
 const STAGE_COLORS = {
@@ -51,10 +54,8 @@ const StudentsPage = () => {
   const [docFilter, setDocFilter] = useState('all');
   const [curStage, setCurStage] = useState('all');
   const [selectedStudentId, setSelectedStudentId] = useState(null);
-
-  const hasFilters = useMemo(() => {
-    return searchQuery.trim() !== '' || eventFilter !== 'all' || countryFilter !== 'all' || docFilter !== 'all';
-  }, [searchQuery, eventFilter, countryFilter, docFilter]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [displayMode, setDisplayMode] = useState('table');
 
   useEffect(() => {
     fetchStudents();
@@ -130,6 +131,7 @@ const StudentsPage = () => {
   const kpis = useMemo(() => {
     const total = baseFilteredStudents.length;
     const missingDocs = baseFilteredStudents.filter(s => getDocStatus(s) === 'missing').length;
+    const pendingDocs = baseFilteredStudents.filter(s => getDocStatus(s) === 'pending').length;
     const confirmed = baseFilteredStudents.filter(s => s.status === 'Confirmed').length;
     const attended = baseFilteredStudents.filter(s => s.status === 'Attended').length;
     const converted = baseFilteredStudents.filter(s => s.status === 'Converted').length;
@@ -137,6 +139,7 @@ const StudentsPage = () => {
     return {
       total,
       missingDocs,
+      pendingDocs,
       confirmed,
       attended,
       converted,
@@ -169,6 +172,31 @@ const StudentsPage = () => {
   const getEventName = (eventId) => {
     const event = events.find(e => e.id === eventId || e._id === eventId);
     return event?.title || 'Unknown Event';
+  };
+
+  const getStudentValue = (student, key, fallbackLabel) => {
+    if (!student) return 'N/A';
+    if (student[key] && student[key] !== 'Not specified') return student[key];
+
+    let cf = student.customFields;
+    if (cf instanceof Map) cf = Object.fromEntries(cf);
+    if (!cf) return 'N/A';
+
+    if (cf[key]) return cf[key];
+
+    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
+    if (event?.formFields) {
+      const field = event.formFields.find(f =>
+        f.label.toLowerCase().trim() === fallbackLabel.toLowerCase().trim() ||
+        f.label.toLowerCase().includes(fallbackLabel.toLowerCase()) ||
+        f.label.toLowerCase().includes(key.toLowerCase())
+      );
+      if (field) {
+        const cleanId = String(field.id).replace(/^field_/, '');
+        return cf[cleanId] || cf[`field_${cleanId}`] || 'N/A';
+      }
+    }
+    return 'N/A';
   };
 
   const getAgentName = (agentId) => {
@@ -236,37 +264,35 @@ const StudentsPage = () => {
             onClick={() => toast.info('Export started...')}>
             <Download size={14} className="mr-2" /> Export
           </button>
-          <button
+          {/* <button
             className="inline-flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-[#FAC775] bg-[#FAEEDA] text-[#633806] transition-all hover:bg-[#FAC775]"
             onClick={() => toast.info('Stale students flagged')}>
             <Flag size={14} /> Flag stale <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
-          </button>
+          </button> */}
           <button
             className="flex items-center gap-2 text-xs font-bold h-10 px-5 rounded-lg bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10 transition-all active:scale-95"
-            onClick={() => navigate('/admin/students/new')}>
+            onClick={() => setShowAddModal(true)}>
             <Plus size={14} /> Add student
           </button>
         </div>
       </div>
 
       {/* KPI Row */}
-      {hasFilters && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
-          {[
-            { label: 'Total Students', val: kpis.total, sub: eventFilter !== 'all' ? 'Event reach' : 'Global reach', color: '#0C447C' },
-            { label: 'Doc Missing', val: kpis.missingDocs, sub: 'Needs follow-up', color: '#791F1F' },
-            { label: 'Confirmed', val: kpis.confirmed, sub: `${kpis.confirmedPerc}% of current`, color: '#3C3489' },
-            { label: 'Attended', val: kpis.attended, sub: `${kpis.attendedPerc}% of current`, color: '#27500A' },
-            { label: 'Converted', val: kpis.converted, sub: `${kpis.convRate}% conv. rate`, color: '#085041' }
-          ].map((kpi, i) => (
-            <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm">
-              <div className="text-[10px] text-[#6B7280] mb-1.5 uppercase font-bold tracking-wider">{kpi.label}</div>
-              <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpi.val.toLocaleString()}</div>
-              <div className="text-[10px] mt-1 font-semibold" style={{ color: kpi.color }}>{kpi.sub}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+        {[
+          { label: 'Total Students', val: kpis.total, sub: eventFilter !== 'all' ? 'Event reach' : 'Global reach', color: '#0C447C' },
+          { label: 'Doc Pending', val: kpis.pendingDocs, sub: 'Needs verification', color: '#EF9F27' },
+          { label: 'Confirmed', val: kpis.confirmed, sub: `${kpis.confirmedPerc}% of current`, color: '#3C3489' },
+          { label: 'Attended', val: kpis.attended, sub: `${kpis.attendedPerc}% of current`, color: '#27500A' },
+          { label: 'Converted', val: kpis.converted, sub: `${kpis.convRate}% conv. rate`, color: '#085041' }
+        ].map((kpi, i) => (
+          <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm">
+            <div className="text-[10px] text-[#6B7280] mb-1.5 uppercase font-bold tracking-wider">{kpi.label}</div>
+            <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpi.val.toLocaleString()}</div>
+            <div className="text-[10px] mt-1 font-semibold" style={{ color: kpi.color }}>{kpi.sub}</div>
+          </div>
+        ))}
+      </div>
 
       {/* Pipeline Strip */}
       {/* <div className="flex mb-6 rounded-xl overflow-hidden border border-[#E5E7EB] bg-white shadow-sm">
@@ -330,13 +356,33 @@ const StudentsPage = () => {
         >
           <option value="all">All Doc Status</option>
           <option value="complete">Complete</option>
-          <option value="missing">Missing</option>
           <option value="pending">Pending</option>
         </select>
+
+        <div className="flex bg-white border border-slate-200 rounded-xl p-1 gap-1">
+          <button
+            onClick={() => setDisplayMode('table')}
+            className={cn(
+              "h-8 w-8 flex items-center justify-center p-0 rounded-lg transition-all",
+              displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+            )}
+          >
+            <List className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setDisplayMode('grid')}
+            className={cn(
+              "h-8 w-8 flex items-center justify-center p-0 rounded-lg transition-all",
+              displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+            )}
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Table Panel */}
-      {hasFilters ? (
+      {/* Main Content View */}
+      {displayMode === 'table' ? (
         <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <table className="w-full border-collapse text-sm">
             <thead>
@@ -375,12 +421,12 @@ const StudentsPage = () => {
                           </div>
                           <div className="min-w-0">
                             <div className="font-bold text-[#111827] truncate">{getStudentName(s)}</div>
-                            <div className="text-[10px] text-[#6B7280] truncate">{s.email || s.customFields?.email}</div>
+                            <div className="text-[10px] text-[#6B7280] truncate">{getStudentValue(s, 'email', 'Email Address') !== 'N/A' ? getStudentValue(s, 'email', 'Email Address') : 'No email provided'}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-xs">{getEventName(s.eventId)}</td>
-                      <td className="px-4 py-3.5 text-xs">{s.country || s.customFields?.country || 'N/A'}</td>
+                      <td className="px-4 py-3.5 text-xs">{getStudentValue(s, 'country', 'Country of Interest')}</td>
                       <td className="px-4 py-3.5">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
                           {s.status}
@@ -406,14 +452,64 @@ const StudentsPage = () => {
           </table>
         </div>
       ) : (
-        <div className="bg-white border border-[#E5E7EB] rounded-xl p-16 text-center shadow-sm mb-6 animate-in fade-in zoom-in-95 duration-500">
-          <div className="w-20 h-20 bg-[#F3F4F6] rounded-full flex items-center justify-center mx-auto mb-6">
-            <Search size={32} className="text-[#9CA3AF]" />
-          </div>
-          <h3 className="text-xl font-bold text-[#111827] font-['Outfit'] mb-2">Search Students</h3>
-          <p className="text-[#6B7280] max-w-sm mx-auto">
-            Use the search bar or filters above to find specific student records and view their registration statistics.
-          </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {filteredStudents.length === 0 ? (
+            <div className="col-span-full text-center py-16 text-[#6B7280] bg-white border border-[#E5E7EB] rounded-xl">
+              <User size={48} className="mx-auto mb-4 opacity-20" />
+              <p>No students match the current filters</p>
+            </div>
+          ) : (
+            filteredStudents.map(s => {
+              const docStatus = getDocStatus(s);
+              return (
+                <div
+                  key={s.id || s._id}
+                  className="bg-white border border-[#E5E7EB] rounded-2xl p-5 hover:border-[#042C53] hover:shadow-md transition-all cursor-pointer group"
+                  onClick={() => setSelectedStudentId(s.id || s._id)}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold bg-[#E6F1FB] text-[#0C447C] ring-4 ring-[#E6F1FB]/30">
+                      {getInitials(getStudentName(s))}
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
+                        {s.status}
+                      </span>
+                      {docStatus === 'pending' && <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-[#FAEEDA] text-[#633806]">Pending Verification</span>}
+                      {docStatus === 'missing' && <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-[#FCEBEB] text-[#791F1F]">Docs Missing</span>}
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <h3 className="font-bold text-[#111827] text-base group-hover:text-[#042C53] transition-colors line-clamp-1">{getStudentName(s)}</h3>
+                    <p className="text-xs text-[#6B7280] mt-0.5 truncate">{getStudentValue(s, 'email', 'Email Address')}</p>
+                  </div>
+
+                  <div className="space-y-2.5 mb-5">
+                    <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
+                      <Flag size={12} className="text-[#9CA3AF]" />
+                      <span>{getStudentValue(s, 'country', 'Country') || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
+                      <FileText size={12} className="text-[#9CA3AF]" />
+                      <span className="truncate">{getEventName(s.eventId)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
+                      <User size={12} className="text-[#9CA3AF]" />
+                      <span>Agent: {getAgentName(s.agentId)}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-[#F3F4F6] flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">{new Date(s.createdAt || s.submittedAt).toLocaleDateString()}</span>
+                    <button className="text-[#042C53] group-hover:translate-x-1 transition-transform">
+                      <ArrowUpRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 
@@ -431,9 +527,9 @@ const StudentsPage = () => {
               <div className="flex-1 min-w-0">
                 <div className="text-xl font-bold text-[#111827] font-['Outfit'] truncate">{getStudentName(selectedStudent)}</div>
                 <div className="text-sm text-[#6B7280] mt-1 flex flex-wrap gap-2 items-center">
-                  <span className="flex items-center gap-1"><Mail size={12} /> {selectedStudent.email || selectedStudent.customFields?.email}</span>
+                  <span className="flex items-center gap-1"><Mail size={12} /> {getStudentValue(selectedStudent, 'email', 'Email Address')}</span>
                   <span>·</span>
-                  <span className="flex items-center gap-1"><Phone size={12} /> {selectedStudent.phone || selectedStudent.customFields?.phone}</span>
+                  <span className="flex items-center gap-1"><Phone size={12} /> {getStudentValue(selectedStudent, 'phone', 'Phone Number')}</span>
                 </div>
               </div>
               <div className="flex gap-2 items-center">
@@ -475,9 +571,9 @@ const StudentsPage = () => {
 
             <div className="grid grid-cols-2 gap-4 mb-6">
               {[
-                { label: 'Preferred Country', val: selectedStudent.country || selectedStudent.customFields?.country },
-                { label: 'Course Interest', val: selectedStudent.courseInterested || selectedStudent.customFields?.courseInterested },
-                { label: 'Education', val: selectedStudent.education || selectedStudent.customFields?.education },
+                { label: 'Preferred Country', val: getStudentValue(selectedStudent, 'country', 'Country of Interest') },
+                { label: 'Course Interest', val: getStudentValue(selectedStudent, 'courseInterested', 'Target Course') },
+                { label: 'Education', val: (() => { const val = getStudentValue(selectedStudent, 'education', 'Highest Qualification'); return val !== 'N/A' ? val : getStudentValue(selectedStudent, 'education', 'Education Level'); })() },
                 { label: 'Event', val: getEventName(selectedStudent.eventId) },
                 { label: 'Assigned Agent', val: getAgentName(selectedStudent.agentId) },
                 { label: 'Registered On', val: new Date(selectedStudent.createdAt || selectedStudent.submittedAt).toLocaleDateString() }
@@ -573,10 +669,21 @@ const StudentsPage = () => {
             </div>
 
             <div className="flex flex-wrap gap-2 pt-5 border-t border-[#F3F4F6]">
-              <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => toast.success('Follow-up message sent')}>
+              {/* <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => toast.success('Follow-up message sent')}>
                 <MessageSquare size={14} /> Message Student <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
+              </button> */}
+              <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => navigate(`/admin/students/${selectedStudent.id || selectedStudent._id}/edit`)}>
+                <Pencil size={14} /> Edit Student <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
               </button>
-              <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => toast.success('Agent notified')}>
+              <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => {
+                const agent = agents.find(a => a.id === selectedStudent.agentId || a._id === selectedStudent.agentId);
+                if (agent && agent.email) {
+                  window.location.href = `mailto:${agent.email}?subject=Alert regarding student: ${getStudentName(selectedStudent)}&body=Hello ${agent.name},%0D%0A%0D%0APlease check the status of your student ${getStudentName(selectedStudent)}.%0D%0A%0D%0AThank you.`;
+                  toast.success('Opened email client to alert agent');
+                } else {
+                  toast.error('Agent contact information not found');
+                }
+              }}>
                 <Bell size={14} /> Alert Agent <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
               </button>
               <div className="w-full flex gap-2">
@@ -603,6 +710,11 @@ const StudentsPage = () => {
           </div>
         </div>
       )}
+      {/* Student Registration Modal */}
+      <StudentRegistrationModal
+        open={showAddModal}
+        onOpenChange={setShowAddModal}
+      />
     </div>
   );
 };

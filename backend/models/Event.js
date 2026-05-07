@@ -23,6 +23,11 @@ const eventSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Location cannot exceed 500 characters']
   },
+  type: {
+    type: String,
+    enum: ['physical', 'virtual'],
+    default: 'physical'
+  },
   seatCapacity: {
     type: Number,
     required: false,
@@ -55,7 +60,7 @@ const eventSchema = new mongoose.Schema({
     type: {
       type: String,
       required: true,
-      enum: ['text', 'paragraph', 'radio', 'date', 'select', 'phone', 'email', 'number']
+      enum: ['text', 'paragraph', 'radio', 'date', 'select', 'phone', 'email', 'number', 'country', 'qualification']
     },
     required: {
       type: Boolean,

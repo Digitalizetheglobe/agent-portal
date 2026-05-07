@@ -14,7 +14,9 @@ import {
   Phone,
   Settings2,
   Lock,
-  Unlock
+  Unlock,
+  Globe,
+  GraduationCap
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -55,6 +57,8 @@ const fieldTypeIcons = {
   date: Calendar,
   select: ChevronDown,
   phone: Phone,
+  country: Globe,
+  qualification: GraduationCap,
 };
 
 const fieldTypeLabels = {
@@ -64,6 +68,8 @@ const fieldTypeLabels = {
   date: 'Date',
   select: 'Select',
   phone: 'Phone',
+  country: 'Country',
+  qualification: 'Qualification',
 };
 
 const PRESET_FIELDS = [
@@ -96,7 +102,7 @@ const PRESET_FIELDS = [
     placeholder: '123 456 7890',
     useCountryCode: true,
     defaultCountry: 'IN',
-    regex: '^[0-9]{10,15}$',
+    regex: '^\\+?[0-9]{10,15}$',
     regexError: 'Please enter a valid phone number',
   },
   {
@@ -124,9 +130,8 @@ const PRESET_FIELDS = [
   },
   {
     label: 'Country of Interest',
-    type: 'select',
+    type: 'country',
     required: true,
-    options: ['UK', 'USA', 'Canada', 'Australia', 'Germany', 'France'],
   },
   {
     label: 'Preferred Intake',
@@ -136,9 +141,8 @@ const PRESET_FIELDS = [
   },
   {
     label: 'Highest Qualification',
-    type: 'select',
+    type: 'qualification',
     required: true,
-    options: ['High School', 'Bachelor\'s Degree', 'Master\'s Degree', 'PhD'],
   },
   {
     label: 'English Proficiency',

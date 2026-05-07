@@ -332,6 +332,17 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  const deleteVerificationDocument = async (docId) => {
+    try {
+      const response = await agentAPI.deleteVerificationDocument(docId);
+      // Return updated user data
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to delete document', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
   const viewAgentDocument = async (agentId, docId) => {
     try {
       toast.loading('Opening document...');
@@ -399,6 +410,16 @@ export const DataProvider = ({ children }) => {
       await fetchStats();
     } catch (error) {
       toast.error('Failed to delete event', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const notifyAgents = async (id, message) => {
+    try {
+      await eventAPI.notifyAgents(id, message);
+      toast.success('Notification broadcast sent to all assigned agents');
+    } catch (error) {
+      toast.error('Failed to send notifications', { description: formatApiError(error) });
       throw error;
     }
   };
@@ -630,6 +651,17 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  const deleteTicket = async (id) => {
+    try {
+      await ticketAPI.delete(id);
+      setTickets(prev => prev.filter(t => t.id !== id));
+      toast.success('Ticket deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete ticket', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
   // Notification operations
   const markNotificationAsRead = async (id) => {
     try {
@@ -669,11 +701,13 @@ export const DataProvider = ({ children }) => {
     getAgentById,
     verifyAgent,
     uploadVerificationDocument,
+    deleteVerificationDocument,
     viewAgentDocument,
     // Event operations
     createEvent,
     updateEvent,
     deleteEvent,
+    notifyAgents,
     getEventById,
     getEventsForAgent,
     // Student operations
@@ -698,6 +732,7 @@ export const DataProvider = ({ children }) => {
     createTicket,
     addTicketResponse,
     updateTicketStatus,
+    deleteTicket,
     fetchTickets,
     // Notification operations
     fetchNotifications,

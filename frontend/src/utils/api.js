@@ -172,6 +172,7 @@ export const agentAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
+  deleteVerificationDocument: (docId) => api.delete(`/agents/me/documents/${docId}`),
   verify: (id, data) => api.patch(`/agents/${id}/verify`, data),
   downloadDocument: (agentId, docId, params = {}) => api.get(`/agents/${agentId}/documents/${docId}`, {
     params,
@@ -185,7 +186,8 @@ export const eventAPI = {
   getById: (id) => api.get(`/events/${id}`),
   create: (data) => api.post('/events', data),
   update: (id, data) => api.put(`/events/${id}`, data),
-  delete: (id) => api.delete(`/events/${id}`)
+  delete: (id) => api.delete(`/events/${id}`),
+  notifyAgents: (id, message) => api.post(`/events/${id}/notify`, { message })
 };
 
 // Student APIs
@@ -235,7 +237,8 @@ export const ticketAPI = {
   getById: (id) => api.get(`/tickets/${id}`),
   create: (data) => api.post('/tickets', data),
   addResponse: (id, message) => api.post(`/tickets/${id}/responses`, { message }),
-  updateStatus: (id, status) => api.patch(`/tickets/${id}/status`, { status })
+  updateStatus: (id, status) => api.patch(`/tickets/${id}/status`, { status }),
+  delete: (id) => api.delete(`/tickets/${id}`)
 };
 
 // Notification APIs

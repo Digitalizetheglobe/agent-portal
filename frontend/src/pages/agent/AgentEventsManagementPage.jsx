@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Search, 
-  Calendar, 
-  MapPin, 
-  Users, 
+import {
+  Search,
+  Calendar,
+  MapPin,
+  Users,
   ArrowUpRight,
   Clock,
   X,
-  GraduationCap
+  GraduationCap,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -22,12 +24,13 @@ const AgentEventsManagementPage = () => {
   const { user } = useAuth();
   const { events, getEventsForAgent, getStudentsByAgent, students } = useData();
   const navigate = useNavigate();
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('live');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [displayMode, setDisplayMode] = useState('grid');
 
   // Filter events assigned to this agent
   const assignedEvents = useMemo(() => {
@@ -50,25 +53,27 @@ const AgentEventsManagementPage = () => {
 
   // KPI Calculations
   const kpis = useMemo(() => {
+
     const live = assignedEvents.filter(e => getEventStatus(e) === 'live').length;
     const upcoming = assignedEvents.filter(e => getEventStatus(e) === 'upcoming').length;
     const past = assignedEvents.filter(e => getEventStatus(e) === 'completed').length;
-    
+
+    const total = assignedEvents.length;
     const totalRegistrations = myStudents.length;
     const avgRegistrations = assignedEvents.length > 0 ? Math.round(totalRegistrations / assignedEvents.length) : 0;
 
-    return { live, upcoming, past, totalRegistrations, avgRegistrations };
+    return { total, live, upcoming, past, totalRegistrations, avgRegistrations };
   }, [assignedEvents, myStudents]);
 
   // Filtered Events
   const filteredEvents = useMemo(() => {
     return assignedEvents.filter(event => {
-      const matchesSearch = 
+      const matchesSearch =
         event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (event.location && event.location.toLowerCase().includes(searchQuery.toLowerCase()));
-      
+
       const matchesType = typeFilter === 'all' || (event.type && event.type.toLowerCase() === typeFilter);
-      
+
       return matchesSearch && matchesType;
     });
   }, [assignedEvents, searchQuery, typeFilter]);
@@ -80,7 +85,7 @@ const AgentEventsManagementPage = () => {
     const seats = event.seatCapacity || 50;
     const p = Math.round(seats > 0 ? (registered / seats) * 100 : 0);
     const status = getEventStatus(event);
-    
+
     return {
       ...event,
       registered,
@@ -116,7 +121,7 @@ const AgentEventsManagementPage = () => {
   };
 
   const getTypePill = (type) => {
-    return type === 'virtual' 
+    return type === 'virtual'
       ? <span className="pill p-vir">Virtual</span>
       : <span className="pill p-phy">Physical</span>;
   };
@@ -126,10 +131,10 @@ const AgentEventsManagementPage = () => {
     const p = enhanced.p;
     const bc = barColor(p);
     const status = enhanced.status;
-    
+
     return (
-      <div 
-        key={event.id} 
+      <div
+        key={event.id}
         className={cn(
           "ev-card transition-all duration-200",
           status === 'live' ? 'live-card' : status === 'upcoming' ? 'upcoming-card' : 'past-card'
@@ -146,7 +151,7 @@ const AgentEventsManagementPage = () => {
               {getTypePill(event.type)}
             </div>
           </div>
-          
+
           <div className="ev-meta">
             <div className="em-row">
               {status === 'live' ? (
@@ -168,8 +173,8 @@ const AgentEventsManagementPage = () => {
 
           <div className="seat-section">
             <div className="seat-bar-bg">
-              <div 
-                className="seat-bar-fill transition-all duration-500" 
+              <div
+                className="seat-bar-fill transition-all duration-500"
                 style={{ width: `${p}%`, background: bc }}
               />
             </div>
@@ -179,7 +184,7 @@ const AgentEventsManagementPage = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="ev-card-bot">
           <div className="uni-chips">
             {['Management', 'Student Care', 'Direct Portal'].slice(0, 2).map((tag, idx) => (
@@ -187,8 +192,8 @@ const AgentEventsManagementPage = () => {
             ))}
           </div>
           <div className="card-actions">
-            <button 
-              className="ibtn" 
+            <button
+              className="ibtn"
               title="View Details"
               onClick={(e) => {
                 e.stopPropagation();
@@ -309,6 +314,7 @@ const AgentEventsManagementPage = () => {
         .tab-btn-active { background: #ffffff !important; color: #1e293b !important; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
         .tab-btn-live.tab-btn-active { color: #27500A !important; }
         .tab-btn-upcoming.tab-btn-active { color: #0C447C !important; }
+        .tab-btn-all.tab-btn-active { color: #0C447C !important; }
         .tab-btn-completed.tab-btn-active { color: #3C3489 !important; }
         .tab-filters { display: flex; align-items: center; gap: 10px; }
       `}</style>
@@ -320,9 +326,9 @@ const AgentEventsManagementPage = () => {
           <p>Strategic overview of your assigned recruitment campaigns</p>
         </div>
         <div className="flex gap-3">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="text-xs font-semibold h-9 px-4 border-slate-200"
             onClick={() => toast.info('Requesting more events from admin')}
           >
@@ -334,6 +340,11 @@ const AgentEventsManagementPage = () => {
       {/* KPI Row */}
       <div className="kpi-row">
         <div className="kpi">
+          <div className="kpi-label">Total Events</div>
+          <div className="kpi-val" style={{ color: '#3C3489' }}>{kpis.total}</div>
+          <div className="kpi-sub text-[#3C3489]">All events assigned to you</div>
+        </div>
+        <div className="kpi">
           <div className="kpi-label">Live now</div>
           <div className="kpi-val" style={{ color: '#27500A' }}>{kpis.live}</div>
           <div className="kpi-sub text-[#27500A]">Events in progress</div>
@@ -341,18 +352,18 @@ const AgentEventsManagementPage = () => {
         <div className="kpi">
           <div className="kpi-label">Upcoming</div>
           <div className="kpi-val" style={{ color: '#0C447C' }}>{kpis.upcoming}</div>
-          <div className="kpi-sub text-[#0C447C]">Next: {assignedEvents.filter(e => isFuture(parseISO(e.date))).sort((a,b) => parseISO(a.date) - parseISO(b.date))[0]?.date || 'TBD'}</div>
+          <div className="kpi-sub text-[#0C447C]">Next: {assignedEvents.filter(e => isFuture(parseISO(e.date))).sort((a, b) => parseISO(a.date) - parseISO(b.date))[0]?.date || 'TBD'}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Past events</div>
           <div className="kpi-val">{kpis.past}</div>
           <div className="kpi-sub text-slate-400">Total completed</div>
         </div>
-        <div className="kpi">
+        {/* <div className="kpi">
           <div className="kpi-label">Total Registrations</div>
           <div className="kpi-val">{kpis.totalRegistrations}</div>
           <div className="kpi-sub text-[#791F1F]">Avg {kpis.avgRegistrations} per event</div>
-        </div>
+        </div> */}
       </div>
 
       {/* Tab + Filter Row */}
@@ -360,9 +371,10 @@ const AgentEventsManagementPage = () => {
         {/* Tab Strip */}
         <div className="tab-strip">
           {[
-            { key: 'live',     label: 'Live now',        countClass: 'sc-live',  count: kpis.live },
-            { key: 'upcoming', label: 'Upcoming',         countClass: 'sc-up',   count: kpis.upcoming },
-            { key: 'completed',label: 'Past events',     countClass: 'sc-past', count: kpis.past },
+            { key: 'all', label: 'All', countClass: 'sc-up', count: kpis.total },
+            { key: 'live', label: 'Live now', countClass: 'sc-live', count: kpis.live },
+            { key: 'upcoming', label: 'Upcoming', countClass: 'sc-up', count: kpis.upcoming },
+            { key: 'completed', label: 'Past events', countClass: 'sc-past', count: kpis.past },
           ].map(tab => (
             <button
               key={tab.key}
@@ -398,15 +410,48 @@ const AgentEventsManagementPage = () => {
             <option value="physical">Physical</option>
             <option value="virtual">Virtual</option>
           </select>
+
+          <div className="flex bg-white border border-slate-200 rounded-xl p-1 gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDisplayMode('table')}
+              className={cn(
+                "h-8 w-8 p-0 rounded-lg transition-all",
+                displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+              )}
+            >
+              <List className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDisplayMode('grid')}
+              className={cn(
+                "h-8 w-8 p-0 rounded-lg transition-all",
+                displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+              )}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Active Tab Divider */}
-      <div className={cn('section-divider', activeTab === 'live' ? 'div-live' : activeTab === 'upcoming' ? 'div-up' : 'div-past')} style={{ marginBottom: 24 }} />
+      <div className={cn(
+        'section-divider',
+        activeTab === 'live' ? 'div-live' :
+          (activeTab === 'upcoming' || activeTab === 'all') ? 'div-up' :
+            'div-past'
+      )} style={{ marginBottom: 24 }} />
 
       {/* Active Tab Content */}
       {(() => {
-        const tabItems = filteredEvents.filter(e => getEventStatus(e) === activeTab);
+        const tabItems = activeTab === 'all'
+          ? filteredEvents
+          : filteredEvents.filter(e => getEventStatus(e) === activeTab);
+        
         if (tabItems.length === 0) return (
           <div className="flex flex-col items-center justify-center py-20 bg-white border border-dashed border-slate-200 rounded-2xl">
             <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-4">
@@ -416,9 +461,70 @@ const AgentEventsManagementPage = () => {
             <p className="text-xs text-slate-500 mt-1">Try adjusting your filters or search query</p>
           </div>
         );
+
+        if (displayMode === 'grid') {
+          return (
+            <div className="card-grid">
+              {tabItems.map(event => renderEventCard(event))}
+            </div>
+          );
+        }
+
         return (
-          <div className="card-grid">
-            {tabItems.map(event => renderEventCard(event))}
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Event</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Date & Type</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Location</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Registrations</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-right"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {tabItems.map(event => {
+                  const enhanced = getEnhancedEvent(event);
+                  return (
+                    <tr key={event.id} className="hover:bg-slate-50/50 transition-colors cursor-pointer" onClick={() => openDetail(event)}>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-900 text-sm">{event.title}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 truncate max-w-[200px]">{event.description || 'No description'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-semibold text-slate-700">{format(parseISO(event.date), 'dd MMM yyyy')}</div>
+                        <div className="mt-1">{getTypePill(event.type)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                          <MapPin className="w-3 h-3 text-slate-400" />
+                          <span className="truncate max-w-[150px]">{event.location || 'Virtual'}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="text-xs font-bold text-slate-700">{enhanced.registered}/{enhanced.seats} capacity</div>
+                          <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full" style={{ width: `${enhanced.p}%`, backgroundColor: barColor(enhanced.p) }} />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn("pill", getStatusClass(enhanced.status))}>
+                          {enhanced.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600">
+                          <ArrowUpRight className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         );
       })()}
@@ -439,7 +545,7 @@ const AgentEventsManagementPage = () => {
               </div>
               <h3 className="text-xl font-bold text-slate-900 font-['Outfit']">{selectedEvent.title}</h3>
               <p className="text-sm text-slate-500 mt-1 font-medium flex items-center gap-2">
-                {selectedEvent.type === 'physical' ? 'Physical' : 'Virtual'} • {selectedEvent.location || 'Online'} • {format(parseISO(selectedEvent.date), 'dd MMM yyyy')}
+                {selectedEvent.type === 'virtual' ? 'Virtual' : 'Physical'} • {selectedEvent.location || 'Online'} • {format(parseISO(selectedEvent.date), 'dd MMM yyyy')}
               </p>
             </div>
 
@@ -461,9 +567,9 @@ const AgentEventsManagementPage = () => {
                   <span className="text-sm font-bold text-slate-900">{selectedEvent.p}%</span>
                 </div>
                 <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full rounded-full transition-all duration-1000" 
-                    style={{ width: `${selectedEvent.p}%`, backgroundColor: barColor(selectedEvent.p) }} 
+                  <div
+                    className="h-full rounded-full transition-all duration-1000"
+                    style={{ width: `${selectedEvent.p}%`, backgroundColor: barColor(selectedEvent.p) }}
                   />
                 </div>
               </div>
@@ -477,14 +583,14 @@ const AgentEventsManagementPage = () => {
             </div>
 
             <div className="dp-footer">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="flex-1 rounded-xl font-bold text-xs h-10"
                 onClick={() => navigate(`/agent/events/${selectedEvent.id}`)}
               >
                 Manage Registrations
               </Button>
-              <Button 
+              <Button
                 className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-[#B5D4F4] rounded-xl font-bold text-xs h-10"
                 onClick={() => toast.info('Support request sent to admin')}
               >

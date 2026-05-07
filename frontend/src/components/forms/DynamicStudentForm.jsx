@@ -29,6 +29,9 @@ import { CalendarIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import CountrySelector from './specialized/CountrySelector';
+import PhoneInput from './specialized/PhoneInput';
+import QualificationSelector from './specialized/QualificationSelector';
 
 const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
   const { addStudent, getEventById, updateStudent } = useData();
@@ -37,53 +40,57 @@ const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
   const [formSchema, setFormSchema] = useState(null);
   const [isEditMode, setIsEditMode] = useState(!!studentData);
 
+  // const [isEditMode, setIsEditMode] = useState(!!studentData);
+
   // Get event data and form fields
   useEffect(() => {
     const eventData = getEventById(eventId);
     setEvent(eventData);
-    
-    if (eventData?.formFields && eventData.formFields.length > 0) {
+
+    if (eventData?.formFields) {
       // Generate dynamic Zod schema based on form fields
       const schemaFields = {};
-      
+
       eventData.formFields.forEach(field => {
         let fieldSchema;
-        
+
         switch (field.type) {
           case 'text':
-            fieldSchema = z.string().min(1, `${field.label} is required`);
-            break;
-          case 'paragraph':
-            fieldSchema = z.string().min(1, `${field.label} is required`);
-            break;
           case 'email':
-            fieldSchema = z.string().email('Invalid email address');
+          case 'phone':
+          case 'country':
+          case 'qualification':
+          case 'select':
+          case 'radio':
+            fieldSchema = z.string().min(1, `${field.label} is required`);
+            if (field.type === 'email' || field.label.toLowerCase().includes('email')) {
+              fieldSchema = z.string().email('Invalid email address');
+            }
             break;
           case 'date':
             fieldSchema = z.date({ required_error: `${field.label} is required` });
             break;
-          case 'select':
-          case 'radio':
+          case 'paragraph':
             fieldSchema = z.string().min(1, `${field.label} is required`);
             break;
           default:
             fieldSchema = z.string().min(1, `${field.label} is required`);
         }
-        
+
         // Add regex validation if specified
         if (field.regex) {
           const regexPattern = new RegExp(field.regex);
           fieldSchema = fieldSchema.regex(regexPattern, field.regexError || 'Invalid format');
         }
-        
+
         // Make field optional if not required
         if (!field.required) {
           fieldSchema = fieldSchema.optional();
         }
-        
+
         schemaFields[field.id] = fieldSchema;
       });
-      
+
       const dynamicSchema = z.object(schemaFields);
       setFormSchema(dynamicSchema);
     }
@@ -94,14 +101,14 @@ const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
     if (studentData) {
       // Edit mode: populate with existing student data
       const values = {};
-      
+
       // Handle custom fields
       if (studentData.customFields) {
         Object.entries(studentData.customFields).forEach(([key, value]) => {
           values[key] = value;
         });
       }
-      
+
       // Handle legacy fields for backward compatibility
       if (studentData.name) values.name = studentData.name;
       if (studentData.email) values.email = studentData.email;
@@ -110,10 +117,10 @@ const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
       if (studentData.education) values.education = studentData.education;
       if (studentData.courseInterested) values.courseInterested = studentData.courseInterested;
       if (studentData.notes) values.notes = studentData.notes;
-      
+
       return values;
     }
-    
+
     // Create mode: empty values
     return {};
   };
@@ -145,10 +152,30 @@ const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
     try {
       const studentPayload = {
         eventId,
-        // Only set agentId if current user is an agent, not admin
-        agentId: isAdmin() ? (studentData?.agentId || null) : user?.id,
+        // Only set agentId if current user is an agent, not admin. 
+        // If admin, use the existing agentId if editing, or the admin's own ID as a fallback for new students
+        agentId: isAdmin() ? (studentData?.agentId || user?.id) : user?.id,
         customFields: data // Store custom field responses
       };
+
+      // Map custom fields to root of object for easier access and backward compatibility
+      // We check for common labels to map them correctly
+      if (event?.formFields) {
+        event.formFields.forEach(field => {
+          const val = data[field.id];
+          if (!val) return;
+
+          const label = field.label.toLowerCase();
+          if (label.includes('name')) studentPayload.name = val;
+          else if (label.includes('email')) studentPayload.email = val;
+          else if (label.includes('phone') || label.includes('mobile')) studentPayload.phone = val;
+          else if (label.includes('country')) studentPayload.country = val;
+          else if (label.includes('city')) studentPayload.city = val;
+          else if (label.includes('education') || label.includes('qualification')) studentPayload.education = val;
+          else if (label.includes('course')) studentPayload.courseInterested = val;
+          else if (label.includes('note')) studentPayload.notes = val;
+        });
+      }
 
       // Remove individual field properties to avoid duplicates
       Object.keys(data).forEach(key => {
@@ -165,7 +192,7 @@ const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
         toast.success('Student updated', {
           description: 'Student information has been updated successfully.'
         });
-        
+
         if (onSuccess) {
           onSuccess();
         }
@@ -246,6 +273,61 @@ const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
                 ))}
               </SelectContent>
             </Select>
+            {error && (
+              <p className="text-sm text-destructive">{error.message}</p>
+            )}
+          </div>
+        );
+
+      case 'country':
+        return (
+          <div key={field.id} className="space-y-2">
+            <Label htmlFor={field.id}>
+              {field.label} {field.required && <span className="text-red-500">*</span>}
+            </Label>
+            <CountrySelector
+              value={fieldValue || ''}
+              onChange={(value) => setValue(field.id, value)}
+              placeholder={field.placeholder || `Select ${field.label.toLowerCase()}`}
+              className={error ? 'border-red-500' : ''}
+            />
+            {error && (
+              <p className="text-sm text-destructive">{error.message}</p>
+            )}
+          </div>
+        );
+
+      case 'qualification':
+        return (
+          <div key={field.id} className="space-y-2">
+            <Label htmlFor={field.id}>
+              {field.label} {field.required && <span className="text-red-500">*</span>}
+            </Label>
+            <QualificationSelector
+              value={fieldValue || ''}
+              onChange={(value) => setValue(field.id, value)}
+              placeholder={field.placeholder || `Select ${field.label.toLowerCase()}`}
+              className={error ? 'border-red-500' : ''}
+            />
+            {error && (
+              <p className="text-sm text-destructive">{error.message}</p>
+            )}
+          </div>
+        );
+
+      case 'phone':
+        return (
+          <div key={field.id} className="space-y-2">
+            <Label htmlFor={field.id}>
+              {field.label} {field.required && <span className="text-red-500">*</span>}
+            </Label>
+            <PhoneInput
+              value={fieldValue || ''}
+              onChange={(value) => setValue(field.id, value)}
+              placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+              defaultCountry={field.defaultCountry || 'IN'}
+              className={error ? 'border-red-500' : ''}
+            />
             {error && (
               <p className="text-sm text-destructive">{error.message}</p>
             )}
@@ -356,13 +438,13 @@ const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
         </p>
       </div> */}
 
-      {event.formFields
+      {(event.formFields || [])
         .sort((a, b) => a.order - b.order)
         .map(field => renderFormField(field))}
 
-      <Button 
-        type="submit" 
-        className="w-full"
+      <Button
+        type="submit"
+        className="w-full bg-[#042C53] hover:bg-[#0C447C] h-11 text-sm font-bold mt-2"
         disabled={isSubmitting}
         data-testid="dynamic-student-submit-btn"
       >

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, ShieldAlert, ShieldCheck, Upload, FileText, X, Clock, AlertCircle } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, Upload, FileText, X, Clock, AlertCircle, Trash2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -18,8 +18,9 @@ import { toast } from 'sonner';
 
 const ComplianceStatus = () => {
   const { user, updateUser } = useAuth();
-  const { uploadVerificationDocument } = useData();
+  const { uploadVerificationDocument, deleteVerificationDocument } = useData();
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState(null);
   const [docType, setDocType] = useState('');
@@ -61,6 +62,27 @@ const ComplianceStatus = () => {
     }
   };
 
+  const handleDelete = async (docId) => {
+    if (!window.confirm('Are you sure you want to delete this document?')) return;
+
+    setIsDeleting(docId);
+    try {
+      const updatedUser = await deleteVerificationDocument(docId);
+      updateUser(updatedUser);
+      toast.success('Document deleted successfully');
+    } catch (error) {
+      console.error('Delete error:', error);
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
+  const handleReupload = (type) => {
+    setDocType(type);
+    setShowUpload(true);
+    // Scroll to upload section if needed, but it's usually visible
+  };
+
   const getStatusBadge = (status) => {
     switch (status) {
       case 'approved':
@@ -89,8 +111,8 @@ const ComplianceStatus = () => {
             <div>
               <CardTitle className="text-lg font-['Outfit']">Agent Compliance Status</CardTitle>
               <CardDescription>
-                {isVerified 
-                  ? 'Your account is fully verified and compliant.' 
+                {isVerified
+                  ? 'Your account is fully verified and compliant.'
                   : 'Action Required: Complete your verification to ensure full access.'}
               </CardDescription>
             </div>
@@ -114,11 +136,38 @@ const ComplianceStatus = () => {
                       <p className="text-xs text-muted-foreground line-clamp-1">{doc.fileName}</p>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    {getStatusBadge(doc.status)}
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(doc.uploadedAt).toLocaleDateString()}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-end gap-1">
+                      {getStatusBadge(doc.status)}
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(doc.uploadedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 ml-2 border-l pl-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-white"
+                        onClick={() => handleReupload(doc.docType)}
+                        title="Re-upload"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDelete(doc._id)}
+                        disabled={isDeleting === doc._id}
+                        title="Delete"
+                      >
+                        {isDeleting === doc._id ? (
+                          <Clock className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -127,10 +176,13 @@ const ComplianceStatus = () => {
 
           {/* Upload Section */}
           {!showUpload ? (
-            <Button 
-              variant="outline" 
-              className="w-full border-dashed" 
-              onClick={() => setShowUpload(true)}
+            <Button
+              variant="outline"
+              className="w-full border-dashed"
+              onClick={() => {
+                setDocType('');
+                setShowUpload(true);
+              }}
             >
               <Upload className="w-4 h-4 mr-2" />
               Upload New Document
@@ -143,7 +195,7 @@ const ComplianceStatus = () => {
                   <X className="w-4 h-4" />
                 </Button>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="docType">Document Type</Label>
@@ -161,9 +213,9 @@ const ComplianceStatus = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="file">File</Label>
-                  <Input 
-                    id="file" 
-                    type="file" 
+                  <Input
+                    id="file"
+                    type="file"
                     onChange={handleFileChange}
                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                   />
@@ -172,9 +224,9 @@ const ComplianceStatus = () => {
 
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setShowUpload(false)}>Cancel</Button>
-                <Button 
-                  size="sm" 
-                  onClick={handleUpload} 
+                <Button
+                  size="sm"
+                  onClick={handleUpload}
                   disabled={isUploading || !file || !docType}
                 >
                   {isUploading ? (

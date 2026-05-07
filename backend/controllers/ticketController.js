@@ -45,6 +45,7 @@ exports.getTickets = async (req, res) => {
 
     const tickets = await Ticket.find(query)
       .populate('agentId', 'name email agencyName')
+      .populate('responses.senderId', 'name role')
       .sort({ createdAt: -1 });
 
     res.status(200).json(tickets.map(t => t.toJSON()));
@@ -126,7 +127,11 @@ exports.addResponse = async (req, res) => {
 
     await ticket.save();
 
-    res.status(201).json(ticket.toJSON());
+    const populatedTicket = await Ticket.findById(ticket._id)
+      .populate('agentId', 'name email agencyName')
+      .populate('responses.senderId', 'name role');
+
+    res.status(201).json(populatedTicket.toJSON());
   } catch (error) {
     console.error('Add response error:', error);
     res.status(500).json({
@@ -164,9 +169,50 @@ exports.updateTicketStatus = async (req, res) => {
     ticket.status = status;
     await ticket.save();
 
-    res.status(200).json(ticket.toJSON());
+    const populatedTicket = await Ticket.findById(ticket._id)
+      .populate('agentId', 'name email agencyName')
+      .populate('responses.senderId', 'name role');
+
+    res.status(200).json(populatedTicket.toJSON());
   } catch (error) {
     console.error('Update ticket status error:', error);
+    res.status(500).json({
+      success: false,
+      detail: 'Server error'
+    });
+  }
+};
+// @desc    Delete ticket
+// @route   DELETE /api/tickets/:id
+// @access  Private (Admin only)
+exports.deleteTicket = async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        detail: 'Ticket not found'
+      });
+    }
+
+    // Access check - only admin can delete for now, or maybe the agent who created it?
+    // User request implies admin page "delete ticket"
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        detail: 'Only admins can delete tickets'
+      });
+    }
+
+    await Ticket.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      detail: 'Ticket deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete ticket error:', error);
     res.status(500).json({
       success: false,
       detail: 'Server error'

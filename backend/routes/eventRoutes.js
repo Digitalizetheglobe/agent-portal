@@ -5,7 +5,8 @@ const {
   getEvent, 
   createEvent, 
   updateEvent, 
-  deleteEvent 
+  deleteEvent,
+  notifyAgents
 } = require('../controllers/eventController');
 const { protect, restrictTo } = require('../middleware/auth');
 
@@ -20,5 +21,6 @@ router.get('/:id', getEvent);
 router.post('/', restrictTo('admin'), createEvent);
 router.put('/:id', restrictTo('admin'), updateEvent);
 router.delete('/:id', restrictTo('admin'), deleteEvent);
+router.post('/:id/notify', restrictTo('admin'), notifyAgents);
 
 module.exports = router;

@@ -74,14 +74,16 @@ const DashboardLayout = ({ requiredRole }) => {
           sidebarCollapsed={sidebarCollapsed}
           onMobileMenuClick={() => setMobileMenuOpen(true)}
         />
-        <main className="flex-1 ">
-          {dataLoading && !initialized ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : (
-            <Outlet />
-          )}
+        <main className="flex-1 overflow-x-hidden">
+          <div className="max-w-[1400px] mx-auto w-full">
+            {dataLoading && !initialized ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              <Outlet />
+            )}
+          </div>
         </main>
       </div>
     </div>
