@@ -388,7 +388,7 @@ const AgentsPage = () => {
             onClick={() => setDisplayMode('table')}
             className={cn(
               "h-8 w-8 p-0 rounded-md transition-all",
-              displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-[#6B7280] hover:bg-gray-50"
+              displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-[#6B7280] hover:bg-gray-50 hover:text-[#0C447C]"
             )}
           >
             <List className="w-4 h-4" />
@@ -399,7 +399,7 @@ const AgentsPage = () => {
             onClick={() => setDisplayMode('grid')}
             className={cn(
               "h-8 w-8 p-0 rounded-md transition-all",
-              displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-[#6B7280] hover:bg-gray-50"
+              displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-[#6B7280] hover:bg-gray-50 hover:text-[#0C447C]"
             )}
           >
             <LayoutGrid className="w-4 h-4" />
@@ -620,11 +620,11 @@ const AgentsPage = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     {agentInDrawer.verificationStatus === 'approved' || agentInDrawer.isVerified ? (
-                      <Badge className="bg-[#EAF3DE] text-[#27500A] h-6">Approve</Badge>
+                      <Badge className="bg-[#EAF3DE] text-[#27500A] h-6 hover:bg-[#27500A] hover:text-white transition-colors">Approve</Badge>
                     ) : agentInDrawer.verificationStatus === 'rejected' ? (
-                      <Badge className="bg-[#FCEBEB] text-[#791F1F] h-6">Rejected</Badge>
+                      <Badge className="bg-[#FCEBEB] text-[#791F1F] h-6 hover:bg-[#791F1F] hover:text-white transition-colors">Rejected</Badge>
                     ) : (
-                      <Badge className="bg-[#FAEEDA] text-[#633806] h-6">Pending</Badge>
+                      <Badge className="bg-[#FAEEDA] text-[#633806] h-6 hover:bg-[#633806] hover:text-white transition-colors">Pending</Badge>
                     )}
                     <Button variant="ghost" size="icon" onClick={() => setDrawerOpen(false)} className="h-8 w-8">
                       <X className="w-5 h-5" />
@@ -693,9 +693,9 @@ const AgentsPage = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <Badge className={cn("text-[10px] h-5", doc.status === 'approved' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600")}>{doc.status}</Badge>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => viewAgentDocument(agentInDrawer.id, doc._id)}>
-                            <Eye className="w-4 h-4 text-[#6B7280]" />
+                          <Badge className={cn("text-[10px] h-5 ", doc.status === 'approved' ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-colors" : "bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-colors")}>{doc.status}</Badge>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-amber-600 hover:text-white transition-colors" onClick={() => viewAgentDocument(agentInDrawer.id, doc._id)}>
+                            <Eye className="w-4 h-4 hover:text-white transition-colors" />
                           </Button>
                         </div>
                       </div>

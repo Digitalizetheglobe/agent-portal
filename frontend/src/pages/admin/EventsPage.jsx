@@ -508,7 +508,7 @@ const EventsPage = () => {
             onClick={() => setDisplayMode('table')}
             className={cn(
               "h-8 w-8 p-0 rounded-lg transition-all",
-              displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+              displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#0C447C] transition-colors"
             )}
           >
             <List className="w-4 h-4" />
@@ -519,7 +519,7 @@ const EventsPage = () => {
             onClick={() => setDisplayMode('grid')}
             className={cn(
               "h-8 w-8 p-0 rounded-lg transition-all",
-              displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+              displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#0C447C] transition-colors"
             )}
           >
             <LayoutGrid className="w-4 h-4" />
@@ -541,7 +541,7 @@ const EventsPage = () => {
         const tabItems = activeTab === 'all'
           ? filteredEvents
           : filteredEvents.filter(e => getEventStatus(e) === activeTab);
-        
+
         if (tabItems.length === 0) return (
           <div className="flex flex-col items-center justify-center py-20 bg-white border border-dashed border-slate-200 rounded-2xl">
             <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-4">

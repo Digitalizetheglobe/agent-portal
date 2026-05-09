@@ -8,10 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { FileText, CheckCircle2, XCircle, Clock, Search, Filter, ArrowUpRight, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { Input } from '../../components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 
 const AdminInvoicesPage = () => {
   const { invoices, updateInvoiceStatus, loading } = useData();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
 
   const filteredInvoices = invoices.filter(inv =>
     inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -64,12 +67,12 @@ const AdminInvoicesPage = () => {
         <TableHeader>
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Agent / Agency</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Students</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Amount</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Status</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Raised At</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-right uppercase tracking-wider">Action</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Agent / Agency</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Students</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Amount</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Status</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Raised At</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -86,22 +89,36 @@ const AdminInvoicesPage = () => {
                 <TableCell className="px-6 py-4 font-bold text-[#111827]">{invoice.invoiceNumber}</TableCell>
                 <TableCell className="px-6 py-4">
                   <div className="flex flex-col min-w-0">
-                    <span className="font-semibold text-[#111827] truncate">{invoice.agentId?.name}</span>
-                    <span className="text-[11px] text-[#6B7280] truncate">{invoice.agentId?.agencyName}</span>
+                    <span className="font-semibold text-[#111827] text-center truncate">{invoice.agentId?.name}</span>
+                    <span className="text-[11px] text-[#6B7280] text-center truncate">{invoice.agentId?.agencyName}</span>
                   </div>
                 </TableCell>
-                <TableCell className="px-6 py-4 text-xs font-medium text-[#4B5563]">{invoice.studentIds?.length || 0} Students</TableCell>
-                <TableCell className="px-6 py-4 font-bold text-[#111827]">₹{invoice.amount?.toLocaleString()}</TableCell>
-                <TableCell className="px-6 py-4">{getStatusBadge(invoice.status)}</TableCell>
-                <TableCell className="px-6 py-4 text-xs text-[#6B7280]">{format(new Date(invoice.raisedAt), 'MMM dd, yyyy')}</TableCell>
+                <TableCell className="px-6 py-4 text-xs font-medium text-[#4B5563] text-center">{invoice.studentIds?.length || 0} Students</TableCell>
+                <TableCell className="px-6 py-4 font-bold text-[#111827] text-center">₹{invoice.amount?.toLocaleString()}</TableCell>
+                <TableCell className="px-6 py-4 text-center">
+                  {invoice.status === 'Paid' ? (
+                    <Badge variant="outline" className="text-[10px] font-bold bg-[#EAF3DE] text-[#27500A] border-[#C0DD97]">
+                      {invoice.status}
+                    </Badge>
+                  ) : invoice.status === 'Pending' ? (
+                    <Badge variant="outline" className="text-[10px] font-bold bg-[#FAEEDA] text-[#633806] border-[#FAC775]">
+                      {invoice.status}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] font-bold bg-[#FCEBEB] text-[#791F1F] border-[#F7C1C1]">
+                      {invoice.status}
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center">{format(new Date(invoice.raisedAt), 'MMM dd, yyyy')}</TableCell>
                 <TableCell className="px-6 py-4 text-right">
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-center gap-2">
                     {invoice.status === 'Pending' && (
                       <>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 text-[11px] font-bold text-[#27500A] bg-[#EAF3DE] border-[#C0DD97] hover:bg-[#DCEFC0]"
+                          className="h-8 text-[11px] font-bold text-[#27500A] bg-[#EAF3DE] border-[#C0DD97] hover:text-[#27500A] hover:bg-[#DCEFC0]"
                           onClick={() => handleUpdateStatus(invoice.id, 'Paid')}
                           disabled={loading}
                         >
@@ -110,7 +127,7 @@ const AdminInvoicesPage = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 text-[11px] font-bold text-[#791F1F] bg-[#FCEBEB] border-[#F7C1C1] hover:bg-[#FADADA]"
+                          className="h-8 text-[11px] font-bold text-[#791F1F] bg-[#FCEBEB] border-[#F7C1C1] hover:text-[#791F1F] hover:bg-[#FADADA]"
                           onClick={() => handleUpdateStatus(invoice.id, 'Rejected')}
                           disabled={loading}
                         >
@@ -118,8 +135,16 @@ const AdminInvoicesPage = () => {
                         </Button>
                       </>
                     )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[#6B7280] hover:text-[#111827] hover:bg-gray-100">
-                      <FileText className="w-4 h-4" />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-[11px] font-bold text-[#0C447C] bg-[#F0F7FF] border-[#C7D2FE] hover:bg-[#E0F0FF] hover:text-[#042C53]"
+                      onClick={() => {
+                        setSelectedInvoice(invoice);
+                        setIsViewOpen(true);
+                      }}
+                    >
+                      <FileText className="w-3.5 h-3.5 mr-1" /> View
                     </Button>
                   </div>
                 </TableCell>
@@ -209,6 +234,121 @@ const AdminInvoicesPage = () => {
           <InvoiceList list={filteredInvoices.filter(i => i.status === 'Rejected')} />
         </TabsContent>
       </Tabs>
+
+      {/* Invoice View Modal */}
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
+          {selectedInvoice && (
+            <div className="relative min-h-[600px] flex flex-col">
+              {/* Background Watermark */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none overflow-hidden">
+                <img
+                  src="/assets/QStudylogo(blue).png"
+                  alt="Watermark"
+                  className="w-[500px] h-[500px] object-contain rotate-[-15deg]"
+                />
+              </div>
+
+              {/* Invoice Content */}
+              <div className="relative z-10 flex-1 flex flex-col">
+                {/* Header */}
+                <div className="bg-[#042C53] p-8 text-white flex justify-between items-start">
+                  <div className="space-y-4">
+                    <div className="bg-white p-3 rounded-xl inline-block">
+                      <img src="/assets/QStudylogo(blue).png" alt="QStudy" className="h-8 object-contain" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold font-['Outfit']">COMMISSION INVOICE</h2>
+                      <p className="text-blue-200 text-xs font-semibold uppercase tracking-widest mt-1">Institutional Settlement</p>
+                    </div>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <p className="text-sm font-bold">QStudy International</p>
+                    <p className="text-[11px] text-blue-100">123 Education Hub, Knowledge Park</p>
+                    <p className="text-[11px] text-blue-100">contact@qstudy.edu</p>
+                    <p className="text-[11px] text-blue-100">+1 (555) 000-1234</p>
+                  </div>
+                </div>
+
+                <div className="p-8 space-y-8 flex-1">
+                  {/* Meta Info */}
+                  <div className="grid grid-cols-3 gap-8">
+                    <div>
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Invoice Details</p>
+                      <div className="mt-2 space-y-1">
+                        <p className="text-sm font-bold text-[#111827]">{selectedInvoice.invoiceNumber}</p>
+                        <p className="text-xs text-[#6B7280]">{format(new Date(selectedInvoice.raisedAt), 'MMMM dd, yyyy')}</p>
+                        <div className="pt-2">{getStatusBadge(selectedInvoice.status)}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Billed To (Agent)</p>
+                      <div className="mt-2 space-y-1">
+                        <p className="text-sm font-bold text-[#111827]">{selectedInvoice.agentId?.name}</p>
+                        <p className="text-xs text-[#4B5563] font-semibold">{selectedInvoice.agentId?.agencyName}</p>
+                        <p className="text-xs text-[#6B7280]">{selectedInvoice.agentId?.email}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Settlement Amount</p>
+                      <div className="mt-2">
+                        <p className="text-3xl font-bold text-[#042C53] font-['Outfit']">₹{selectedInvoice.amount?.toLocaleString()}</p>
+                        <p className="text-[10px] font-semibold text-[#6B7280] mt-1">Incl. {selectedInvoice.commissionRate}% Commission</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Student Table */}
+                  <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-[#F9FAFB]">
+                        <TableRow>
+                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Student Name</TableHead>
+                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Email Address</TableHead>
+                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3 text-right">Application Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedInvoice.studentIds?.map((student, idx) => (
+                          <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0">
+                            <TableCell className="px-6 py-4 text-sm font-bold text-[#111827]">{student.name}</TableCell>
+                            <TableCell className="px-6 py-4 text-sm text-[#4B5563]">{student.email}</TableCell>
+                            <TableCell className="px-6 py-4 text-right">
+                              <Badge variant="outline" className="text-[10px] font-bold bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD]">{student.status}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {selectedInvoice.remarks && (
+                    <div className="bg-[#F9FAFB] p-4 rounded-xl border border-[#E5E7EB]">
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-2">Agent Remarks</p>
+                      <p className="text-sm text-[#4B5563] italic">"{selectedInvoice.remarks}"</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-8 border-t border-[#E5E7EB] bg-[#F9FAFB] flex justify-between items-center">
+                  <div className="text-[10px] text-[#9CA3AF] font-medium max-w-xs">
+                    This is an electronically generated document. No signature is required. QStudy International Settlement System.
+                  </div>
+                  <div className="flex gap-3">
+                    <Button variant="outline" size="sm" onClick={() => window.print()} className="h-9 px-4 text-xs font-bold border-[#D1D5DB] hover:bg-white transition-all hover:text-[#042C53]">
+                      <Download size={14} className="mr-2" /> Download PDF
+                    </Button>
+                    <Button size="sm" onClick={() => setIsViewOpen(false)} className="h-9 px-6 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white transition-all hover:text-[#ffffff]">
+                      Close View
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

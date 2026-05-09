@@ -30,6 +30,7 @@ const invoiceSchema = new mongoose.Schema({
     default: 'Pending'
   },
   remarks: String,
+  invoiceUrl: String,
   raisedAt: {
     type: Date,
     default: Date.now

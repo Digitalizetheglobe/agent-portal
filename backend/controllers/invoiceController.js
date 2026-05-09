@@ -7,7 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 // @access  Private (Agent only)
 exports.createInvoice = async (req, res) => {
   try {
-    const { studentIds, amount, commissionRate, remarks } = req.body;
+    const { studentIds, amount, commissionRate, remarks, invoiceUrl } = req.body;
 
     if (req.user.role !== 'agent') {
       return res.status(403).json({
@@ -47,6 +47,7 @@ exports.createInvoice = async (req, res) => {
       amount,
       commissionRate,
       remarks,
+      invoiceUrl,
       status: 'Pending'
     });
 
