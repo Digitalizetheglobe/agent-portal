@@ -410,7 +410,7 @@ const AgentEventsPage = () => {
               onClick={() => setDisplayMode('table')}
               className={cn(
                 "h-8 w-8 p-0 rounded-lg transition-all",
-                displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+                displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#111827] "
               )}
             >
               <List className="w-4 h-4" />
@@ -421,7 +421,7 @@ const AgentEventsPage = () => {
               onClick={() => setDisplayMode('grid')}
               className={cn(
                 "h-8 w-8 p-0 rounded-lg transition-all",
-                displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+                displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#111827]"
               )}
             >
               <LayoutGrid className="w-4 h-4" />

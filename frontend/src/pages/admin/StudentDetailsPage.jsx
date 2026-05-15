@@ -200,8 +200,8 @@ const StudentDetailsPage = () => {
 
       // Skip if it's a standard field or already displayed
       const isStandardKey = standardFieldKeys.includes(key);
-      const isStandardLabel = standardLabels.some(l => 
-        label.toLowerCase().includes(l.toLowerCase()) || 
+      const isStandardLabel = standardLabels.some(l =>
+        label.toLowerCase().includes(l.toLowerCase()) ||
         l.toLowerCase().includes(label.toLowerCase())
       );
 
@@ -560,7 +560,7 @@ const StudentDetailsPage = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-[#042C53]"
+                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-white"
                             onClick={() => handleViewDocument(doc.id, doc.originalFilename)}
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -568,7 +568,7 @@ const StudentDetailsPage = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-[#042C53]"
+                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-white"
                             onClick={() => handleDownloadDocument(doc.id, doc.originalFilename)}
                           >
                             <Download className="w-3.5 h-3.5" />

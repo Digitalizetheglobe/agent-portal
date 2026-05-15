@@ -50,6 +50,20 @@ const PhoneInput = ({ value = '', onChange, placeholder = "Enter phone number", 
     }
   }, [selectedCountry, phoneNumber]);
 
+  // Sync internal state with external value changes
+  useEffect(() => {
+    if (value) {
+      const parsed = parseValue(value);
+      if (parsed.country.code !== selectedCountry.code || parsed.number !== phoneNumber) {
+        setSelectedCountry(parsed.country);
+        setPhoneNumber(parsed.number);
+      }
+    } else if (phoneNumber !== '') {
+      // Handle reset
+      setPhoneNumber('');
+    }
+  }, [value]);
+
   const handleNumberChange = (e) => {
     const val = e.target.value.replace(/[^\d]/g, ''); // Only allow digits
     setPhoneNumber(val);

@@ -27,7 +27,7 @@ const AgentEventsManagementPage = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState('live');
+  const [activeTab, setActiveTab] = useState('all');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState('grid');
@@ -418,7 +418,7 @@ const AgentEventsManagementPage = () => {
               onClick={() => setDisplayMode('table')}
               className={cn(
                 "h-8 w-8 p-0 rounded-lg transition-all",
-                displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+                displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#111827] "
               )}
             >
               <List className="w-4 h-4" />
@@ -429,7 +429,7 @@ const AgentEventsManagementPage = () => {
               onClick={() => setDisplayMode('grid')}
               className={cn(
                 "h-8 w-8 p-0 rounded-lg transition-all",
-                displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+                displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#111827] "
               )}
             >
               <LayoutGrid className="w-4 h-4" />
@@ -451,7 +451,7 @@ const AgentEventsManagementPage = () => {
         const tabItems = activeTab === 'all'
           ? filteredEvents
           : filteredEvents.filter(e => getEventStatus(e) === activeTab);
-        
+
         if (tabItems.length === 0) return (
           <div className="flex flex-col items-center justify-center py-20 bg-white border border-dashed border-slate-200 rounded-2xl">
             <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-4">
@@ -592,7 +592,18 @@ const AgentEventsManagementPage = () => {
               </Button>
               <Button
                 className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-[#B5D4F4] rounded-xl font-bold text-xs h-10"
-                onClick={() => toast.info('Support request sent to admin')}
+                onClick={() => {
+                  navigate('/agent/support', {
+                    state: {
+                      openNewTicket: true,
+                      prefill: {
+                        subject: `Support for Event: ${selectedEvent.title}`,
+                        category: 'Student-Related',
+                        description: `Support requested for event: ${selectedEvent.title} (ID: ${selectedEvent.id || selectedEvent._id}).`
+                      }
+                    }
+                  });
+                }}
               >
                 Request Support
               </Button>

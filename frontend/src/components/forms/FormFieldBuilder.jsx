@@ -92,8 +92,8 @@ const PRESET_FIELDS = [
     type: 'phone',
     required: true,
     placeholder: '+1 123 456 7890',
-    regex: '^\\+?[1-9]\\d{1,14}$',
-    regexError: 'Please enter a valid international phone number with country code',
+    regex: '^\\+?[0-9\\s\\-\\(\\)]{7,20}$',
+    regexError: 'Please enter a valid phone number',
   },
   {
     label: 'International Phone',
@@ -102,7 +102,7 @@ const PRESET_FIELDS = [
     placeholder: '123 456 7890',
     useCountryCode: true,
     defaultCountry: 'IN',
-    regex: '^\\+?[0-9]{10,15}$',
+    regex: '^\\+?[0-9\\s\\-\\(\\)]{7,20}$',
     regexError: 'Please enter a valid phone number',
   },
   {

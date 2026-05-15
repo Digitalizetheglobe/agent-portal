@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Search, Plus, Download, GraduationCap, Mail, Phone,
   ChevronRight, FileText, CheckCircle2, AlertCircle,
   X, MessageSquare, LayoutGrid, List, Filter,
-  ArrowRight, User, Calendar, MapPin, Upload, ArrowUpRight
+  ArrowRight, User, Calendar, MapPin, Upload, ArrowUpRight,
+  Eye,
+  MessageCircle
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -67,6 +69,14 @@ const AgentStudentsPage = () => {
   const [formData, setFormData] = useState({
     eventId: '',
   });
+
+  const location = useLocation();
+  
+  useEffect(() => {
+    if (location.state?.eventFilter) {
+      setEventFilter(location.state.eventFilter);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     fetchStudents();
@@ -352,7 +362,7 @@ const AgentStudentsPage = () => {
               onClick={() => setDisplayMode('table')}
               className={cn(
                 "h-8 w-8 p-0 rounded-lg transition-all",
-                displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+                displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#111827] "
               )}
             >
               <List className="w-4 h-4" />
@@ -363,7 +373,7 @@ const AgentStudentsPage = () => {
               onClick={() => setDisplayMode('grid')}
               className={cn(
                 "h-8 w-8 p-0 rounded-lg transition-all",
-                displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50"
+                displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#111827] "
               )}
             >
               <LayoutGrid className="w-4 h-4" />
@@ -502,9 +512,9 @@ const AgentStudentsPage = () => {
       )}
 
       {/* Registration Modal */}
-      <StudentRegistrationModal 
-        open={showAddModal} 
-        onOpenChange={setShowAddModal} 
+      <StudentRegistrationModal
+        open={showAddModal}
+        onOpenChange={setShowAddModal}
         initialEventId={formData.eventId}
       />
 
@@ -677,23 +687,67 @@ const AgentStudentsPage = () => {
 
               {/* Action Toolbar */}
               <div className="pt-6 border-t border-gray-100">
+
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <Button
+                    className="h-11 text-xs font-bold bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:bg-[#DCEFC0] hover:text-[#111827]"
+                    onClick={() => navigate(`/agent/students/${selectedStudent.id || selectedStudent._id}`)}
+                  >
+                    <Eye size={14} className="mr-2" /> View Details
+                  </Button>
+                  <Button
+                    className="h-11 text-xs font-bold bg-[#042C53] text-white hover:bg-[#0C447C] hover:text-white"
+                    onClick={() => {
+                      const email = getStudentValue(selectedStudent, 'email', 'Email Address');
+                      if (email && email !== 'N/A') {
+                        window.location.href = `mailto:${email}`;
+                      } else {
+                        toast.error('No email address available for this student');
+                      }
+                    }}
+                  >
+                    <Mail size={14} className="mr-2" /> Mail Student
+                  </Button>
+                </div>
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <Button
                     variant="outline"
-                    className="h-11 text-xs font-bold border-gray-200 hover:bg-[#F3F4F6]"
-                    onClick={() => toast.success('Follow-up drafted in WhatsApp')}
+                    className="h-11 text-xs font-bold border-gray-200 hover:bg-[#F3F4F6] hover:text-[#111827]"
+                    onClick={() => {
+                      const name = getStudentName(selectedStudent);
+                      const phone = getStudentValue(selectedStudent, 'phone', 'Phone Number');
+                      const event = getEventName(selectedStudent.eventId);
+                      if (!phone || phone === 'N/A') {
+                        toast.error('No phone number available for this student');
+                        return;
+                      }
+                      const cleanPhone = phone.replace(/[^\d+]/g, '');
+                      const message = `Hi ${name}, I'm following up on your registration for ${event}. Do you have any questions?`;
+                      window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                    }}
                   >
                     <MessageSquare size={14} className="mr-2" /> Draft Follow-up
                   </Button>
                   <Button
                     variant="outline"
-                    className="h-11 text-xs font-bold border-gray-200 hover:bg-[#F3F4F6]"
-                    onClick={() => toast.info('Support ticket created')}
+                    className="h-11 text-xs font-bold border-gray-200 hover:bg-[#F3F4F6] hover:text-[#111827]"
+                    onClick={() => {
+                      navigate('/agent/support', { 
+                        state: { 
+                          openNewTicket: true, 
+                          prefill: { 
+                            subject: `Student Issue: ${getStudentName(selectedStudent)}`,
+                            category: 'Student-Related',
+                            description: `Support requested for student ${getStudentName(selectedStudent)} (ID: ${selectedStudent.id || selectedStudent._id}) registered for ${getEventName(selectedStudent.eventId)}.`
+                          } 
+                        } 
+                      });
+                    }}
                   >
                     <AlertCircle size={14} className="mr-2" /> Raise Ticket
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                {/* <div className="grid grid-cols-2 gap-3">
                   <Button
                     className="h-11 text-xs font-bold bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:bg-[#DCEFC0]"
                     onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Confirmed')}
@@ -706,7 +760,8 @@ const AgentStudentsPage = () => {
                   >
                     Mark Converted <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                   </Button>
-                </div>
+                </div> */}
+
               </div>
             </div>
           </div>

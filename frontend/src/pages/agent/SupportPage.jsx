@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -41,7 +42,19 @@ const SupportPage = () => {
     category: 'Technical Issue',
     priority: 'Medium'
   });
-
+  const location = useLocation();
+  
+  useEffect(() => {
+    if (location.state?.openNewTicket) {
+      setIsNewTicketOpen(true);
+      if (location.state?.prefill) {
+        setFormData(prev => ({
+          ...prev,
+          ...location.state.prefill
+        }));
+      }
+    }
+  }, [location]);
   const faqs = [
     {
       id: 'q1',

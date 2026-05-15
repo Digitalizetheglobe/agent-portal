@@ -37,7 +37,7 @@ const EventsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState('live');
+  const [activeTab, setActiveTab] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
