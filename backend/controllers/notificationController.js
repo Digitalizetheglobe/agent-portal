@@ -1,15 +1,17 @@
-const Notification = require('../models/Notification');
+const { Notification } = require('../models');
 
 // @desc    Get all notifications for user
 // @route   GET /api/notifications
 // @access  Private
 exports.getNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ recipient: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(200);
+    const notifications = await Notification.findAll({
+      where: { recipient: req.user.id },
+      order: [['createdAt', 'DESC']],
+      limit: 200
+    });
 
-    res.status(200).json(notifications);
+    res.status(200).json(notifications.map(n => n.toJSON()));
   } catch (error) {
     console.error('Get notifications error:', error);
     res.status(500).json({ success: false, detail: 'Server error' });
@@ -22,8 +24,10 @@ exports.getNotifications = async (req, res) => {
 exports.markAsRead = async (req, res) => {
   try {
     const notification = await Notification.findOne({
-      _id: req.params.id,
-      recipient: req.user._id
+      where: {
+        id: req.params.id,
+        recipient: req.user.id
+      }
     });
 
     if (!notification) {
@@ -33,7 +37,7 @@ exports.markAsRead = async (req, res) => {
     notification.isRead = true;
     await notification.save();
 
-    res.status(200).json(notification);
+    res.status(200).json(notification.toJSON());
   } catch (error) {
     console.error('Mark as read error:', error);
     res.status(500).json({ success: false, detail: 'Server error' });
@@ -45,9 +49,9 @@ exports.markAsRead = async (req, res) => {
 // @access  Private
 exports.markAllAsRead = async (req, res) => {
   try {
-    await Notification.updateMany(
-      { recipient: req.user._id, isRead: false },
-      { isRead: true }
+    await Notification.update(
+      { isRead: true },
+      { where: { recipient: req.user.id, isRead: false } }
     );
 
     res.status(200).json({ success: true, message: 'All notifications marked as read' });

@@ -193,3 +193,29 @@ export const countries = [
   { name: 'Zambia', code: 'ZM', phone: '260', flag: '🇿🇲' },
   { name: 'Zimbabwe', code: 'ZW', phone: '263', flag: '🇿🇼' }
 ];
+
+/**
+ * Checks if a university's country matches a target/selected country.
+ * Handles exact matches, case variations, whitespace, and common country aliases.
+ */
+export const isCountryMatch = (uniCountry, targetCountry) => {
+  if (!uniCountry || !targetCountry) return false;
+  const uc = String(uniCountry).trim().toLowerCase();
+  const tc = String(targetCountry).trim().toLowerCase();
+  if (!uc || !tc) return false;
+  if (uc === tc) return true;
+
+  const aliases = [
+    ['us', 'usa', 'united states', 'united states of america'],
+    ['uk', 'united kingdom', 'great britain', 'england', 'scotland', 'wales', 'britain'],
+    ['uae', 'united arab emirates'],
+  ];
+
+  for (const group of aliases) {
+    if (group.includes(uc) && group.includes(tc)) {
+      return true;
+    }
+  }
+
+  return uc.includes(tc) || tc.includes(uc);
+};

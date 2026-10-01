@@ -78,5 +78,11 @@ agenthub/agents/youtube/db
 
 memory/test_credentials.md
 
+# Local uploads and scratch files
+backend/uploads/
+backend/scratch/
+frontend/scratch/
+*.log
+
 # Mobile development
 android-sdk/frontend/node_modules/.cache/default-development/2.pack

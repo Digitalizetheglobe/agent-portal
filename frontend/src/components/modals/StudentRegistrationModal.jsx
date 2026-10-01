@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   GraduationCap,
   Calendar
@@ -18,25 +18,30 @@ import DynamicStudentForm from '../forms/DynamicStudentForm';
 const StudentRegistrationModal = ({ open, onOpenChange, initialEventId }) => {
   const { events, getEventsForAgent } = useData();
   const { user, isAdmin } = useAuth();
-  const [selectedEventId, setSelectedEventId] = useState(initialEventId || '');
+  const [selectedEventId, setSelectedEventId] = useState(initialEventId || 'direct');
 
   const availableEvents = useMemo(() => {
     if (isAdmin()) return events;
     return getEventsForAgent(user?.id);
   }, [events, user?.id, isAdmin, getEventsForAgent]);
 
-  // Reset event selection when modal opens if an initial ID is provided
-  React.useEffect(() => {
-    if (open && initialEventId) {
-      setSelectedEventId(initialEventId);
+  // Set default selection when modal opens (defaults to 'direct' unless initialEventId is specified)
+  useEffect(() => {
+    if (open) {
+      if (initialEventId) {
+        setSelectedEventId(initialEventId);
+      } else {
+        setSelectedEventId('direct');
+      }
     }
   }, [open, initialEventId]);
 
   // Handle successful registration
   const handleSuccess = () => {
     onOpenChange(false);
-    setSelectedEventId('');
   };
+
+  const effectiveEventId = selectedEventId === 'direct' ? null : selectedEventId;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,46 +53,35 @@ const StudentRegistrationModal = ({ open, onOpenChange, initialEventId }) => {
             </div>
             <div>
               <DialogTitle className="text-xl font-bold text-[#111827] font-['Outfit']">Register New Student</DialogTitle>
-              <DialogDescription className="text-xs text-gray-500 font-medium mt-0.5">Add student to an active recruitment event</DialogDescription>
+              <DialogDescription className="text-xs text-gray-500 font-medium mt-0.5">Add student to an active recruitment event or register directly</DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="p-6 bg-[#F9FAFB] max-h-[70vh] overflow-y-auto custom-scrollbar">
+        <div className="p-6 bg-[#F9FAFB] max-h-[75vh] overflow-y-auto custom-scrollbar">
           <div className="space-y-6">
             {/* Event Selection */}
             <div className="space-y-2">
-              <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Select Target Event</Label>
+              <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Target Event / Direct Registration</Label>
               <select
                 value={selectedEventId}
                 onChange={(e) => setSelectedEventId(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white appearance-none"
+                className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#042C53] transition-all bg-white"
               >
-                <option value="">Select an event...</option>
+                <option value="direct">Direct Registration (No Event)</option>
                 {availableEvents.map(ev => (
                   <option key={ev.id || ev._id} value={ev.id || ev._id}>{ev.title}</option>
                 ))}
               </select>
             </div>
 
-            {selectedEventId ? (
-              <div className="pt-4 border-t border-gray-100">
-                <DynamicStudentForm
-                  eventId={selectedEventId}
-                  onSuccess={handleSuccess}
-                />
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center bg-white border border-dashed border-gray-200 rounded-2xl">
-                <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-4">
-                  <Calendar className="w-6 h-6 text-gray-300" />
-                </div>
-                <h4 className="text-sm font-bold text-gray-900">Choose an event to continue</h4>
-                <p className="text-xs text-gray-500 mt-1 max-w-[250px]">
-                  Each event has its own specific registration fields and requirements.
-                </p>
-              </div>
-            )}
+            <div className="pt-2 border-t border-gray-100">
+              <DynamicStudentForm
+                key={effectiveEventId || 'direct'}
+                eventId={effectiveEventId}
+                onSuccess={handleSuccess}
+              />
+            </div>
           </div>
         </div>
       </DialogContent>

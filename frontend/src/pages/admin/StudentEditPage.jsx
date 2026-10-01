@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, X } from 'lucide-react';
 import { useData } from '../../context/DataContext';
@@ -16,11 +16,13 @@ import {
 } from '../../components/ui/select';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import CountrySelector from '../../components/forms/specialized/CountrySelector';
+import { isCountryMatch } from '../../lib/countries';
 
 const StudentEditPage = () => {
   const { studentId: id } = useParams();
   const navigate = useNavigate();
-  const { students, events, agents, updateStudent, getStudentById } = useData();
+  const { students, events, agents, universities, courses, fetchCourses, updateStudent, getStudentById } = useData();
 
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,6 +33,7 @@ const StudentEditPage = () => {
     email: '',
     phone: '',
     country: '',
+    universityId: '',
     courseInterested: '',
     currentEducation: '',
     additionalInfo: '',
@@ -40,19 +43,43 @@ const StudentEditPage = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Load courses if empty
+  useEffect(() => {
+    if (!courses || courses.length === 0) {
+      if (typeof fetchCourses === 'function') {
+        fetchCourses();
+      }
+    }
+  }, [courses, fetchCourses]);
+
+  const filteredUniversities = useMemo(() => {
+    if (!universities || universities.length === 0) return [];
+    if (!formData.country || !formData.country.trim()) {
+      return universities;
+    }
+    return universities.filter(u => isCountryMatch(u.country, formData.country));
+  }, [universities, formData.country]);
+
+  const filteredCourses = useMemo(() => {
+    if (!courses || courses.length === 0) return [];
+    const active = courses.filter(c => c.status === 'active' || !c.status);
+    if (!formData.universityId) return active;
+    return active.filter(c => {
+      const uniIds = Array.isArray(c.universityIds) && c.universityIds.length > 0
+        ? c.universityIds.map(String)
+        : (c.universityId ? [String(c.universityId)] : []);
+      if (uniIds.length === 0) return true;
+      return uniIds.includes(String(formData.universityId));
+    });
+  }, [courses, formData.universityId]);
+
   useEffect(() => {
     const fetchStudent = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // First try to find in local state
-        let foundStudent = students.find(s => s.id === id);
-
-        // If not found locally, fetch from API
-        if (!foundStudent) {
-          foundStudent = await getStudentById(id);
-        }
+        const foundStudent = await getStudentById(id);
 
         if (foundStudent) {
           setStudent(foundStudent);
@@ -83,11 +110,25 @@ const StudentEditPage = () => {
             return '';
           };
 
+          const getInitialUniversityId = () => {
+            if (foundStudent.universityId) return String(foundStudent.universityId);
+            const cf = foundStudent.customFields || {};
+            if (cf.universityId) return String(cf.universityId);
+            if (cf instanceof Map && cf.has('universityId')) return String(cf.get('universityId'));
+            const uName = cf.university || cf.universityName || (cf instanceof Map ? (cf.get('university') || cf.get('universityName')) : null);
+            if (uName && universities) {
+              const match = universities.find(u => u.name?.toLowerCase() === String(uName).toLowerCase());
+              if (match) return String(match.id || match._id);
+            }
+            return '';
+          };
+
           setFormData({
             name: getField('name', 'Full Name'),
             email: getField('email', 'Email Address'),
             phone: getField('phone', 'Phone Number'),
             country: getField('country', 'Country of Interest'),
+            universityId: getInitialUniversityId(),
             courseInterested: getField('courseInterested', 'Target Course'),
             currentEducation: getField('currentEducation', 'Education Level') || getField('education', 'Highest Qualification'),
             additionalInfo: getField('additionalInfo', 'Internal Notes') || getField('notes'),
@@ -148,24 +189,55 @@ const StudentEditPage = () => {
   }
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => {
+      const next = {
+        ...prev,
+        [field]: value
+      };
+      if (field === 'country') {
+        const countryVal = value ? value.trim() : '';
+        if (countryVal && prev.universityId) {
+          const currentUni = universities?.find(u => String(u.id || u._id) === String(prev.universityId));
+          if (currentUni && !isCountryMatch(currentUni.country, countryVal)) {
+            next.universityId = '';
+          }
+        }
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.email || !formData.phone || !formData.country) {
-      toast.error('Please fill in all required fields');
+    if (!formData.name || !formData.email || !formData.phone || !formData.universityId || formData.universityId === 'none') {
+      toast.error('Please fill in all required fields including Target University');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      await updateStudent(id, formData);
+      const selectedUni = universities?.find(u => String(u.id || u._id) === String(formData.universityId));
+      const existingCustomFields = student.customFields instanceof Map 
+        ? Object.fromEntries(student.customFields)
+        : (student.customFields || {});
+
+      const updatedCustomFields = {
+        ...existingCustomFields,
+        universityId: formData.universityId || '',
+        university: selectedUni ? selectedUni.name : '',
+        universityName: selectedUni ? selectedUni.name : ''
+      };
+
+      const payload = {
+        ...formData,
+        education: formData.currentEducation,
+        notes: formData.additionalInfo,
+        customFields: updatedCustomFields
+      };
+
+      await updateStudent(id, payload);
       toast.success('Student information updated successfully');
       navigate(`/admin/students/${id}`);
     } catch (error) {
@@ -272,15 +344,11 @@ const StudentEditPage = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="country" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Country of Interest *</Label>
-                    <Input
-                      id="country"
+                    <Label htmlFor="country" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Country of Interest</Label>
+                    <CountrySelector
                       value={formData.country}
-                      onChange={(e) => handleInputChange('country', e.target.value)}
-                      placeholder="United States"
-                      className="h-11 border-[#E5E7EB] focus-visible:ring-[#042C53]/10"
-                      data-testid="student-country-input"
-                      required
+                      onChange={(val) => handleInputChange('country', val || '')}
+                      placeholder="Select Country of Interest"
                     />
                   </div>
                 </div>
@@ -297,17 +365,91 @@ const StudentEditPage = () => {
               </CardHeader>
               <CardContent className="p-6 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                  <div className="space-y-2 md:col-span-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="universityId" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">
+                        Target University <span className="text-red-500">*</span>
+                      </Label>
+                      {formData.country && formData.country.trim() ? (
+                        <span className="text-[11px] font-medium text-[#042C53] bg-blue-50 px-2 py-0.5 rounded-md">
+                          {filteredUniversities.length} {filteredUniversities.length === 1 ? 'university' : 'universities'} in {formData.country}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-medium text-gray-400">
+                          {filteredUniversities.length} {filteredUniversities.length === 1 ? 'university' : 'universities'} available
+                        </span>
+                      )}
+                    </div>
+                    <Select
+                      value={formData.universityId || ''}
+                      onValueChange={(val) => handleInputChange('universityId', val)}
+                    >
+                      <SelectTrigger className="h-11 border-[#E5E7EB]" data-testid="student-university-select">
+                        <SelectValue placeholder={formData.country && formData.country.trim() ? `Select target university in ${formData.country}` : "Select target university"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredUniversities?.map(u => (
+                          <SelectItem key={u.id || u._id} value={String(u.id || u._id)}>
+                            {u.name} {u.country ? `(${u.country})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {formData.country && formData.country.trim() && filteredUniversities.length === 0 && (
+                      <p className="text-xs text-amber-600 font-medium mt-1">
+                        No universities found for {formData.country}. Clear Country of Interest to select from all partner universities.
+                      </p>
+                    )}
+                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="courseInterested" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Interested Course *</Label>
-                    <Input
-                      id="courseInterested"
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="courseInterested" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">
+                        Interested Course *
+                      </Label>
+                      {formData.universityId ? (
+                        <span className="text-[11px] font-medium text-[#042C53] bg-blue-50 px-2 py-0.5 rounded-md">
+                          {filteredCourses.length} {filteredCourses.length === 1 ? 'course' : 'courses'} available
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-medium text-gray-400">
+                          {filteredCourses.length} {filteredCourses.length === 1 ? 'course' : 'courses'} total
+                        </span>
+                      )}
+                    </div>
+                    <Select
                       value={formData.courseInterested}
-                      onChange={(e) => handleInputChange('courseInterested', e.target.value)}
-                      placeholder="e.g., Computer Science, Business"
-                      className="h-11 border-[#E5E7EB] focus-visible:ring-[#042C53]/10"
-                      data-testid="student-course-input"
-                      required
-                    />
+                      onValueChange={(value) => handleInputChange('courseInterested', value)}
+                    >
+                      <SelectTrigger className="h-11 border-[#E5E7EB]" data-testid="student-course-select">
+                        <SelectValue placeholder="Select target course" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {formData.courseInterested && !filteredCourses.some(c => c.name === formData.courseInterested) && (
+                          <SelectItem value={formData.courseInterested}>
+                            {formData.courseInterested} (Current)
+                          </SelectItem>
+                        )}
+                        {filteredCourses.map(c => {
+                          const uniCount = (c.universityIds && c.universityIds.length > 0) ? c.universityIds.length : (c.universityId ? 1 : 0);
+                          let uniLabel = '';
+                          if (!formData.universityId) {
+                            if (uniCount === 0) uniLabel = ' (All Universities)';
+                            else if (uniCount === 1) {
+                              const uniId = c.universityIds?.[0] || c.universityId;
+                              const u = universities?.find(x => String(x.id || x._id) === String(uniId));
+                              if (u) uniLabel = ` - ${u.name}`;
+                            } else {
+                              uniLabel = ` (${uniCount} Universities)`;
+                            }
+                          }
+                          return (
+                            <SelectItem key={c.id || c._id} value={c.name}>
+                              {c.name} {c.level ? `(${c.level})` : ''}{uniLabel}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="currentEducation" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Current Qualification</Label>

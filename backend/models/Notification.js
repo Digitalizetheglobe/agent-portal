@@ -1,53 +1,94 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const notificationSchema = new mongoose.Schema({
+const Notification = sequelize.define('Notification', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
+  },
   recipient: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    type: DataTypes.UUID,
+    allowNull: false
   },
   title: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: false
   },
   message: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.TEXT,
+    allowNull: false
   },
   type: {
-    type: String,
-    enum: ['info', 'success', 'warning', 'error'],
-    default: 'info'
+    type: DataTypes.ENUM('info', 'success', 'warning', 'error'),
+    defaultValue: 'info'
   },
   relatedId: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: false
+    type: DataTypes.UUID,
+    allowNull: true
   },
   relatedModel: {
-    type: String,
-    enum: ['Student', 'Event', 'Invoice', 'Ticket', 'Agent'],
-    required: false
+    type: DataTypes.STRING,
+    allowNull: true
   },
   isRead: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   }
 }, {
   timestamps: true,
-  toJSON: {
-    transform: function(doc, ret) {
-      ret.id = ret._id.toString();
-      delete ret._id;
-      delete ret.__v;
-      return ret;
-    }
-  }
+  tableName: 'Notifications',
+  indexes: [
+    { fields: ['recipient', 'createdAt'] },
+    { fields: ['isRead'] }
+  ]
 });
 
-// Index for faster queries for a specific user
-notificationSchema.index({ recipient: 1, createdAt: -1 });
-notificationSchema.index({ isRead: 1 });
+// Instance method to JSON transform
+Notification.prototype.toJSON = function() {
+  const values = { ...this.get() };
+  values.id = values.id ? values.id.toString() : values.id;
+  values._id = values.id;
+  return values;
+};
 
-module.exports = mongoose.model('Notification', notificationSchema);
+// Compatibility static helpers
+Notification.findById = function(id, options = {}) {
+  return this.findByPk(id, options);
+};
+
+Notification.findByIdAndUpdate = async function(id, updateData, options = {}) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  return await instance.update(updateData, options);
+};
+
+Notification.findByIdAndDelete = async function(id) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  await instance.destroy();
+  return instance;
+};
+
+Notification.countDocuments = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.count({ where });
+};
+
+Notification.deleteMany = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.destroy({ where });
+};
+
+Notification.updateMany = function(criteria = {}, updateData = {}) {
+  const where = { ...criteria };
+  return this.update(updateData, { where });
+};
+
+module.exports = Notification;

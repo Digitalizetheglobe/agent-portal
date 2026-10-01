@@ -1,127 +1,152 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const documentSchema = new mongoose.Schema({
+const Student = sequelize.define('Student', {
   id: {
-    type: String,
-    required: true
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
-  storagePath: {
-    type: String,
-    required: true
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
   },
-  originalFilename: {
-    type: String,
-    required: true
-  },
-  contentType: {
-    type: String,
-    default: 'application/octet-stream'
-  },
-  size: {
-    type: Number,
-    default: 0
-  },
-  category: {
-    type: String,
-    default: 'Other'
-  },
-  status: {
-    type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending'
-  },
-  remarks: String,
-  uploadedAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-const studentSchema = new mongoose.Schema({
   name: {
-    type: String,
-    required: false, // Made optional for flexibility
-    trim: true,
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    type: DataTypes.STRING(100),
+    allowNull: true
   },
   email: {
-    type: String,
-    required: false, // Made optional for flexibility
-    lowercase: true,
-    trim: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
+    type: DataTypes.STRING,
+    allowNull: true,
+    set(val) {
+      if (val) this.setDataValue('email', val.toLowerCase().trim());
+      else this.setDataValue('email', val);
+    }
   },
   phone: {
-    type: String,
-    required: false, // Made optional for flexibility
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: true
   },
   country: {
-    type: String,
-    required: false, // Made optional for flexibility
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: true
   },
   education: {
-    type: String,
-    required: false, // Made optional for flexibility
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: true
   },
   courseInterested: {
-    type: String,
-    required: false, // Made optional for flexibility
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: true
   },
   notes: {
-    type: String,
-    trim: true,
-    default: ''
+    type: DataTypes.TEXT,
+    defaultValue: ''
   },
   eventId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Event',
-    required: [true, 'Event ID is required']
+    type: DataTypes.UUID,
+    allowNull: true
   },
   agentId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'Agent ID is required']
+    type: DataTypes.UUID,
+    allowNull: false
   },
-  documents: [documentSchema],
-  // Custom form fields for flexible registration
+  documents: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
   customFields: {
-    type: Map,
-    of: mongoose.Schema.Types.Mixed,
-    default: new Map()
+    type: DataTypes.JSONB,
+    defaultValue: {}
   },
   status: {
-    type: String,
-    enum: ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'],
-    default: 'Registered'
+    type: DataTypes.ENUM('Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'),
+    defaultValue: 'Registered'
+  },
+
+  // --- Phase H: Student Verification ---
+  verificationStatus: {
+    type: DataTypes.ENUM('Pending', 'UnderReview', 'Verified', 'Rejected'),
+    defaultValue: 'Pending',
+    allowNull: false
+  },
+  verifiedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  verifiedBy: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
+  verificationHistory: {
+    type: DataTypes.JSONB,
+    defaultValue: [],
+    allowNull: false
+  },
+  verificationRejectionReason: {
+    type: DataTypes.TEXT,
+    allowNull: true
   }
 }, {
   timestamps: true,
-  toJSON: {
-    transform: function(doc, ret) {
-      if (ret._id) ret.id = ret._id.toString();
-      if (ret.eventId && typeof ret.eventId.toString === 'function') ret.eventId = ret.eventId.toString();
-      if (ret.agentId && typeof ret.agentId.toString === 'function') ret.agentId = ret.agentId.toString();
-      ret.submittedAt = ret.createdAt;
-      
-      // Convert customFields Map to plain object
-      if (ret.customFields && ret.customFields instanceof Map) {
-        ret.customFields = Object.fromEntries(ret.customFields);
-      }
-      
-      delete ret._id;
-      delete ret.__v;
-      return ret;
-    }
-  }
+  tableName: 'Students',
+  indexes: [
+    { fields: ['eventId'] },
+    { fields: ['agentId'] },
+    { fields: ['email'] },
+    { fields: ['verificationStatus'] }
+  ]
 });
 
-// Indexes for faster queries
-studentSchema.index({ eventId: 1 });
-studentSchema.index({ agentId: 1 });
-studentSchema.index({ email: 1 });
+// Instance method to JSON transform
+Student.prototype.toJSON = function() {
+  const values = { ...this.get() };
+  values.id = values.id ? values.id.toString() : values.id;
+  values._id = values.id;
+  values.eventId = values.eventId ? values.eventId.toString() : values.eventId;
+  values.agentId = values.agentId ? values.agentId.toString() : values.agentId;
+  values.submittedAt = values.createdAt;
+  
+  // Ensure customFields is plain object
+  if (values.customFields && values.customFields instanceof Map) {
+    values.customFields = Object.fromEntries(values.customFields);
+  }
+  return values;
+};
 
-module.exports = mongoose.model('Student', studentSchema);
+// Compatibility static helpers
+Student.findById = function(id, options = {}) {
+  return this.findByPk(id, options);
+};
+
+Student.findByIdAndUpdate = async function(id, updateData, options = {}) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  return await instance.update(updateData, options);
+};
+
+Student.findByIdAndDelete = async function(id) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  await instance.destroy();
+  return instance;
+};
+
+Student.countDocuments = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.count({ where });
+};
+
+Student.deleteMany = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.destroy({ where });
+};
+
+Student.updateMany = function(criteria = {}, updateData = {}) {
+  const where = { ...criteria };
+  return this.update(updateData, { where });
+};
+
+module.exports = Student;

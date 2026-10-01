@@ -1,60 +1,89 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const responseSchema = new mongoose.Schema({
-  senderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+const Ticket = sequelize.define('Ticket', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
-  message: {
-    type: String,
-    required: true
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
   },
-  timestamp: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-const ticketSchema = new mongoose.Schema({
   agentId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    type: DataTypes.UUID,
+    allowNull: false
   },
   subject: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: false
   },
   description: {
-    type: String,
-    required: true
+    type: DataTypes.TEXT,
+    allowNull: false
   },
   priority: {
-    type: String,
-    enum: ['Low', 'Medium', 'High'],
-    default: 'Medium'
+    type: DataTypes.ENUM('Low', 'Medium', 'High'),
+    defaultValue: 'Medium'
   },
   status: {
-    type: String,
-    enum: ['Open', 'In Progress', 'Resolved', 'Closed'],
-    default: 'Open'
+    type: DataTypes.ENUM('Open', 'In Progress', 'Resolved', 'Closed'),
+    defaultValue: 'Open'
   },
-  responses: [responseSchema]
+  responses: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  }
 }, {
   timestamps: true,
-  toJSON: {
-    transform: function(doc, ret) {
-      ret.id = ret._id.toString();
-      delete ret._id;
-      delete ret.__v;
-      return ret;
-    }
-  }
+  tableName: 'Tickets',
+  indexes: [
+    { fields: ['agentId', 'status'] }
+  ]
 });
 
-// Index for faster queries
-ticketSchema.index({ agentId: 1, status: 1 });
+// Instance method to JSON transform
+Ticket.prototype.toJSON = function() {
+  const values = { ...this.get() };
+  values.id = values.id ? values.id.toString() : values.id;
+  values._id = values.id;
+  return values;
+};
 
-module.exports = mongoose.model('Ticket', ticketSchema);
+// Compatibility static helpers
+Ticket.findById = function(id, options = {}) {
+  return this.findByPk(id, options);
+};
+
+Ticket.findByIdAndUpdate = async function(id, updateData, options = {}) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  return await instance.update(updateData, options);
+};
+
+Ticket.findByIdAndDelete = async function(id) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  await instance.destroy();
+  return instance;
+};
+
+Ticket.countDocuments = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.count({ where });
+};
+
+Ticket.deleteMany = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.destroy({ where });
+};
+
+Ticket.updateMany = function(criteria = {}, updateData = {}) {
+  const where = { ...criteria };
+  return this.update(updateData, { where });
+};
+
+module.exports = Ticket;

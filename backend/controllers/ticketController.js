@@ -1,4 +1,56 @@
-const Ticket = require('../models/Ticket');
+const { Ticket, User } = require('../models');
+
+// Helper to format ticket with populated agent and responses.senderId
+const formatTicket = async (ticket) => {
+  const t = ticket.toJSON();
+
+  // Populate agent
+  if (ticket.agent) {
+    t.agentId = {
+      id: ticket.agent.id,
+      _id: ticket.agent.id,
+      name: ticket.agent.name,
+      email: ticket.agent.email,
+      agencyName: ticket.agent.agencyName
+    };
+  } else if (t.agentId) {
+    const agent = await User.findByPk(t.agentId, {
+      attributes: ['id', 'name', 'email', 'agencyName']
+    });
+    if (agent) {
+      t.agentId = {
+        id: agent.id,
+        _id: agent.id,
+        name: agent.name,
+        email: agent.email,
+        agencyName: agent.agencyName
+      };
+    }
+  }
+
+  // Populate responses
+  if (Array.isArray(t.responses) && t.responses.length > 0) {
+    const senderIds = [...new Set(t.responses.map(r => typeof r.senderId === 'object' ? r.senderId?.id || r.senderId?._id : r.senderId).filter(Boolean))];
+    const senders = await User.findAll({
+      where: { id: senderIds },
+      attributes: ['id', 'name', 'role']
+    });
+    const senderMap = new Map(senders.map(s => [s.id.toString(), s.toJSON()]));
+
+    t.responses = t.responses.map(r => {
+      const rawId = typeof r.senderId === 'object' ? r.senderId?.id || r.senderId?._id : r.senderId;
+      const sender = senderMap.get(rawId?.toString());
+      return {
+        ...r,
+        senderId: sender || (typeof r.senderId === 'object' ? r.senderId : { id: rawId, _id: rawId, name: 'User', role: 'agent' })
+      };
+    });
+  } else {
+    t.responses = [];
+  }
+
+  return t;
+};
 
 // @desc    Create new ticket
 // @route   POST /api/tickets
@@ -15,14 +67,16 @@ exports.createTicket = async (req, res) => {
     }
 
     const ticket = await Ticket.create({
-      agentId: req.user._id,
+      agentId: req.user.id,
       subject,
       description,
-      priority,
-      status: 'Open'
+      priority: priority || 'Medium',
+      status: 'Open',
+      responses: []
     });
 
-    res.status(201).json(ticket.toJSON());
+    const formatted = await formatTicket(ticket);
+    res.status(201).json(formatted);
   } catch (error) {
     console.error('Create ticket error:', error);
     res.status(500).json({
@@ -37,18 +91,27 @@ exports.createTicket = async (req, res) => {
 // @access  Private
 exports.getTickets = async (req, res) => {
   try {
-    let query = {};
+    let where = {};
 
     if (req.user.role === 'agent') {
-      query.agentId = req.user._id;
+      where.agentId = req.user.id;
     }
 
-    const tickets = await Ticket.find(query)
-      .populate('agentId', 'name email agencyName')
-      .populate('responses.senderId', 'name role')
-      .sort({ createdAt: -1 });
+    const tickets = await Ticket.findAll({
+      where,
+      include: [{
+        model: User,
+        as: 'agent',
+        attributes: ['id', 'name', 'email', 'agencyName']
+      }],
+      order: [['createdAt', 'DESC']]
+    });
 
-    res.status(200).json(tickets.map(t => t.toJSON()));
+    const formattedTickets = await Promise.all(
+      tickets.map(t => formatTicket(t))
+    );
+
+    res.status(200).json(formattedTickets);
   } catch (error) {
     console.error('Get tickets error:', error);
     res.status(500).json({
@@ -63,9 +126,13 @@ exports.getTickets = async (req, res) => {
 // @access  Private
 exports.getTicket = async (req, res) => {
   try {
-    const ticket = await Ticket.findById(req.params.id)
-      .populate('agentId', 'name email agencyName')
-      .populate('responses.senderId', 'name role');
+    const ticket = await Ticket.findByPk(req.params.id, {
+      include: [{
+        model: User,
+        as: 'agent',
+        attributes: ['id', 'name', 'email', 'agencyName']
+      }]
+    });
 
     if (!ticket) {
       return res.status(404).json({
@@ -75,14 +142,15 @@ exports.getTicket = async (req, res) => {
     }
 
     // Access check
-    if (req.user.role === 'agent' && ticket.agentId._id.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'agent' && ticket.agentId.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         success: false,
         detail: 'Access denied'
       });
     }
 
-    res.status(200).json(ticket.toJSON());
+    const formatted = await formatTicket(ticket);
+    res.status(200).json(formatted);
   } catch (error) {
     console.error('Get ticket error:', error);
     res.status(500).json({
@@ -98,7 +166,13 @@ exports.getTicket = async (req, res) => {
 exports.addResponse = async (req, res) => {
   try {
     const { message } = req.body;
-    const ticket = await Ticket.findById(req.params.id);
+    const ticket = await Ticket.findByPk(req.params.id, {
+      include: [{
+        model: User,
+        as: 'agent',
+        attributes: ['id', 'name', 'email', 'agencyName']
+      }]
+    });
 
     if (!ticket) {
       return res.status(404).json({
@@ -108,17 +182,21 @@ exports.addResponse = async (req, res) => {
     }
 
     // Access check
-    if (req.user.role === 'agent' && ticket.agentId.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'agent' && ticket.agentId.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         success: false,
         detail: 'Access denied'
       });
     }
 
-    ticket.responses.push({
-      senderId: req.user._id,
-      message
+    const currentResponses = Array.isArray(ticket.responses) ? [...ticket.responses] : [];
+    currentResponses.push({
+      senderId: req.user.id,
+      message,
+      timestamp: new Date()
     });
+
+    ticket.responses = currentResponses;
 
     // Automatically update status if admin responds
     if (req.user.role === 'admin' && ticket.status === 'Open') {
@@ -127,11 +205,8 @@ exports.addResponse = async (req, res) => {
 
     await ticket.save();
 
-    const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('agentId', 'name email agencyName')
-      .populate('responses.senderId', 'name role');
-
-    res.status(201).json(populatedTicket.toJSON());
+    const formatted = await formatTicket(ticket);
+    res.status(201).json(formatted);
   } catch (error) {
     console.error('Add response error:', error);
     res.status(500).json({
@@ -147,7 +222,13 @@ exports.addResponse = async (req, res) => {
 exports.updateTicketStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const ticket = await Ticket.findById(req.params.id);
+    const ticket = await Ticket.findByPk(req.params.id, {
+      include: [{
+        model: User,
+        as: 'agent',
+        attributes: ['id', 'name', 'email', 'agencyName']
+      }]
+    });
 
     if (!ticket) {
       return res.status(404).json({
@@ -157,23 +238,18 @@ exports.updateTicketStatus = async (req, res) => {
     }
 
     // Access check
-    if (req.user.role === 'agent' && ticket.agentId.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'agent' && ticket.agentId.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         success: false,
         detail: 'Access denied'
       });
     }
 
-    // Agents can only close their own tickets or reopen them
-    // Admins can do anything
     ticket.status = status;
     await ticket.save();
 
-    const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('agentId', 'name email agencyName')
-      .populate('responses.senderId', 'name role');
-
-    res.status(200).json(populatedTicket.toJSON());
+    const formatted = await formatTicket(ticket);
+    res.status(200).json(formatted);
   } catch (error) {
     console.error('Update ticket status error:', error);
     res.status(500).json({
@@ -182,12 +258,20 @@ exports.updateTicketStatus = async (req, res) => {
     });
   }
 };
+
 // @desc    Delete ticket
 // @route   DELETE /api/tickets/:id
 // @access  Private (Admin only)
 exports.deleteTicket = async (req, res) => {
   try {
-    const ticket = await Ticket.findById(req.params.id);
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        detail: 'Only admins can delete tickets'
+      });
+    }
+
+    const ticket = await Ticket.findByPk(req.params.id);
 
     if (!ticket) {
       return res.status(404).json({
@@ -196,16 +280,7 @@ exports.deleteTicket = async (req, res) => {
       });
     }
 
-    // Access check - only admin can delete for now, or maybe the agent who created it?
-    // User request implies admin page "delete ticket"
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        detail: 'Only admins can delete tickets'
-      });
-    }
-
-    await Ticket.findByIdAndDelete(req.params.id);
+    await ticket.destroy();
 
     res.status(200).json({
       success: true,

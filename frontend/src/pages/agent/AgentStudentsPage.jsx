@@ -6,7 +6,7 @@ import {
   X, MessageSquare, LayoutGrid, List, Filter,
   ArrowRight, User, Calendar, MapPin, Upload, ArrowUpRight,
   Eye,
-  MessageCircle
+  MessageCircle, Clock, XCircle, Shield
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -45,6 +45,7 @@ const AgentStudentsPage = () => {
   const {
     students,
     events,
+    universities,
     getStudentsByAgent,
     fetchStudents,
     addStudent,
@@ -58,8 +59,10 @@ const AgentStudentsPage = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [eventFilter, setEventFilter] = useState('all');
+  const [universityFilter, setUniversityFilter] = useState('all');
   const [docFilter, setDocFilter] = useState('all');
   const [curStage, setCurStage] = useState('all');
+  const [verificationFilter, setVerificationFilter] = useState('all');
   const [displayMode, setDisplayMode] = useState('table'); // 'table' or 'grid'
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -90,12 +93,6 @@ const AgentStudentsPage = () => {
     return getEventsForAgent(user?.id);
   }, [events, user?.id, getEventsForAgent]);
 
-  // Set default event if none selected and events exist
-  useEffect(() => {
-    if (!formData.eventId && assignedEvents.length > 0) {
-      setFormData(prev => ({ ...prev, eventId: assignedEvents[0].id || assignedEvents[0]._id }));
-    }
-  }, [assignedEvents, formData.eventId]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -160,18 +157,18 @@ const AgentStudentsPage = () => {
 
     const uploadedDocs = student.documents || [];
 
-    // Check if any mandatory document is missing or rejected
+    // Check if any mandatory document is missing or not approved
     const mandatoryDocs = required.filter(d => d.mandatory !== false);
     const hasMissingMandatory = mandatoryDocs.some(req => {
-      const doc = uploadedDocs.find(d => d.category === req.value);
-      return !doc || doc.status === 'rejected';
+      const doc = uploadedDocs.find(d => (d.category || '').toLowerCase() === (req.value || '').toLowerCase());
+      return !doc || (doc.status || '').toLowerCase() !== 'approved';
     });
 
     if (hasMissingMandatory) return 'missing';
 
-    // Check if any document is pending
-    const hasPending = uploadedDocs.some(d => d.status === 'pending');
-    if (hasPending) return 'pending';
+    // Check if any uploaded document is not approved
+    const hasUnapproved = uploadedDocs.some(d => (d.status || '').toLowerCase() !== 'approved');
+    if (hasUnapproved) return 'pending';
 
     return 'complete';
   }, [events]);
@@ -180,6 +177,57 @@ const AgentStudentsPage = () => {
   const getEventName = (eventId) => {
     const event = events.find(e => e.id === eventId || e._id === eventId);
     return event?.title || 'Unknown Event';
+  };
+
+  const getUniversityName = useCallback((s) => {
+    if (!s) return 'Not specified';
+    const cf = s.customFields || {};
+    const uId = s.universityId || cf.universityId || (cf instanceof Map ? cf.get('universityId') : null);
+    if (uId && universities) {
+      const u = universities.find(uni => String(uni.id) === String(uId) || String(uni._id) === String(uId));
+      if (u) return u.name;
+    }
+    const uName = s.university || cf.university || cf.universityName || (cf instanceof Map ? (cf.get('university') || cf.get('universityName')) : null);
+    if (uName && uName !== 'Not specified') return uName;
+    if (s.applications && s.applications.length > 0) {
+      const app = s.applications[0];
+      return app.university?.name || app.universityName || 'Not specified';
+    }
+    return 'Not specified';
+  }, [universities]);
+
+  const getVerificationBadge = (status) => {
+    switch (status) {
+      case 'Verified':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            Verified
+          </span>
+        );
+      case 'UnderReview':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800">
+            <Clock className="w-3 h-3 text-blue-600" />
+            Under Review
+          </span>
+        );
+      case 'Rejected':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800">
+            <XCircle className="w-3 h-3 text-red-600" />
+            Rejected
+          </span>
+        );
+      case 'Pending':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800">
+            <AlertCircle className="w-3 h-3 text-amber-600" />
+            Pending
+          </span>
+        );
+    }
   };
 
   // Filtering Logic
@@ -193,12 +241,18 @@ const AgentStudentsPage = () => {
 
       if (searchQuery && !name.includes(q) && !email.includes(q) && !phone.includes(q)) return false;
       if (eventFilter !== 'all' && s.eventId !== eventFilter) return false;
+      if (universityFilter !== 'all') {
+        const uId = s.universityId || cf.universityId || (cf instanceof Map ? cf.get('universityId') : null);
+        const uName = getUniversityName(s);
+        if (String(uId) !== String(universityFilter) && uName !== universityFilter) return false;
+      }
       if (docFilter !== 'all' && getDocStatus(s) !== docFilter) return false;
       if (curStage !== 'all' && s.status !== curStage) return false;
+      if (verificationFilter !== 'all' && (s.verificationStatus || 'Pending') !== verificationFilter) return false;
 
       return true;
     });
-  }, [myStudents, searchQuery, eventFilter, docFilter, curStage]);
+  }, [myStudents, searchQuery, eventFilter, universityFilter, docFilter, curStage, verificationFilter, getUniversityName]);
 
   const kpis = useMemo(() => {
     const total = myStudents.length;
@@ -347,6 +401,27 @@ const AgentStudentsPage = () => {
           </select>
           <select
             className="text-xs font-bold px-3 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-[#042C53] transition-all"
+            value={universityFilter}
+            onChange={(e) => setUniversityFilter(e.target.value)}
+          >
+            <option value="all">All Universities</option>
+            {universities?.map(u => (
+              <option key={u.id || u._id} value={u.id || u._id}>{u.name}</option>
+            ))}
+          </select>
+          <select
+            className="text-xs font-bold px-3 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-[#042C53] transition-all"
+            value={verificationFilter}
+            onChange={(e) => setVerificationFilter(e.target.value)}
+          >
+            <option value="all">All Verification</option>
+            <option value="Pending">Pending</option>
+            <option value="UnderReview">Under Review</option>
+            <option value="Verified">Verified</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+          <select
+            className="text-xs font-bold px-3 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-[#042C53] transition-all"
             value={docFilter}
             onChange={(e) => setDocFilter(e.target.value)}
           >
@@ -390,9 +465,11 @@ const AgentStudentsPage = () => {
               <thead>
                 <tr className="bg-[#F9FAFB] border-b border-gray-100">
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Student</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">University</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Event</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Country</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Verification</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Documents</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Registered</th>
                   <th className="px-6 py-4 w-[80px]"></th>
@@ -418,6 +495,9 @@ const AgentStudentsPage = () => {
                           </div>
                         </div>
                       </td>
+                      <td className="px-6 py-4 text-xs font-medium text-gray-600 truncate max-w-[130px]" title={getUniversityName(s)}>
+                        {getUniversityName(s)}
+                      </td>
                       <td className="px-6 py-4 text-xs font-medium text-gray-600">
                         {getEventName(s.eventId).split(' ').slice(0, 3).join(' ')}
                       </td>
@@ -428,6 +508,9 @@ const AgentStudentsPage = () => {
                         <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100 text-gray-600'}`}>
                           {s.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {getVerificationBadge(s.verificationStatus || 'Pending')}
                       </td>
                       <td className="px-6 py-4">
                         {docStatus === 'complete' && <span className="text-[10px] px-2.5 py-0.5 rounded-full font-semibold uppercase bg-[#EAF3DE] text-[#27500A]">Complete</span>}
@@ -446,7 +529,7 @@ const AgentStudentsPage = () => {
                   );
                 }) : (
                   <tr>
-                    <td colSpan="7" className="px-6 py-20 text-center text-gray-400 italic">
+                    <td colSpan="9" className="px-6 py-20 text-center text-gray-400 italic">
                       <User size={48} className="mx-auto mb-3 opacity-20" />
                       No students match your current filters.
                     </td>
@@ -476,6 +559,7 @@ const AgentStudentsPage = () => {
                         <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
                           {s.status}
                         </span>
+                        {getVerificationBadge(s.verificationStatus || 'Pending')}
                         {docStatus === 'missing' && <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-[#FCEBEB] text-[#791F1F]">Doc Missing</span>}
                       </div>
                     </div>
@@ -484,6 +568,10 @@ const AgentStudentsPage = () => {
                       <p className="text-xs text-gray-500 font-medium truncate">{s.email || s.customFields?.email || 'No email provided'}</p>
                     </div>
                     <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium">
+                        <GraduationCap size={12} className="text-gray-400" />
+                        <span className="truncate">{getUniversityName(s)}</span>
+                      </div>
                       <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium">
                         <Calendar size={12} className="text-gray-400" />
                         <span className="truncate">{getEventName(s.eventId)}</span>
@@ -515,7 +603,6 @@ const AgentStudentsPage = () => {
       <StudentRegistrationModal
         open={showAddModal}
         onOpenChange={setShowAddModal}
-        initialEventId={formData.eventId}
       />
 
       {/* Detail Panel Overlay */}
@@ -558,7 +645,7 @@ const AgentStudentsPage = () => {
               </div>
 
               {getDocStatus(selectedStudent) === 'missing' && (
-                <div className="flex items-start gap-3 p-4 bg-[#FFF9EB] border border-[#FEF3C7] rounded-xl mb-0">
+                <div className="flex items-start gap-3 p-4 bg-[#FFF9EB] border border-[#FEF3C7] rounded-xl mb-4">
                   <AlertCircle size={18} className="text-[#854F0B] mt-0.5" />
                   <div>
                     <p className="text-[13px] font-bold text-[#854F0B]">Action Required: Missing Documents</p>
@@ -566,6 +653,22 @@ const AgentStudentsPage = () => {
                   </div>
                 </div>
               )}
+
+              {/* Student Verification Notice */}
+              <div className="p-4 bg-[#F9FAFB] border border-gray-100 rounded-xl mb-0 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Student Verification</p>
+                  <div className="mt-1">{getVerificationBadge(selectedStudent.verificationStatus || 'Pending')}</div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs font-semibold text-[#042C53]"
+                  onClick={() => navigate(`/agent/students/${selectedStudent.id || selectedStudent._id}`)}
+                >
+                  View Details
+                </Button>
+              </div>
             </div>
 
             <div className="p-6 md:p-8 space-y-10">
@@ -607,6 +710,7 @@ const AgentStudentsPage = () => {
                 <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-[0.2em] mb-6">Metadata & Context</h4>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-6">
                   {[
+                    { label: 'Target University', value: getUniversityName(selectedStudent) },
                     { label: 'Preferred Country', value: getStudentValue(selectedStudent, 'country', 'Country of Interest') },
                     { label: 'Course Interest', value: getStudentValue(selectedStudent, 'courseInterested', 'Course Interested') },
                     { label: 'Education Level', value: getStudentValue(selectedStudent, 'education', 'Highest Qualification') },
@@ -630,53 +734,87 @@ const AgentStudentsPage = () => {
                 </div>
                 <div className="space-y-3">
                   {requiredDocs.map(docType => {
-                    const doc = selectedStudent.documents?.find(d => d.category === docType.value);
+                    const doc = selectedStudent.documents?.find(d => (d.category || '').toLowerCase() === (docType.value || '').toLowerCase());
                     const isMandatory = docType.mandatory !== false;
+                    const docStatus = (doc?.status || '').toLowerCase();
+                    const isCorrection = docStatus.includes('correction');
+                    const isApproved = docStatus === 'approved';
+                    const isRejected = docStatus === 'rejected';
+                    const isUnderReview = docStatus === 'underreview' || docStatus === 'under_review';
+
                     return (
-                      <div key={docType.value} className="flex items-center gap-4 p-4 border border-gray-100 rounded-2xl bg-[#F9FAFB] hover:bg-white hover:border-[#042C53]/20 hover:shadow-sm transition-all group">
-                        <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 group-hover:text-[#042C53] transition-colors">
-                          <FileText size={20} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-[13px] font-bold text-[#111827]">{docType.label}</p>
-                            {isMandatory && <span className="text-[8px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Mandatory</span>}
+                      <div key={docType.value} className="flex flex-col p-4 border border-gray-100 rounded-2xl bg-[#F9FAFB] hover:bg-white hover:border-[#042C53]/20 hover:shadow-sm transition-all group">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 group-hover:text-[#042C53] transition-colors">
+                            <FileText size={20} />
                           </div>
-                          <p className="text-[10px] text-gray-500 font-medium mt-0.5">
-                            {doc ? `Uploaded on ${new Date(doc.uploadedAt).toLocaleDateString()}` : 'No file uploaded yet'}
-                          </p>
-                        </div>
-                        {doc ? (
-                          <div className="flex items-center gap-3">
-                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${doc.status === 'approved' ? 'bg-[#EAF3DE] text-[#27500A]' :
-                              doc.status === 'rejected' ? 'bg-[#FCEBEB] text-[#791F1F]' :
-                                'bg-[#FAEEDA] text-[#633806]'
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-[13px] font-bold text-[#111827]">{docType.label}</p>
+                              {isMandatory && <span className="text-[8px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Mandatory</span>}
+                            </div>
+                            <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+                              {doc ? `Uploaded on ${new Date(doc.uploadedAt).toLocaleDateString()}` : 'No file uploaded yet'}
+                            </p>
+                          </div>
+                          {doc ? (
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                                isApproved ? 'bg-[#EAF3DE] text-[#27500A]' :
+                                isCorrection ? 'bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]' :
+                                isRejected ? 'bg-[#FCEBEB] text-[#791F1F]' :
+                                isUnderReview ? 'bg-[#E6F1FB] text-[#0C447C]' :
+                                'bg-gray-100 text-gray-700'
                               }`}>
-                              {doc.status}
+                                {doc.status || 'Submitted'}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 text-[10px] font-bold text-[#042C53] px-2"
+                                onClick={() => viewStudentDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id)}
+                              >
+                                View
+                              </Button>
+                              {isCorrection && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-[10px] font-bold border-amber-600 text-amber-800 bg-amber-50 hover:bg-amber-100"
+                                  onClick={() => handleUploadClick(docType.value)}
+                                  disabled={isUploading}
+                                >
+                                  <Upload size={12} className="mr-1" /> Replace
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${isMandatory ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-gray-100 text-gray-400'}`}>
+                                {isMandatory ? 'Missing' : 'Optional'}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-[10px] font-bold border-[#042C53] text-[#042C53] hover:bg-[#042C53] hover:text-white"
+                                onClick={() => handleUploadClick(docType.value)}
+                                disabled={isUploading}
+                              >
+                                <Upload size={12} className="mr-1" /> Upload
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Reviewer remarks / reason callout for Agent */}
+                        {doc?.remarks && (isCorrection || isRejected) && (
+                          <div className={`mt-3 p-2.5 rounded-xl text-xs border ${
+                            isCorrection ? 'bg-amber-50/80 border-amber-200 text-amber-900' : 'bg-red-50/80 border-red-200 text-red-900'
+                          }`}>
+                            <span className="font-bold text-[10px] uppercase block mb-0.5">
+                              {isCorrection ? 'Correction Required From Admin:' : 'Rejection Reason:'}
                             </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 text-[10px] font-bold text-[#042C53] px-2"
-                              onClick={() => viewStudentDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id)}
-                            >
-                              View
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${isMandatory ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-gray-100 text-gray-400'}`}>
-                              {isMandatory ? 'Missing' : 'Optional'}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 text-[10px] font-bold border-[#042C53] text-[#042C53] hover:bg-[#042C53] hover:text-white"
-                              onClick={() => handleUploadClick(docType.value)}
-                              disabled={isUploading}
-                            >
-                              <Upload size={12} className="mr-1" /> Upload
-                            </Button>
+                            {doc.remarks}
                           </div>
                         )}
                       </div>

@@ -1,54 +1,139 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const invoiceSchema = new mongoose.Schema({
-  agentId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+const Invoice = sequelize.define('Invoice', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
-  studentIds: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Student',
-    required: true
-  }],
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
+  },
+  agentId: {
+    type: DataTypes.UUID,
+    allowNull: false
+  },
+  studentIds: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+    defaultValue: []
+  },
   invoiceNumber: {
-    type: String,
-    required: true,
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true
   },
   amount: {
-    type: Number,
-    required: true
+    type: DataTypes.DOUBLE,
+    allowNull: false
   },
   commissionRate: {
-    type: Number,
-    default: 0
+    type: DataTypes.DOUBLE,
+    defaultValue: 0
   },
   status: {
-    type: String,
-    enum: ['Pending', 'Paid', 'Rejected'],
-    default: 'Pending'
+    type: DataTypes.ENUM('Pending', 'Paid', 'Rejected'),
+    defaultValue: 'Pending'
   },
-  remarks: String,
-  invoiceUrl: String,
+  remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  invoiceUrl: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   raisedAt: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   },
-  paidAt: Date
+  paidAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+
+  // Finance Review Milestone
+  financeReviewStatus: {
+    type: DataTypes.ENUM('PendingReview', 'UnderReview', 'Approved', 'Rejected'),
+    defaultValue: 'PendingReview'
+  },
+  financeReviewedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  financeReviewedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  financeReviewNotes: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  financeRejectionReason: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  financeReviewHistory: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  }
 }, {
   timestamps: true,
-  toJSON: {
-    transform: function(doc, ret) {
-      if (ret._id) ret.id = ret._id.toString();
-      delete ret._id;
-      delete ret.__v;
-      return ret;
-    }
-  }
+  tableName: 'Invoices',
+  indexes: [
+    { fields: ['invoiceNumber'], unique: true },
+    { fields: ['agentId', 'status'] },
+    { fields: ['financeReviewStatus'] }
+  ]
 });
 
-// Index for faster queries
-invoiceSchema.index({ agentId: 1, status: 1 });
+// Instance method to JSON transform
+Invoice.prototype.toJSON = function() {
+  const values = { ...this.get() };
+  values.id = values.id ? values.id.toString() : values.id;
+  values._id = values.id;
+  return values;
+};
 
-module.exports = mongoose.model('Invoice', invoiceSchema);
+// Compatibility static helpers
+Invoice.findById = function(id, options = {}) {
+  return this.findByPk(id, options);
+};
+
+Invoice.findByIdAndUpdate = async function(id, updateData, options = {}) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  return await instance.update(updateData, options);
+};
+
+Invoice.findByIdAndDelete = async function(id) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  await instance.destroy();
+  return instance;
+};
+
+Invoice.countDocuments = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.count({ where });
+};
+
+Invoice.deleteMany = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.destroy({ where });
+};
+
+Invoice.updateMany = function(criteria = {}, updateData = {}) {
+  const where = { ...criteria };
+  return this.update(updateData, { where });
+};
+
+module.exports = Invoice;

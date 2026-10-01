@@ -3,8 +3,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const connectDB = require('./config/db');
+const { connectDB, sequelize } = require('./config/db');
 const { initStorage } = require('./utils/storage');
+
+// Import models to ensure associations are registered
+const { User, Event, Student, University, Course } = require('./models');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -15,11 +18,10 @@ const statsRoutes = require('./routes/statsRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
-
-// Import models for seeding
-const User = require('./models/User');
-const Event = require('./models/Event');
-const Student = require('./models/Student');
+const applicationRoutes = require('./routes/applicationRoutes');
+const universityRoutes = require('./routes/universityRoutes');
+const invoiceReviewRoutes = require('./routes/invoiceReviewRoutes');
+const courseRoutes = require('./routes/courseRoutes');
 
 const app = express();
 
@@ -39,11 +41,11 @@ app.use(cors({
 
 // Health check routes (before /api prefix)
 app.get('/api', (req, res) => {
-  res.json({ message: 'Admin Portal API', status: 'healthy' });
+  res.json({ message: 'Admin Portal API', status: 'healthy', database: 'postgresql' });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.json({ status: 'healthy', database: 'postgresql', timestamp: new Date().toISOString() });
 });
 
 // API Routes
@@ -55,6 +57,10 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/applications', applicationRoutes);
+app.use('/api/universities', universityRoutes);
+app.use('/api/invoice-reviews', invoiceReviewRoutes);
+app.use('/api/courses', courseRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -84,7 +90,6 @@ app.use((err, req, res, next) => {
 // 404 handler
 app.use((req, res) => {
   console.log('404 - Route not found:', req.method, req.url);
-  console.log('Headers:', req.headers);
   res.status(404).json({
     success: false,
     detail: 'Route not found'
@@ -100,7 +105,7 @@ const seedDatabase = async () => {
     const adminEmail = (process.env.ADMIN_EMAIL || 'admin@example.com').toLowerCase();
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
-    let admin = await User.findOne({ email: adminEmail });
+    let admin = await User.findOne({ where: { email: adminEmail } });
     
     if (!admin) {
       admin = await User.create({
@@ -108,7 +113,9 @@ const seedDatabase = async () => {
         email: adminEmail,
         password: adminPassword,
         role: 'admin',
-        status: 'active'
+        status: 'active',
+        isVerified: true,
+        verificationStatus: 'approved'
       });
       console.log(`✅ Admin created: ${adminEmail}`);
     } else {
@@ -116,16 +123,16 @@ const seedDatabase = async () => {
     }
 
     // Check if we need to seed sample data
-    const agentCount = await User.countDocuments({ role: 'agent' });
+    const agentCount = await User.count({ where: { role: 'agent' } });
     
     if (agentCount === 0) {
       console.log('📝 Seeding sample data...');
 
       // Create sample agents
       const agentsData = [
-        { name: 'John Smith', email: 'john.smith@example.com', userId: 'john.smith', password: 'agent123', phone: '+1 234 567 8901', status: 'active' },
-        { name: 'Sarah Johnson', email: 'sarah.johnson@example.com', userId: 'sarah.johnson', password: 'agent123', phone: '+1 234 567 8902', status: 'active' },
-        { name: 'Mike Davis', email: 'mike.davis@example.com', userId: 'mike.davis', password: 'agent123', phone: '+1 234 567 8903', status: 'inactive' }
+        { name: 'John Smith', email: 'john.smith@example.com', userId: 'john.smith', password: 'agent123', phone: '+1 234 567 8901', status: 'active', isVerified: true, verificationStatus: 'approved' },
+        { name: 'Sarah Johnson', email: 'sarah.johnson@example.com', userId: 'sarah.johnson', password: 'agent123', phone: '+1 234 567 8902', status: 'active', isVerified: true, verificationStatus: 'approved' },
+        { name: 'Mike Davis', email: 'mike.davis@example.com', userId: 'mike.davis', password: 'agent123', phone: '+1 234 567 8903', status: 'inactive', isVerified: false, verificationStatus: 'pending' }
       ];
 
       const agents = [];
@@ -137,29 +144,50 @@ const seedDatabase = async () => {
 
       // Create sample events
       const eventsData = [
-        { title: 'Tech Career Fair 2025', description: 'Annual technology career fair featuring top tech companies and startups. Students can explore opportunities in software development, data science, and more.', date: '2025-03-15', assignedAgents: [agents[0]._id, agents[1]._id] },
-        { title: 'MBA Open Day', description: 'Explore MBA programs from leading business schools. Learn about admission requirements, curriculum, and career prospects.', date: '2025-04-20', assignedAgents: [agents[1]._id] },
-        { title: 'Study Abroad Workshop', description: 'Comprehensive workshop covering study abroad options, visa processes, and scholarship opportunities.', date: '2025-05-10', assignedAgents: [agents[0]._id, agents[2]._id] }
+        { title: 'Tech Career Fair 2025', description: 'Annual technology career fair featuring top tech companies and startups. Students can explore opportunities in software development, data science, and more.', date: '2025-03-15', assignedAgents: [agents[0].id, agents[1].id] },
+        { title: 'MBA Open Day', description: 'Explore MBA programs from leading business schools. Learn about admission requirements, curriculum, and career prospects.', date: '2025-04-20', assignedAgents: [agents[1].id] },
+        { title: 'Study Abroad Workshop', description: 'Comprehensive workshop covering study abroad options, visa processes, and scholarship opportunities.', date: '2025-05-10', assignedAgents: [agents[0].id, agents[2].id] }
       ];
 
       const events = [];
       for (const eventData of eventsData) {
-        const event = await Event.create({ ...eventData, createdBy: admin._id });
+        const event = await Event.create({ ...eventData, createdBy: admin.id });
         events.push(event);
       }
       console.log(`✅ Created ${events.length} sample events`);
 
       // Create sample students
       const studentsData = [
-        { name: 'Alice Wang', email: 'alice.wang@email.com', phone: '+86 123 4567 8901', country: 'China', education: "Bachelor's in Computer Science", courseInterested: "Master's in Data Science", notes: 'Interested in AI/ML programs', eventId: events[0]._id, agentId: agents[0]._id },
-        { name: 'Raj Patel', email: 'raj.patel@email.com', phone: '+91 987 654 3210', country: 'India', education: "Bachelor's in Engineering", courseInterested: 'MBA', notes: 'Looking for scholarships', eventId: events[1]._id, agentId: agents[1]._id },
-        { name: 'Emma Thompson', email: 'emma.t@email.com', phone: '+44 789 012 3456', country: 'United Kingdom', education: 'A-Levels', courseInterested: "Bachelor's in Business", notes: 'Prefers universities in USA', eventId: events[2]._id, agentId: agents[0]._id }
+        { name: 'Alice Wang', email: 'alice.wang@email.com', phone: '+86 123 4567 8901', country: 'China', education: "Bachelor's in Computer Science", courseInterested: "Master's in Data Science", notes: 'Interested in AI/ML programs', eventId: events[0].id, agentId: agents[0].id },
+        { name: 'Raj Patel', email: 'raj.patel@email.com', phone: '+91 987 654 3210', country: 'India', education: "Bachelor's in Engineering", courseInterested: 'MBA', notes: 'Looking for scholarships', eventId: events[1].id, agentId: agents[1].id },
+        { name: 'Emma Thompson', email: 'emma.t@email.com', phone: '+44 789 012 3456', country: 'United Kingdom', education: 'A-Levels', courseInterested: "Bachelor's in Business", notes: 'Prefers universities in USA', eventId: events[2].id, agentId: agents[0].id }
       ];
 
       for (const studentData of studentsData) {
         await Student.create(studentData);
       }
       console.log(`✅ Created ${studentsData.length} sample students`);
+    }
+
+    // Check if we need to seed initial courses
+    const courseCount = await Course.count();
+    if (courseCount === 0) {
+      console.log('📚 Seeding sample courses...');
+      const sampleCourses = [
+        { name: 'Computer Science', code: 'CS101', level: 'Undergraduate', department: 'Computer Science & IT', duration: '3 Years', tuitionFee: '$18,000 / year', status: 'active', description: 'Comprehensive study of computer systems, algorithms, software development and computation.' },
+        { name: 'Data Science & Artificial Intelligence', code: 'DSAI', level: 'Postgraduate', department: 'Computer Science & IT', duration: '2 Years', tuitionFee: '$22,000 / year', status: 'active', description: 'Advanced machine learning, statistical modeling, big data infrastructure, and AI engineering.' },
+        { name: 'Master of Business Administration (MBA)', code: 'MBA', level: 'Postgraduate', department: 'Business & Management', duration: '2 Years', tuitionFee: '$26,000 / year', status: 'active', description: 'Executive leadership, global business strategy, corporate finance, and enterprise operations.' },
+        { name: 'Software Engineering', code: 'SE201', level: 'Undergraduate', department: 'Engineering', duration: '4 Years', tuitionFee: '$20,000 / year', status: 'active', description: 'Design, architect, and deploy reliable large-scale distributed systems and enterprise software.' },
+        { name: 'International Business & Marketing', code: 'IB301', level: 'Undergraduate', department: 'Business & Management', duration: '3 Years', tuitionFee: '$16,500 / year', status: 'active', description: 'Global commerce, multinational supply chain economics, and modern international brand management.' },
+        { name: 'Biomedical Science', code: 'BMS', level: 'Undergraduate', department: 'Health & Life Sciences', duration: '3 Years', tuitionFee: '$21,000 / year', status: 'active', description: 'Human pathology, molecular biology, clinical diagnostics, and pharmacology research.' },
+        { name: 'Cyber Security & Network Defense', code: 'CSND', level: 'Postgraduate', department: 'Computer Science & IT', duration: '1 Year', tuitionFee: '$19,500 / year', status: 'active', description: 'Cryptographic systems, ethical hacking, digital forensics, and cloud infrastructure security.' },
+        { name: 'Mechanical Engineering', code: 'ME101', level: 'Undergraduate', department: 'Engineering', duration: '4 Years', tuitionFee: '$19,000 / year', status: 'active', description: 'Thermodynamics, robotics, mechanical design, aerospace mechanics, and manufacturing.' }
+      ];
+
+      for (const c of sampleCourses) {
+        await Course.create(c);
+      }
+      console.log(`✅ Created ${sampleCourses.length} sample courses`);
     }
 
     // Write test credentials
@@ -183,18 +211,14 @@ const seedDatabase = async () => {
 - sarah.johnson@example.com / agent123 (Active)
 - mike.davis@example.com / agent123 (Inactive)
 
-## API Endpoints
-- POST /api/auth/login
-- POST /api/auth/logout
-- GET /api/auth/me
-- GET /api/agents
-- GET /api/events
-- GET /api/students
-- GET /api/stats
+## Database
+- Engine: PostgreSQL
+- Database: ${process.env.DB_NAME || 'agent_portal'}
+- Host: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}
 `;
 
     fs.writeFileSync(path.join(memoryDir, 'test_credentials.md'), credentials);
-    console.log('✅ Test credentials written to /app/memory/test_credentials.md');
+    console.log('✅ Test credentials written to memory/test_credentials.md');
 
     console.log('🌱 Database seeding completed!');
   } catch (error) {
@@ -207,15 +231,20 @@ const PORT = process.env.PORT || 8001;
 
 const startServer = async () => {
   try {
-    // Connect to MongoDB
+    // Connect to PostgreSQL
     await connectDB();
+
+    // Synchronize Sequelize models with database schema
+    console.log('🔄 Synchronizing PostgreSQL database schema...');
+    await sequelize.sync({ alter: true });
+    console.log('✅ PostgreSQL schema synchronized successfully');
 
     // Initialize object storage
     try {
       await initStorage();
     } catch (error) {
-      console.error('❌ Failed to initialize object storage: Request failed with status code 500');
-      console.log('⚠️ Continuing without object storage - file uploads will be disabled');
+      console.error('❌ Failed to initialize object storage');
+      console.log('⚠️ Continuing with local storage fallback');
     }
 
     // Seed database
@@ -224,7 +253,7 @@ const startServer = async () => {
     // Start listening
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📍 API URL: http://0.0.0.0:${PORT}/api`);
+      console.log(`📍 API URL: http://localhost:${PORT}/api`);
       console.log(`🔗 Frontend URL: ${frontendUrl}`);
     });
   } catch (error) {

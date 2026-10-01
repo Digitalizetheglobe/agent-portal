@@ -1,27 +1,51 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const passwordResetTokenSchema = new mongoose.Schema({
+const PasswordResetToken = sequelize.define('PasswordResetToken', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
   userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    type: DataTypes.UUID,
+    allowNull: false
   },
   token: {
-    type: String,
-    required: true,
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true
   },
   used: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   expiresAt: {
-    type: Date,
-    required: true,
-    index: { expireAfterSeconds: 0 }
+    type: DataTypes.DATE,
+    allowNull: false
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  tableName: 'PasswordResetTokens',
+  indexes: [
+    { fields: ['token'], unique: true },
+    { fields: ['userId'] }
+  ]
 });
 
-module.exports = mongoose.model('PasswordResetToken', passwordResetTokenSchema);
+// Compatibility static helpers
+PasswordResetToken.findById = function(id, options = {}) {
+  return this.findByPk(id, options);
+};
+
+PasswordResetToken.countDocuments = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.count({ where });
+};
+
+PasswordResetToken.deleteMany = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.destroy({ where });
+};
+
+module.exports = PasswordResetToken;

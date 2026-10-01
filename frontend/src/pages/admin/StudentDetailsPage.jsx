@@ -1,67 +1,112 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, MapPin, Phone, Mail, User, BookOpen, Globe, Clock, Upload, FileText, Download, Trash2, Plus, Check, X, Shield, AlertCircle, Edit, Eye } from 'lucide-react';
+import {
+  ArrowLeft, Calendar, MapPin, Phone, Mail, User, BookOpen,
+  Globe, Clock, Upload, FileText, Download, Check, X,
+  Shield, AlertCircle, Edit, Eye, CheckCircle2, XCircle,
+  History, Briefcase, RefreshCw, ChevronRight
+} from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Separator } from '../../components/ui/separator';
 import { Progress } from '../../components/ui/progress';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
-import { studentAPI, formatApiError } from '../../utils/api';
+import { studentAPI, studentVerificationAPI, formatApiError } from '../../utils/api';
+import {
+  STUDENT_VERIFICATION_STATUS,
+  STUDENT_VERIFICATION_STATUS_LABELS
+} from '../../constants/status';
+import StudentRejectionModal from '../../components/modals/StudentRejectionModal';
 
 const StudentDetailsPage = () => {
   const { studentId: id } = useParams();
   const navigate = useNavigate();
-  const { students, events, agents, getStudentById, uploadStudentDocument, updateStudentStatus, verifyStudentDocument } = useData();
+  const { students, events, agents, universities, getStudentById, uploadStudentDocument, updateStudentStatus, verifyStudentDocument } = useData();
   const { isAdmin, isAgent } = useAuth();
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [errorStatus, setErrorStatus] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('Other');
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    const fetchStudent = async () => {
-      if (!id) return;
+  // Phase 3 State: Applications & Student Verification
+  const [applications, setApplications] = useState([]);
+  const [loadingApps, setLoadingApps] = useState(false);
+  const [verificationDetail, setVerificationDetail] = useState(null);
+  const [verificationHistory, setVerificationHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchStudentData = useCallback(async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      setError(null);
+      setErrorStatus(null);
 
-        let foundStudent = null;
-
-        // Always try to fetch from API first for fresh data
-        try {
-          foundStudent = await getStudentById(id);
-        } catch (apiError) {
-          // Fallback to local state if API fails
-          foundStudent = students.find(s => s.id === id);
-
-          if (apiError.response?.status !== 404) {
-            throw apiError;
-          }
-        }
-
-        if (foundStudent) {
-          setStudent(foundStudent);
-        } else {
-          setError('Student not found');
-        }
-      } catch (err) {
-        setError('Failed to fetch student details');
-        console.error('Error fetching student:', err);
-      } finally {
-        setLoading(false);
+      const foundStudent = await getStudentById(id);
+      if (foundStudent) {
+        setStudent(foundStudent);
+      } else {
+        setErrorStatus(404);
+        setError('Student not found');
+        return;
       }
-    };
+    } catch (err) {
+      console.error('Error fetching student:', err);
+      const status = err.response?.status;
+      setErrorStatus(status || 500);
+      setError(err.response?.data?.detail || err.message || 'Failed to fetch student details');
+      return;
+    } finally {
+      setLoading(false);
+    }
 
-    fetchStudent();
-  }, [id, getStudentById, students]);
+    // Fetch Associated Applications
+    try {
+      setLoadingApps(true);
+      const appRes = await studentAPI.getApplications(id);
+      const appList = Array.isArray(appRes.data)
+        ? appRes.data
+        : (appRes.data?.applications || []);
+      setApplications(appList);
+    } catch (appErr) {
+      console.error('Error fetching applications for student:', appErr);
+    } finally {
+      setLoadingApps(false);
+    }
+
+    // Fetch Verification Detail
+    try {
+      const verRes = await studentVerificationAPI.getByStudentId(id);
+      setVerificationDetail(verRes.data);
+    } catch (verErr) {
+      console.error('Error fetching verification detail:', verErr);
+    }
+
+    // Fetch Verification History
+    try {
+      setLoadingHistory(true);
+      const histRes = await studentVerificationAPI.getHistory(id);
+      setVerificationHistory(histRes.data?.history || []);
+    } catch (histErr) {
+      console.error('Error fetching verification history:', histErr);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [id, getStudentById]);
+
+  useEffect(() => {
+    fetchStudentData();
+  }, [fetchStudentData]);
 
   const event = useMemo(() => {
     if (!student?.eventId) return null;
@@ -82,19 +127,92 @@ const StudentDetailsPage = () => {
     return event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
   }, [event]);
 
+  // Current verification status: prefer verificationDetail if loaded, else student.verificationStatus
+  const currentVerificationStatus = verificationDetail?.verificationStatus || student?.verificationStatus || STUDENT_VERIFICATION_STATUS.PENDING;
+
+  // Verification actions (Admin only)
+  const handleInitiateVerification = async () => {
+    try {
+      setActionLoading(true);
+      const res = await studentVerificationAPI.initiate(student.id);
+      setVerificationDetail(res.data);
+      setStudent(prev => ({ ...prev, ...res.data }));
+      toast.success('Verification initiated — student is now Under Review');
+      // Refresh history
+      const histRes = await studentVerificationAPI.getHistory(student.id);
+      setVerificationHistory(histRes.data?.history || []);
+    } catch (err) {
+      toast.error('Failed to initiate verification', { description: formatApiError(err) });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleVerifyStudent = async () => {
+    try {
+      setActionLoading(true);
+      const res = await studentVerificationAPI.verify(student.id);
+      setVerificationDetail(res.data);
+      setStudent(prev => ({ ...prev, ...res.data }));
+      toast.success('Student verified successfully');
+      // Refresh history
+      const histRes = await studentVerificationAPI.getHistory(student.id);
+      setVerificationHistory(histRes.data?.history || []);
+    } catch (err) {
+      toast.error('Failed to verify student', { description: formatApiError(err) });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectStudent = async (reason) => {
+    try {
+      setActionLoading(true);
+      const res = await studentVerificationAPI.reject(student.id, reason);
+      setVerificationDetail(res.data);
+      setStudent(prev => ({ ...prev, ...res.data }));
+      toast.success('Student verification rejected');
+      // Refresh history
+      const histRes = await studentVerificationAPI.getHistory(student.id);
+      setVerificationHistory(histRes.data?.history || []);
+    } catch (err) {
+      toast.error('Failed to reject student', { description: formatApiError(err) });
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const getUniversityName = useCallback((s) => {
+    if (!s) return 'Not specified';
+    const cf = s.customFields || {};
+    const uId = s.universityId || cf.universityId || (cf instanceof Map ? cf.get('universityId') : null);
+    if (uId && universities) {
+      const u = universities.find(uni => String(uni.id) === String(uId) || String(uni._id) === String(uId));
+      if (u) return u.name;
+    }
+    const uName = s.university || cf.university || cf.universityName || (cf instanceof Map ? (cf.get('university') || cf.get('universityName')) : null);
+    if (uName && uName !== 'Not specified') return uName;
+    if (s.applications && s.applications.length > 0) {
+      const app = s.applications[0];
+      return app.university?.name || app.universityName || 'Not specified';
+    }
+    return 'Not specified';
+  }, [universities]);
+
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="p-8 space-y-6 bg-[#F9FAFB] min-h-screen">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => navigate(isAdmin() ? '/admin/students' : '/agent/students')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Students
           </Button>
         </div>
-        <Card>
-          <CardContent className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="text-muted-foreground mt-4">Loading student details...</p>
+        <Card className="border-[#E5E7EB] bg-white">
+          <CardContent className="p-12 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#042C53] mx-auto"></div>
+            <p className="text-muted-foreground mt-4 text-sm font-medium">Loading student profile...</p>
           </CardContent>
         </Card>
       </div>
@@ -103,45 +221,45 @@ const StudentDetailsPage = () => {
 
   if (error || !student) {
     return (
-      <div className="space-y-6">
+      <div className="p-8 space-y-6 bg-[#F9FAFB] min-h-screen">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => navigate(isAdmin() ? '/admin/students' : '/agent/students')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Students
           </Button>
         </div>
-        <Card>
-          <CardContent className="p-8 text-center">
-            <p className="text-muted-foreground">{error || 'Student not found'}</p>
+        <Card className="border-[#E5E7EB] bg-white">
+          <CardContent className="p-12 text-center">
+            <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+            <p className="text-[#111827] font-bold text-base">{error || 'Student not found'}</p>
+            <p className="text-muted-foreground text-xs mt-1">The requested student could not be located or you do not have permission to view it.</p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-
-
   const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
     return new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric'
     });
   };
 
   const formatDateTime = (dateStr) => {
+    if (!dateStr) return 'N/A';
     return new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
   };
 
-  // Helper function to get student data from custom fields or legacy fields
   const getStudentFieldValue = (fieldKey, fallbackKey = null) => {
-    // 1. Try legacy fields as priority (direct properties)
     if (fallbackKey && student[fallbackKey]) {
       return student[fallbackKey];
     }
@@ -149,12 +267,10 @@ const StudentDetailsPage = () => {
       return student[fieldKey];
     }
 
-    // 2. Try to find in custom fields by label matching
     if (event?.formFields) {
       const field = event.formFields.find(f =>
         f.label.toLowerCase().trim() === fieldKey.toLowerCase().trim() ||
         (fallbackKey && f.label.toLowerCase().trim() === fallbackKey.toLowerCase().trim()) ||
-        // Check for partial matches like "Full Name" matching "name"
         f.label.toLowerCase().includes(fieldKey.toLowerCase())
       );
 
@@ -169,7 +285,6 @@ const StudentDetailsPage = () => {
       }
     }
 
-    // 3. Try custom fields directly by key
     if (student.customFields && student.customFields[fieldKey]) {
       return student.customFields[fieldKey];
     }
@@ -177,28 +292,18 @@ const StudentDetailsPage = () => {
     return 'Not specified';
   };
 
-  // Get all custom fields and format them for display
   const getFormattedCustomFields = () => {
     if (!student.customFields) return [];
-
     const fields = [];
-
-    // Define standard field keys to skip in the "Other" section
     const standardFieldKeys = ['name', 'email', 'phone', 'country', 'education', 'courseInterested', 'notes'];
-
-    // Also skip fields that are already matched by label in standard sections
     const standardLabels = ['Full Name', 'Email Address', 'Phone Number', 'Country of Interest', 'Target Course', 'Education Level', 'Highest Qualification', 'Internal Notes'];
 
     Object.entries(student.customFields).forEach(([key, value]) => {
       if (!value) return;
-
-      // Find the label from event formFields if possible
       const cleanKey = key.replace(/^field_/, '');
       const formField = event?.formFields?.find(f => String(f.id).replace(/^field_/, '') === cleanKey);
-
       const label = formField ? formField.label : key.replace(/^field_/, '').replace(/_/g, ' ');
 
-      // Skip if it's a standard field or already displayed
       const isStandardKey = standardFieldKeys.includes(key);
       const isStandardLabel = standardLabels.some(l =>
         label.toLowerCase().includes(l.toLowerCase()) ||
@@ -206,28 +311,22 @@ const StudentDetailsPage = () => {
       );
 
       if (!isStandardKey && !isStandardLabel) {
-        fields.push({
-          key: label,
-          value: value
-        });
+        fields.push({ key: label, value });
       }
     });
 
     return fields;
   };
 
-  // Handle file upload
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
     if (!file) return;
 
-    // Validate file size (10MB limit)
     if (file.size > 10 * 1024 * 1024) {
       toast.error('File size must be less than 10MB');
       return;
     }
 
-    // Validate file type
     const allowedTypes = [
       'application/pdf',
       'application/msword',
@@ -247,16 +346,10 @@ const StudentDetailsPage = () => {
     try {
       setUploading(true);
       setUploadProgress(0);
-
-      const result = await uploadStudentDocument(student.id, file, selectedCategory);
-
-      // Update student data with new document
+      await uploadStudentDocument(student.id, file, selectedCategory);
       const updatedStudent = await getStudentById(student.id);
       setStudent(updatedStudent);
-
       toast.success('Document uploaded successfully');
-
-      // Clear file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -268,51 +361,35 @@ const StudentDetailsPage = () => {
     }
   };
 
-  // Handle document download
   const handleDownloadDocument = async (docId, filename) => {
     try {
       const response = await studentAPI.downloadDocument(student.id, docId);
-
-      // Create blob from response
       const blob = new Blob([response.data], { type: response.headers['content-type'] });
       const url = window.URL.createObjectURL(blob);
-
-      // Create temporary link and trigger download
       const link = document.createElement('a');
       link.href = url;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      // Clean up URL
       setTimeout(() => window.URL.revokeObjectURL(url), 100);
     } catch (error) {
       toast.error('Failed to download document', { description: formatApiError(error) });
     }
   };
 
-  // Handle document preview
-  const handleViewDocument = async (docId, filename) => {
+  const handleViewDocument = async (docId) => {
     try {
       const response = await studentAPI.downloadDocument(student.id, docId, { inline: 'true' });
-
-      // Create blob from response with the correct MIME type
       const contentType = response.headers['content-type'];
       const blob = new Blob([response.data], { type: contentType });
       const url = window.URL.createObjectURL(blob);
-
-      // Open in new tab
       window.open(url, '_blank');
-
-      // Note: We don't revokeObjectURL immediately because the new tab needs it
-      // In a real app, you might want to track these and revoke them later
     } catch (error) {
       toast.error('Failed to view document', { description: formatApiError(error) });
     }
   };
 
-  // Format file size
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -321,33 +398,149 @@ const StudentDetailsPage = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handleVerifyDocument = async (docId, status) => {
-    const remarks = status === 'rejected' ? prompt('Enter reason for rejection:') : '';
-    if (status === 'rejected' && remarks === null) return;
+  const handleVerifyDocumentAction = async (docId, status) => {
+    let remarks = '';
+    const sLower = (status || '').toLowerCase();
+    if (sLower.includes('correction')) {
+      remarks = prompt('Enter correction reason / instructions for the agent:');
+      if (remarks === null) return;
+      if (!remarks.trim()) {
+        toast.error('Remarks are required when requesting correction');
+        return;
+      }
+    } else if (sLower === 'rejected') {
+      remarks = prompt('Enter reason for document rejection:');
+      if (remarks === null) return;
+      if (!remarks.trim()) {
+        toast.error('Remarks are required when rejecting a document');
+        return;
+      }
+    }
 
     try {
       const updatedStudent = await verifyStudentDocument(student.id, docId, { status, remarks });
       setStudent(updatedStudent);
-      toast.success(`Document ${status}`);
+      toast.success(`Document marked as ${status}`);
     } catch (error) {
       console.error('Error verifying document:', error);
     }
   };
 
   const getDocStatusBadge = (status) => {
-    switch (status) {
-      case 'approved': return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 gap-1"><Check className="w-3 h-3" /> Approved</Badge>;
-      case 'rejected': return <Badge variant="destructive" className="gap-1"><X className="w-3 h-3" /> Rejected</Badge>;
-      default: return <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1"><Clock className="w-3 h-3" /> Pending</Badge>;
+    const s = (status || '').toLowerCase();
+    switch (s) {
+      case 'approved':
+        return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 gap-1"><Check className="w-3 h-3" /> Approved</Badge>;
+      case 'underreview':
+      case 'under_review':
+        return <Badge className="bg-blue-100 text-blue-700 border-blue-200 gap-1"><Clock className="w-3 h-3" /> Under Review</Badge>;
+      case 'correctionrequired':
+      case 'correction_required':
+        return <Badge className="bg-amber-100 text-amber-800 border-amber-300 gap-1"><AlertCircle className="w-3 h-3" /> Correction Required</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive" className="gap-1"><X className="w-3 h-3" /> Rejected</Badge>;
+      case 'submitted':
+      case 'pending':
+      default:
+        return <Badge variant="outline" className="text-gray-600 border-gray-200 bg-gray-50 gap-1"><Clock className="w-3 h-3" /> Submitted</Badge>;
     }
   };
+
+  const getVerificationBadge = (status) => {
+    switch (status) {
+      case STUDENT_VERIFICATION_STATUS.VERIFIED:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            Verified
+          </span>
+        );
+      case STUDENT_VERIFICATION_STATUS.UNDER_REVIEW:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200 shadow-sm">
+            <Clock className="w-3.5 h-3.5 text-blue-600" />
+            Under Review
+          </span>
+        );
+      case STUDENT_VERIFICATION_STATUS.REJECTED:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200 shadow-sm">
+            <XCircle className="w-3.5 h-3.5 text-red-600" />
+            Rejected
+          </span>
+        );
+      case STUDENT_VERIFICATION_STATUS.PENDING:
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 shadow-sm">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+            Pending
+          </span>
+        );
+    }
+  };
+
+  const verifierInfo = verificationDetail?.verifiedBy || student?.verifiedBy;
+  const verifierDisplay = typeof verifierInfo === 'object' && verifierInfo !== null
+    ? (verifierInfo.name || verifierInfo.email)
+    : verifierInfo;
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <div className="w-8 h-8 border-3 border-[#042C53] border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs text-[#6B7280] font-medium">Loading candidate dossier...</span>
+      </div>
+    );
+  }
+
+  if (errorStatus === 403) {
+    return (
+      <div className="p-8 max-w-xl mx-auto my-12 text-center bg-white rounded-xl border border-red-200 shadow-sm space-y-4">
+        <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+          <Shield className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-bold text-gray-900 font-['Outfit']">Access Denied (403 Forbidden)</h2>
+        <p className="text-xs text-gray-600">
+          You do not have authorization to view this student profile. Under QStudy agency isolation policies, candidate dossiers are strictly private to their managing agency.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-gray-300"
+          onClick={() => navigate(isAdmin() ? '/admin/students' : '/agent/students')}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Students
+        </Button>
+      </div>
+    );
+  }
+
+  if (errorStatus === 404 || !student) {
+    return (
+      <div className="p-8 max-w-xl mx-auto my-12 text-center bg-white rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <AlertCircle className="w-12 h-12 text-gray-400 mx-auto" />
+        <h2 className="text-lg font-bold text-gray-900 font-['Outfit']">Student Not Found (404)</h2>
+        <p className="text-xs text-gray-500">The requested student record does not exist or has been removed.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate(isAdmin() ? '/admin/students' : '/agent/students')}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Students
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-8" data-testid="student-details-page">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-start gap-4">
-          {/* <Button
+          <Button
             variant="outline"
             size="sm"
             className="mt-1 h-9 border-[#E5E7EB] bg-white hover:bg-gray-50"
@@ -355,12 +548,13 @@ const StudentDetailsPage = () => {
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
-          </Button> */}
+          </Button>
           <div>
             <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
-              Student Profile
+              {getStudentFieldValue('name', 'name')}
             </h1>
-            <div className="flex items-center gap-3 mt-1.5">
+            <div className="flex items-center flex-wrap gap-2.5 mt-2">
+              {/* Pipeline Stage Badge */}
               <Badge className={cn(
                 "text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border-none",
                 student.status === 'Registered' ? 'bg-blue-100 text-blue-700' :
@@ -369,28 +563,162 @@ const StudentDetailsPage = () => {
                       student.status === 'Attended' ? 'bg-emerald-100 text-emerald-700' :
                         'bg-pink-100 text-pink-700'
               )}>
-                {student.status || 'Registered'}
+                Stage: {student.status || 'Registered'}
               </Badge>
+
+              {/* Student Verification Badge */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-[#6B7280]">Verification:</span>
+                {getVerificationBadge(currentVerificationStatus)}
+              </div>
+
               <span className="text-xs font-medium text-[#6B7280]">
-                ID: {student.id?.slice(-8).toUpperCase()} · Joined {formatDate(student.submittedAt)}
+                · ID: {student.id?.slice(-8).toUpperCase()} · Joined {formatDate(student.submittedAt || student.createdAt)}
               </span>
             </div>
           </div>
         </div>
-        <div className="flex gap-3">
+
+        <div className="flex gap-3 items-center">
           <Button
-            className="h-10 px-6 bg-[#042C53] hover:bg-[#0C447C] font-bold rounded-lg shadow-sm"
-            onClick={() => navigate(isAdmin() ? `/admin/students/${student.id}/edit` : `/agent/events/${student.eventId}`)}
+            variant="outline"
+            className="h-10 px-4 border-[#E5E7EB] bg-white hover:bg-gray-50 text-xs font-semibold"
+            onClick={fetchStudentData}
+            title="Refresh details"
           >
-            {isAdmin() ? <Edit className="w-4 h-4 mr-2" /> : null}
-            {isAdmin() ? 'Edit Student' : 'Back to Event'}
+            <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
           </Button>
+          {isAdmin() && (
+            <Button
+              className="h-10 px-5 bg-[#042C53] hover:bg-[#0C447C] font-bold rounded-lg shadow-sm text-xs"
+              onClick={() => navigate(`/admin/students/${student.id}/edit`)}
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              Edit Student
+            </Button>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content - 2 columns */}
         <div className="lg:col-span-2 space-y-8">
+
+          {/* Student Verification Card */}
+          <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
+            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
+                <Shield className="w-4 h-4 text-[#042C53]" />
+                Student Verification Status
+              </CardTitle>
+              <div>{getVerificationBadge(currentVerificationStatus)}</div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6]">
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Current Verification State</div>
+                  <div className="text-sm font-semibold text-[#111827]">
+                    {STUDENT_VERIFICATION_STATUS_LABELS[currentVerificationStatus] || currentVerificationStatus}
+                  </div>
+                  <p className="text-xs text-[#6B7280]">
+                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.PENDING && 'Student registration submitted. Verification has not yet started.'}
+                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.UNDER_REVIEW && 'Student is actively being reviewed by an administrator.'}
+                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.VERIFIED && 'Student identity and profile have been verified and approved.'}
+                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.REJECTED && 'Student verification was rejected. Review the remarks below.'}
+                  </p>
+                </div>
+
+                {/* Admin Verification Controls */}
+                {isAdmin() && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Pending state -> Start Verification */}
+                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.PENDING && (
+                      <Button
+                        size="sm"
+                        disabled={actionLoading}
+                        onClick={handleInitiateVerification}
+                        className="bg-[#042C53] hover:bg-[#0C447C] text-white font-bold text-xs h-9 px-4 shadow-sm"
+                      >
+                        {actionLoading ? 'Processing...' : 'Start Verification'}
+                      </Button>
+                    )}
+
+                    {/* UnderReview state -> Verify or Reject */}
+                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.UNDER_REVIEW && (
+                      <>
+                        <Button
+                          size="sm"
+                          disabled={actionLoading}
+                          onClick={handleVerifyStudent}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 shadow-sm"
+                        >
+                          <Check className="w-3.5 h-3.5 mr-1" />
+                          {actionLoading ? 'Processing...' : 'Verify Student'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={actionLoading}
+                          onClick={() => setRejectionModalOpen(true)}
+                          className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold text-xs h-9 px-4"
+                        >
+                          <X className="w-3.5 h-3.5 mr-1" />
+                          Reject Student
+                        </Button>
+                      </>
+                    )}
+
+                    {/* Rejected state -> Start Verification (re-initiate) */}
+                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.REJECTED && (
+                      <Button
+                        size="sm"
+                        disabled={actionLoading}
+                        onClick={handleInitiateVerification}
+                        className="bg-[#042C53] hover:bg-[#0C447C] text-white font-bold text-xs h-9 px-4 shadow-sm"
+                      >
+                        {actionLoading ? 'Processing...' : 'Start Verification'}
+                      </Button>
+                    )}
+
+                    {/* Verified state -> Terminal */}
+                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.VERIFIED && (
+                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
+                        Finalized
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Verified Metadata */}
+              {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.VERIFIED && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-emerald-50/60 border border-emerald-100 rounded-xl text-xs text-emerald-900">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Verified By</span>
+                    <p className="font-semibold">{verifierDisplay || 'Administrator'}</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Verified On</span>
+                    <p className="font-semibold">{formatDateTime(verificationDetail?.verifiedAt || student?.verifiedAt)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Rejection Reason Notice */}
+              {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.REJECTED && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-bold text-red-800 uppercase tracking-wider">
+                    <AlertCircle className="w-4 h-4 text-red-600" />
+                    Rejection Reason
+                  </div>
+                  <p className="text-xs text-red-700 leading-relaxed pl-6">
+                    {verificationDetail?.verificationRejectionReason || student?.verificationRejectionReason || 'No specific reason provided.'}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Personal Information Card */}
           <Card className="border-[#E5E7EB] shadow-sm">
             <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
@@ -449,7 +777,7 @@ const StudentDetailsPage = () => {
             </CardContent>
           </Card>
 
-          {/* Academic Information Card */}
+          {/* Academic Background Card */}
           <Card className="border-[#E5E7EB] shadow-sm">
             <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
               <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
@@ -459,6 +787,10 @@ const StudentDetailsPage = () => {
             </CardHeader>
             <CardContent className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Target University</label>
+                  <p className="text-sm font-semibold text-[#111827]">{getUniversityName(student)}</p>
+                </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Target Course</label>
                   <p className="text-sm font-semibold text-[#111827]">{getStudentFieldValue('courseInterested', 'courseInterested')}</p>
@@ -476,6 +808,144 @@ const StudentDetailsPage = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Associated Applications Section */}
+          <Card className="border-[#E5E7EB] shadow-sm">
+            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
+                <Briefcase className="w-4 h-4 text-[#042C53]" />
+                Associated Applications
+              </CardTitle>
+              <Badge variant="outline" className="text-xs font-bold bg-[#F9FAFB]">
+                {applications.length} {applications.length === 1 ? 'Application' : 'Applications'}
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-6">
+              {loadingApps ? (
+                <div className="py-8 text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#042C53] mx-auto"></div>
+                  <p className="text-xs text-[#6B7280] mt-2 font-medium">Loading applications...</p>
+                </div>
+              ) : applications.length === 0 ? (
+                <div className="text-center py-10 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+                  <Briefcase className="w-8 h-8 mx-auto mb-2 text-[#9CA3AF] opacity-40" />
+                  <p className="text-xs font-semibold text-[#6B7280]">No applications linked to this student yet</p>
+                  <p className="text-[11px] text-[#9CA3AF] mt-0.5">Applications submitted for universities will appear here.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-[#E5E7EB] text-[10px] font-bold text-[#6B7280] uppercase tracking-wider bg-[#F9FAFB]">
+                        <th className="py-3 px-3">App Number</th>
+                        <th className="py-3 px-3">University</th>
+                        <th className="py-3 px-3">Course</th>
+                        <th className="py-3 px-3">Level / Intake</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3">Created</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F3F4F6]">
+                      {applications.map((app) => (
+                        <tr key={app.id || app._id} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-3 px-3">
+                            <button
+                              onClick={() => navigate(isAdmin() ? `/admin/applications/${app.id || app._id}` : `/agent/applications/${app.id || app._id}`)}
+                              className="font-bold text-[#042C53] hover:underline text-left text-xs"
+                            >
+                              {app.applicationNumber || app.id?.slice(-8).toUpperCase() || 'N/A'}
+                            </button>
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-[#111827]">
+                            {app.university?.name || app.universityName || 'University'}
+                          </td>
+                          <td className="py-3 px-3 text-[#4B5563]">
+                            {app.courseName || app.course || 'N/A'}
+                          </td>
+                          <td className="py-3 px-3 text-[#6B7280]">
+                            {app.courseLevel || 'Undergraduate'} · {app.intake || 'N/A'}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                              {app.status || 'Submitted'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-[#6B7280]">
+                            {formatDate(app.createdAt)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Verification History Section */}
+          <Card className="border-[#E5E7EB] shadow-sm">
+            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
+                <History className="w-4 h-4 text-[#042C53]" />
+                Verification Audit Trail
+              </CardTitle>
+              <Badge variant="outline" className="text-xs font-bold bg-[#F9FAFB]">
+                {verificationHistory.length} {verificationHistory.length === 1 ? 'Record' : 'Records'}
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-6">
+              {loadingHistory ? (
+                <div className="py-8 text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#042C53] mx-auto"></div>
+                  <p className="text-xs text-[#6B7280] mt-2 font-medium">Loading history...</p>
+                </div>
+              ) : verificationHistory.length === 0 ? (
+                <div className="text-center py-8 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+                  <History className="w-8 h-8 mx-auto mb-2 text-[#9CA3AF] opacity-40" />
+                  <p className="text-xs font-semibold text-[#6B7280]">No verification activity recorded yet</p>
+                  <p className="text-[11px] text-[#9CA3AF] mt-0.5">Verification status changes and reviews will be logged here.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {verificationHistory.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 border border-[#F3F4F6] rounded-xl bg-white hover:border-[#042C53]/30 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-3"
+                    >
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
+                            item.action === 'VERIFICATION_APPROVED' ? "bg-emerald-100 text-emerald-800" :
+                              item.action === 'VERIFICATION_REJECTED' ? "bg-red-100 text-red-800" :
+                                "bg-blue-100 text-blue-800"
+                          )}>
+                            {item.action?.replace('VERIFICATION_', '') || 'STATUS_CHANGE'}
+                          </span>
+                          <span className="text-xs font-semibold text-[#111827]">
+                            {item.from || 'Pending'} → <span className="text-[#042C53] font-bold">{item.to}</span>
+                          </span>
+                        </div>
+                        {item.reason && (
+                          <div className="text-xs text-red-700 bg-red-50 p-2.5 rounded-lg border border-red-100">
+                            <span className="font-bold text-[10px] uppercase block mb-0.5 text-red-800">Reason / Notes:</span>
+                            {item.reason}
+                          </div>
+                        )}
+                        <p className="text-[11px] text-[#6B7280]">
+                          Changed by: <span className="font-medium text-[#111827]">{item.changedBy || 'Admin'}</span>
+                        </p>
+                      </div>
+                      <div className="text-[11px] text-[#9CA3AF] font-medium shrink-0">
+                        {formatDateTime(item.changedAt)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
         </div>
 
         {/* Sidebar - 1 column */}
@@ -523,11 +993,11 @@ const StudentDetailsPage = () => {
             </CardContent>
           </Card>
 
-          {/* Documents Section */}
+          {/* Documents Section (Preserved & Separate from Student Verification) */}
           <Card className="border-[#E5E7EB] shadow-sm">
             <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base font-semibold font-['Outfit'] text-[#111827]">
-                Documents
+                Uploaded Documents
               </CardTitle>
               <Badge variant="outline" className="text-[10px] font-bold bg-[#F9FAFB]">
                 {student.documents?.length || 0} Total
@@ -539,7 +1009,7 @@ const StudentDetailsPage = () => {
                 {student.documents && student.documents.length > 0 ? (
                   student.documents.map((doc) => (
                     <div
-                      key={doc.id}
+                      key={doc.id || doc._id}
                       className="group p-3 border border-[#F3F4F6] rounded-xl hover:border-[#042C53] hover:bg-[#F9FAFB] transition-all"
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -560,41 +1030,93 @@ const StudentDetailsPage = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-white"
-                            onClick={() => handleViewDocument(doc.id, doc.originalFilename)}
+                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-[#042C53]"
+                            onClick={() => handleViewDocument(doc.id || doc._id)}
+                            title="Preview"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-white"
-                            onClick={() => handleDownloadDocument(doc.id, doc.originalFilename)}
+                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-[#042C53]"
+                            onClick={() => handleDownloadDocument(doc.id || doc._id, doc.originalFilename)}
+                            title="Download"
                           >
                             <Download className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </div>
 
+                      {/* Document remarks / correction reason notice */}
+                      {doc.remarks && (
+                        <div className={cn(
+                          "mt-2 text-xs p-2.5 rounded-lg border",
+                          (doc.status || '').toLowerCase().includes('correction')
+                            ? "bg-amber-50 text-amber-900 border-amber-200"
+                            : (doc.status || '').toLowerCase() === 'rejected'
+                              ? "bg-red-50 text-red-900 border-red-200"
+                              : "bg-gray-50 text-gray-800 border-gray-200"
+                        )}>
+                          <span className="font-bold text-[10px] uppercase block mb-0.5">
+                            {(doc.status || '').toLowerCase().includes('correction') ? 'Correction Note' : (doc.status || '').toLowerCase() === 'rejected' ? 'Rejection Reason' : 'Verifier Remarks'}:
+                          </span>
+                          {doc.remarks}
+                        </div>
+                      )}
+
+                      {/* Reviewer & Upload metadata */}
+                      <div className="mt-2 flex items-center justify-between text-[10px] text-[#9CA3AF]">
+                        <span>Uploaded: {formatDate(doc.uploadedAt)}</span>
+                        {doc.verifiedAt && (
+                          <span>Reviewed: {formatDate(doc.verifiedAt)}</span>
+                        )}
+                      </div>
+
                       <div className="mt-3 flex items-center justify-between">
                         {getDocStatusBadge(doc.status)}
-                        {isAdmin() && doc.status === 'pending' && (
+                        {isAdmin() && (
                           <div className="flex items-center gap-1">
-                            <Button
-                              size="sm"
-                              className="h-6 text-[9px] font-bold bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:bg-[#DCEFC0]"
-                              onClick={() => handleVerifyDocument(doc.id, 'approved')}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="h-6 text-[9px] font-bold bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] hover:bg-[#FADADA]"
-                              onClick={() => handleVerifyDocument(doc.id, 'rejected')}
-                            >
-                              Reject
-                            </Button>
+                            {(doc.status || '').toLowerCase() !== 'approved' && (
+                              <Button
+                                size="sm"
+                                className="h-6 text-[9px] font-bold bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:bg-[#DCEFC0]"
+                                onClick={() => handleVerifyDocumentAction(doc.id || doc._id, 'Approved')}
+                              >
+                                Approve
+                              </Button>
+                            )}
+                            {!(doc.status || '').toLowerCase().includes('correction') && (
+                              <Button
+                                size="sm"
+                                className="h-6 text-[9px] font-bold bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] hover:bg-[#FEF3C7]"
+                                onClick={() => handleVerifyDocumentAction(doc.id || doc._id, 'CorrectionRequired')}
+                              >
+                                Correction
+                              </Button>
+                            )}
+                            {(doc.status || '').toLowerCase() !== 'rejected' && (
+                              <Button
+                                size="sm"
+                                className="h-6 text-[9px] font-bold bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] hover:bg-[#FADADA]"
+                                onClick={() => handleVerifyDocumentAction(doc.id || doc._id, 'Rejected')}
+                              >
+                                Reject
+                              </Button>
+                            )}
                           </div>
+                        )}
+                        {!isAdmin() && (doc.status || '').toLowerCase().includes('correction') && (
+                          <Button
+                            size="sm"
+                            className="h-6 text-[9px] font-bold bg-[#042C53] text-white hover:bg-[#0C447C]"
+                            onClick={() => {
+                              setSelectedCategory(doc.category || 'Other');
+                              fileInputRef.current?.click();
+                            }}
+                          >
+                            <Upload className="w-3 h-3 mr-1" /> Replace
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -692,6 +1214,15 @@ const StudentDetailsPage = () => {
           </Card>
         </div>
       </div>
+
+      {/* Student Rejection Modal */}
+      <StudentRejectionModal
+        open={rejectionModalOpen}
+        onOpenChange={setRejectionModalOpen}
+        studentName={getStudentFieldValue('name', 'name')}
+        onConfirm={handleRejectStudent}
+        loading={actionLoading}
+      />
     </div>
   );
 };

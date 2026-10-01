@@ -1,115 +1,160 @@
-const mongoose = require('mongoose');
+const { DataTypes, Op } = require('sequelize');
+const { sequelize } = require('../config/db');
 const bcrypt = require('bcryptjs');
 
-const userSchema = new mongoose.Schema({
+const User = sequelize.define('User', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
+  },
   name: {
-    type: String,
-    required: [true, 'Name is required'],
-    trim: true,
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    type: DataTypes.STRING(100),
+    allowNull: false
   },
   email: {
-    type: String,
-    required: [true, 'Email is required'],
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true,
-    lowercase: true,
-    trim: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
+    validate: {
+      isEmail: true
+    },
+    set(val) {
+      if (val) this.setDataValue('email', val.toLowerCase().trim());
+    }
   },
   userId: {
-    type: String,
+    type: DataTypes.STRING,
     unique: true,
-    sparse: true,
-    trim: true
+    allowNull: true
   },
   password: {
-    type: String,
-    required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters'],
-    select: false
+    type: DataTypes.STRING,
+    allowNull: false
   },
   phone: {
-    type: String,
-    trim: true
+    type: DataTypes.STRING,
+    allowNull: true
   },
   role: {
-    type: String,
-    enum: ['admin', 'agent'],
-    default: 'agent'
+    type: DataTypes.ENUM('admin', 'agent'),
+    defaultValue: 'agent'
   },
   status: {
-    type: String,
-    enum: ['active', 'inactive'],
-    default: 'active'
+    type: DataTypes.ENUM('active', 'inactive'),
+    defaultValue: 'active'
   },
-  agencyName: String,
-  businessRegistrationNumber: String,
-  fullAddress: String,
-  region: String,
+  agencyName: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  businessRegistrationNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  fullAddress: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  region: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   avatar: {
-    type: String,
-    default: null
+    type: DataTypes.STRING,
+    allowNull: true
   },
   isVerified: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   verificationStatus: {
-    type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending'
+    type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+    defaultValue: 'pending'
   },
   verificationRemarks: {
-    type: String,
-    default: ''
+    type: DataTypes.TEXT,
+    defaultValue: ''
   },
-  verificationDocuments: [{
-    docType: {
-      type: String,
-      enum: ['Identity', 'Business License', 'Tax ID', 'Other'],
-      required: true
-    },
-    fileUrl: String,
-    fileName: String,
-    status: {
-      type: String,
-      enum: ['pending', 'approved', 'rejected'],
-      default: 'pending'
-    },
-    uploadedAt: {
-      type: Date,
-      default: Date.now
-    },
-    remarks: String
-  }]
+  verificationDocuments: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  }
 }, {
   timestamps: true,
-  toJSON: {
-    transform: function(doc, ret) {
-      if (ret._id) ret.id = ret._id.toString();
-      delete ret._id;
-      delete ret.__v;
-      delete ret.password;
-      return ret;
+  tableName: 'Users',
+  indexes: [
+    { fields: ['email'], unique: true },
+    { fields: ['userId'], unique: true },
+    { fields: ['role', 'status'] }
+  ],
+  hooks: {
+    beforeCreate: async (user) => {
+      if (user.password) {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(user.password, salt);
+      }
+    },
+    beforeUpdate: async (user) => {
+      if (user.changed('password')) {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(user.password, salt);
+      }
     }
   }
 });
 
-// Hash password before saving
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
-});
-
-// Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword) {
+// Instance method to compare password
+User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Index for faster queries
-userSchema.index({ role: 1, status: 1 });
+// Instance method to JSON transform
+User.prototype.toJSON = function() {
+  const values = { ...this.get() };
+  values.id = values.id ? values.id.toString() : values.id;
+  values._id = values.id;
+  delete values.password;
+  return values;
+};
 
-module.exports = mongoose.model('User', userSchema);
+// Compatibility static helpers
+User.findById = function(id, options = {}) {
+  return this.findByPk(id, options);
+};
+
+User.findByIdAndUpdate = async function(id, updateData, options = {}) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  return await instance.update(updateData, options);
+};
+
+User.findByIdAndDelete = async function(id) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  await instance.destroy();
+  return instance;
+};
+
+User.countDocuments = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.count({ where });
+};
+
+User.deleteMany = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.destroy({ where });
+};
+
+User.updateMany = function(criteria = {}, updateData = {}) {
+  const where = { ...criteria };
+  return this.update(updateData, { where });
+};
+
+module.exports = User;

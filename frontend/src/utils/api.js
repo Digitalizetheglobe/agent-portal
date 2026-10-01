@@ -215,7 +215,8 @@ export const studentAPI = {
   downloadDocument: (studentId, docId, params = {}) => api.get(`/students/${studentId}/documents/${docId}`, {
     params,
     responseType: 'blob'
-  })
+  }),
+  getApplications: (studentId) => api.get(`/students/${studentId}/applications`)
 };
 
 // Stats API
@@ -223,12 +224,101 @@ export const statsAPI = {
   get: () => api.get('/stats')
 };
 
-// Invoice APIs
+// University APIs (Phase C)
+export const universityAPI = {
+  getAll: (params = {}) => api.get('/universities', { params }),
+  getById: (id) => api.get(`/universities/${id}`),
+  getApplications: (id) => api.get(`/universities/${id}/applications`),
+  create: (data) => api.post('/universities', data),
+  update: (id, data) => api.put(`/universities/${id}`, data),
+  updateStatus: (id, status) => {
+    const payload = typeof status === 'object' ? status : { status };
+    return api.patch(`/universities/${id}/status`, payload);
+  },
+  delete: (id) => api.delete(`/universities/${id}`)
+};
+
+// Course APIs
+export const courseAPI = {
+  getAll: (params = {}) => api.get('/courses', { params }),
+  getById: (id) => api.get(`/courses/${id}`),
+  create: (data) => api.post('/courses', data),
+  update: (id, data) => api.put(`/courses/${id}`, data),
+  updateStatus: (id, status) => {
+    const payload = typeof status === 'object' ? status : { status };
+    return api.patch(`/courses/${id}/status`, payload);
+  },
+  delete: (id) => api.delete(`/courses/${id}`)
+};
+
+// Application APIs (Phase B & D)
+export const applicationAPI = {
+  getAll: (params = {}) => api.get('/applications', { params }),
+  getById: (id) => api.get(`/applications/${id}`),
+  create: (data) => api.post('/applications', data),
+  update: (id, data) => api.put(`/applications/${id}`, data),
+  updateStatus: (id, status, remarks) => {
+    const payload = typeof status === 'object' ? status : { status, remarks };
+    return api.patch(`/applications/${id}/status`, payload);
+  },
+  updateWorkflowStatus: (id, status, notes) => {
+    const payload = typeof status === 'object' ? status : { status, notes };
+    return api.patch(`/applications/${id}/workflow/status`, payload);
+  },
+  delete: (id) => api.delete(`/applications/${id}`),
+  getByStudent: (studentId) => api.get(`/applications/student/${studentId}`),
+  getByUniversity: (universityId) => api.get(`/applications/university/${universityId}`),
+  getByAgent: (agentId) => api.get(`/applications/agent/${agentId}`),
+  getTracking: (id) => api.get(`/applications/${id}/tracking`),
+  getHistory: (id, params = {}) => api.get(`/applications/${id}/history`, { params })
+};
+
+// Admission Tracking APIs (Phase E)
+export const admissionTrackingAPI = {
+  updateWorkflowStatus: (id, data) => api.patch(`/applications/${id}/workflow/status`, data),
+  scheduleVisit: (id, data) => api.post(`/applications/${id}/visit`, data),
+  completeVisit: (id, data) => api.patch(`/applications/${id}/visit/complete`, data),
+  createOffer: (id, data) => api.post(`/applications/${id}/offer`, data),
+  createConditionalOffer: (id, data) => api.post(`/applications/${id}/conditional-offer`, data),
+  confirmAdmission: (id, data) => api.post(`/applications/${id}/admission`, data),
+  enroll: (id, data) => api.post(`/applications/${id}/enrollment`, data),
+  updateDeposit: (id, data) => api.patch(`/applications/${id}/deposit`, data),
+  getTracking: (id) => api.get(`/applications/${id}/tracking`),
+  getHistory: (id, params = {}) => api.get(`/applications/${id}/history`, { params })
+};
+
+// Invoice APIs (Phase F)
 export const invoiceAPI = {
-  getAll: () => api.get('/invoices'),
+  getAll: (params = {}) => api.get('/invoices', { params }),
   getById: (id) => api.get(`/invoices/${id}`),
   create: (data) => api.post('/invoices', data),
-  updateStatus: (id, data) => api.patch(`/invoices/${id}/status`, data)
+  updateStatus: (id, data) => api.patch(`/invoices/${id}/status`, data),
+  getEligibleApplications: (params = {}) => api.get('/invoices/eligible-applications', { params }),
+  delete: (id) => api.delete(`/invoices/${id}`)
+};
+
+// Invoice Review APIs (Phase G)
+export const invoiceReviewAPI = {
+  getAll: (params = {}) => api.get('/invoice-reviews', { params }),
+  getByInvoiceId: (invoiceId) => api.get(`/invoice-reviews/${invoiceId}`),
+  start: (invoiceId) => api.patch(`/invoice-reviews/${invoiceId}/start`),
+  setRate: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/rate`, data),
+  approve: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/approve`, data),
+  reject: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/reject`, data),
+  getHistory: (invoiceId) => api.get(`/invoice-reviews/${invoiceId}/history`)
+};
+
+// Student Verification APIs (Phase H)
+export const studentVerificationAPI = {
+  getQueue: (params = {}) => api.get('/students/verification/queue', { params }),
+  getByStudentId: (studentId) => api.get(`/students/${studentId}/verification`),
+  getHistory: (studentId) => api.get(`/students/${studentId}/verification/history`),
+  initiate: (studentId, data = {}) => api.patch(`/students/${studentId}/verification/initiate`, data),
+  verify: (studentId, data = {}) => api.patch(`/students/${studentId}/verification/verify`, data),
+  reject: (studentId, data = {}) => {
+    const payload = typeof data === 'string' ? { reason: data } : data;
+    return api.patch(`/students/${studentId}/verification/reject`, payload);
+  }
 };
 
 // Ticket APIs

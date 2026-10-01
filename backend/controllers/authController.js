@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const User = require('../models/User');
-const PasswordResetToken = require('../models/PasswordResetToken');
+const { Op } = require('sequelize');
+const { User, PasswordResetToken } = require('../models');
 const { generateAccessToken, generateRefreshToken, setTokenCookies, clearTokenCookies } = require('../middleware/auth');
 const { sendEmail, templates } = require('../utils/email');
 
@@ -20,8 +20,10 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Find user by email (include password for verification)
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    // Find user by email
+    const user = await User.findOne({
+      where: { email: email.toLowerCase().trim() }
+    });
 
     if (!user) {
       return res.status(401).json({
@@ -102,7 +104,10 @@ exports.logout = async (req, res) => {
 // @access  Private
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, detail: 'User not found' });
+    }
     res.status(200).json(user.toJSON());
   } catch (error) {
     console.error('Get me error:', error);
@@ -139,7 +144,7 @@ exports.refreshToken = async (req, res) => {
       }
 
       // Find user
-      const user = await User.findById(decoded.id);
+      const user = await User.findByPk(decoded.id);
 
       if (!user) {
         return res.status(401).json({
@@ -200,7 +205,9 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({
+      where: { email: email.toLowerCase().trim() }
+    });
 
     if (user) {
       // Generate reset token
@@ -208,7 +215,7 @@ exports.forgotPassword = async (req, res) => {
 
       // Save token to database
       await PasswordResetToken.create({
-        userId: user._id,
+        userId: user.id,
         token,
         expiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 hour
       });
@@ -253,9 +260,11 @@ exports.resetPassword = async (req, res) => {
 
     // Find valid token
     const resetToken = await PasswordResetToken.findOne({
-      token,
-      used: false,
-      expiresAt: { $gt: new Date() }
+      where: {
+        token,
+        used: false,
+        expiresAt: { [Op.gt]: new Date() }
+      }
     });
 
     if (!resetToken) {
@@ -266,7 +275,10 @@ exports.resetPassword = async (req, res) => {
     }
 
     // Update user password
-    const user = await User.findById(resetToken.userId);
+    const user = await User.findByPk(resetToken.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, detail: 'User not found' });
+    }
     user.password = new_password;
     await user.save();
 
@@ -305,11 +317,12 @@ exports.updateProfile = async (req, res) => {
       fieldsToUpdate[key] === undefined && delete fieldsToUpdate[key]
     );
 
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      { $set: fieldsToUpdate },
-      { new: true, runValidators: true }
-    );
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, detail: 'User not found' });
+    }
+
+    await user.update(fieldsToUpdate);
 
     res.status(200).json(user.toJSON());
   } catch (error) {
@@ -335,7 +348,10 @@ exports.updatePassword = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, detail: 'User not found' });
+    }
 
     // Check current password
     const isMatch = await user.comparePassword(current_password);
@@ -358,7 +374,7 @@ exports.updatePassword = async (req, res) => {
     console.error('Update password error:', error);
     res.status(500).json({
       success: false,
-      detail: error.message || 'Server error'
+      detail: 'Server error'
     });
   }
 };

@@ -1,122 +1,88 @@
-const Invoice = require('../models/Invoice');
-const Student = require('../models/Student');
-const { v4: uuidv4 } = require('uuid');
+const invoiceService = require('../services/invoiceService');
 
-// @desc    Create new invoice
+// @desc    Create new invoice (supports both applicationIds and legacy studentIds)
 // @route   POST /api/invoices
-// @access  Private (Agent only)
+// @access  Private (Agent or Admin)
 exports.createInvoice = async (req, res) => {
   try {
-    const { studentIds, amount, commissionRate, remarks, invoiceUrl } = req.body;
-
-    if (req.user.role !== 'agent') {
-      return res.status(403).json({
-        success: false,
-        detail: 'Only agents can raise invoices'
-      });
-    }
-
-    if (!studentIds || studentIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        detail: 'Please provide at least one student'
-      });
-    }
-
-    // Verify students belong to agent and are "Converted"
-    const students = await Student.find({
-      _id: { $in: studentIds },
-      agentId: req.user._id,
-      status: 'Converted'
-    });
-
-    if (students.length !== studentIds.length) {
-      return res.status(400).json({
-        success: false,
-        detail: 'One or more students are not eligible for invoicing (must be Converted and belong to you)'
-      });
-    }
-
-    // Generate unique invoice number
-    const invoiceNumber = `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-    const invoice = await Invoice.create({
-      agentId: req.user._id,
-      studentIds,
-      invoiceNumber,
-      amount,
-      commissionRate,
-      remarks,
-      invoiceUrl,
-      status: 'Pending'
-    });
-
-    res.status(201).json(invoice.toJSON());
+    const invoice = await invoiceService.createInvoice(req.body, req.user);
+    res.status(201).json(invoice);
   } catch (error) {
     console.error('Create invoice error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };
 
-// @desc    Get all invoices
+// @desc    Get all invoices (with search, filter, pagination)
 // @route   GET /api/invoices
 // @access  Private
 exports.getInvoices = async (req, res) => {
   try {
-    let query = {};
+    const result = await invoiceService.getInvoices(req.query, req.user);
 
-    if (req.user.role === 'agent') {
-      query.agentId = req.user._id;
+    // Set standard pagination headers
+    res.setHeader('X-Total-Count', result.total);
+    res.setHeader('X-Page', result.page);
+    res.setHeader('X-Total-Pages', result.totalPages);
+    res.setHeader('X-Limit', result.limit);
+
+    // If envelope requested, return wrapper object; otherwise return array to match project conventions
+    if (req.query.envelope === 'true' || req.query.format === 'envelope') {
+      return res.status(200).json(result);
     }
 
-    const invoices = await Invoice.find(query)
-      .populate('agentId', 'name email agencyName')
-      .populate('studentIds', 'name email status')
-      .sort({ createdAt: -1 });
-
-    res.status(200).json(invoices.map(inv => inv.toJSON()));
+    res.status(200).json(result.invoices);
   } catch (error) {
     console.error('Get invoices error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };
 
-// @desc    Get single invoice
+// @desc    Get applications eligible for invoicing
+// @route   GET /api/invoices/eligible-applications
+// @access  Private
+exports.getEligibleApplications = async (req, res) => {
+  try {
+    const result = await invoiceService.getEligibleApplications(req.query, req.user);
+
+    // Set standard pagination headers
+    res.setHeader('X-Total-Count', result.total);
+    res.setHeader('X-Page', result.page);
+    res.setHeader('X-Total-Pages', result.totalPages);
+    res.setHeader('X-Limit', result.limit);
+
+    if (req.query.envelope === 'true' || req.query.format === 'envelope') {
+      return res.status(200).json(result);
+    }
+
+    res.status(200).json(result.applications);
+  } catch (error) {
+    console.error('Get eligible applications error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Get single invoice by ID
 // @route   GET /api/invoices/:id
 // @access  Private
 exports.getInvoice = async (req, res) => {
   try {
-    const invoice = await Invoice.findById(req.params.id)
-      .populate('agentId', 'name email agencyName')
-      .populate('studentIds', 'name email status');
-
-    if (!invoice) {
-      return res.status(404).json({
-        success: false,
-        detail: 'Invoice not found'
-      });
-    }
-
-    // Access check
-    if (req.user.role === 'agent' && invoice.agentId._id.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        detail: 'Access denied'
-      });
-    }
-
-    res.status(200).json(invoice.toJSON());
+    const invoice = await invoiceService.getInvoiceById(req.params.id, req.user);
+    res.status(200).json(invoice);
   } catch (error) {
     console.error('Get invoice error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };
@@ -126,36 +92,33 @@ exports.getInvoice = async (req, res) => {
 // @access  Private (Admin only)
 exports.updateInvoiceStatus = async (req, res) => {
   try {
-    const { status, remarks } = req.body;
-
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        detail: 'Only admins can update invoice status'
-      });
-    }
-
-    const invoice = await Invoice.findById(req.params.id);
-
-    if (!invoice) {
-      return res.status(404).json({
-        success: false,
-        detail: 'Invoice not found'
-      });
-    }
-
-    invoice.status = status;
-    if (remarks) invoice.remarks = remarks;
-    if (status === 'Paid') invoice.paidAt = Date.now();
-
-    await invoice.save();
-
-    res.status(200).json(invoice.toJSON());
+    const updated = await invoiceService.updateInvoiceStatus(
+      req.params.id,
+      req.body,
+      req.user
+    );
+    res.status(200).json(updated);
   } catch (error) {
     console.error('Update invoice status error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Delete invoice
+// @route   DELETE /api/invoices/:id
+// @access  Private
+exports.deleteInvoice = async (req, res) => {
+  try {
+    const result = await invoiceService.deleteInvoice(req.params.id, req.user);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Delete invoice error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      detail: error.message || 'Server error'
     });
   }
 };

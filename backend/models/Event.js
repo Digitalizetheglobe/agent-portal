@@ -1,129 +1,127 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const eventSchema = new mongoose.Schema({
+const Event = sequelize.define('Event', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
+  },
   title: {
-    type: String,
-    required: [true, 'Event title is required'],
-    trim: true,
-    maxlength: [200, 'Title cannot exceed 200 characters']
+    type: DataTypes.STRING(200),
+    allowNull: false
   },
   description: {
-    type: String,
-    required: [true, 'Event description is required'],
-    trim: true,
-    maxlength: [2000, 'Description cannot exceed 2000 characters']
+    type: DataTypes.TEXT,
+    allowNull: false
   },
   date: {
-    type: String,
-    required: [true, 'Event date is required']
+    type: DataTypes.STRING,
+    allowNull: false
   },
   location: {
-    type: String,
-    required: false,
-    trim: true,
-    maxlength: [500, 'Location cannot exceed 500 characters']
+    type: DataTypes.TEXT,
+    allowNull: true
   },
   type: {
-    type: String,
-    enum: ['physical', 'virtual'],
-    default: 'physical'
+    type: DataTypes.ENUM('physical', 'virtual'),
+    defaultValue: 'physical'
   },
   seatCapacity: {
-    type: Number,
-    required: false,
-    min: [1, 'Seat capacity must be at least 1'],
-    default: 50
+    type: DataTypes.INTEGER,
+    defaultValue: 50
   },
   filledSeats: {
-    type: Number,
-    default: 0,
-    min: [0, 'Filled seats cannot be negative']
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
-  assignedAgents: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
+  assignedAgents: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
   createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    type: DataTypes.UUID,
+    allowNull: true
   },
-  // Custom form fields for student registration
-  formFields: [{
-    id: {
-      type: String,
-      required: true
-    },
-    label: {
-      type: String,
-      required: true
-    },
-    type: {
-      type: String,
-      required: true,
-      enum: ['text', 'paragraph', 'radio', 'date', 'select', 'phone', 'email', 'number', 'country', 'qualification']
-    },
-    required: {
-      type: Boolean,
-      default: false
-    },
-    options: [{
-      type: String
-    }], // For radio and select types
-    placeholder: String,
-    order: {
-      type: Number,
-      default: 0
-    },
-    regex: {
-      type: String,
-      default: ''
-    },
-    regexError: {
-      type: String,
-      default: 'Invalid format'
-    }
-  }],
-  // Document requirements for this event
-  requiredDocuments: [{
-    label: {
-      type: String,
-      required: true
-    },
-    value: {
-      type: String,
-      required: true
-    },
-    mandatory: {
-      type: Boolean,
-      default: true
-    }
-  }],
-  // Notification settings
+  formFields: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
+  requiredDocuments: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
   notifyAgents: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   },
   notificationMessage: {
-    type: String,
-    default: ''
+    type: DataTypes.TEXT,
+    defaultValue: ''
   }
 }, {
   timestamps: true,
-  toJSON: {
-    transform: function(doc, ret) {
-      if (ret._id) ret.id = ret._id.toString();
-      if (ret.assignedAgents && Array.isArray(ret.assignedAgents)) {
-        ret.assignedAgents = ret.assignedAgents.map(id => (id && id.toString) ? id.toString() : id);
-      }
-      delete ret._id;
-      delete ret.__v;
-      return ret;
-    }
-  }
+  tableName: 'Events',
+  indexes: [
+    { fields: ['date'] }
+  ]
 });
 
-// Indexes for faster queries
-eventSchema.index({ date: 1 });
-eventSchema.index({ assignedAgents: 1 });
+// Instance method to JSON transform
+Event.prototype.toJSON = function() {
+  const values = { ...this.get() };
+  values.id = values.id ? values.id.toString() : values.id;
+  values._id = values.id;
+  if (Array.isArray(values.assignedAgents)) {
+    values.assignedAgents = values.assignedAgents.map(a => (a && a.toString) ? a.toString() : a);
+  }
+  return values;
+};
 
-module.exports = mongoose.model('Event', eventSchema);
+// Compatibility static helpers
+Event.findById = function(id, options = {}) {
+  return this.findByPk(id, options);
+};
+
+Event.findByIdAndUpdate = async function(id, updateData, options = {}) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  // Handle MongoDB $inc if present
+  if (updateData && updateData.$inc) {
+    for (const [key, val] of Object.entries(updateData.$inc)) {
+      instance[key] = (instance[key] || 0) + val;
+    }
+    delete updateData.$inc;
+  }
+  return await instance.update(updateData, options);
+};
+
+Event.findByIdAndDelete = async function(id) {
+  const instance = await this.findByPk(id);
+  if (!instance) return null;
+  await instance.destroy();
+  return instance;
+};
+
+Event.countDocuments = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.count({ where });
+};
+
+Event.deleteMany = function(criteria = {}) {
+  const where = { ...criteria };
+  return this.destroy({ where });
+};
+
+Event.updateMany = function(criteria = {}, updateData = {}) {
+  const where = { ...criteria };
+  return this.update(updateData, { where });
+};
+
+module.exports = Event;

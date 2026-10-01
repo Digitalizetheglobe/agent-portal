@@ -1,6 +1,21 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { agentAPI, eventAPI, studentAPI, statsAPI, invoiceAPI, ticketAPI, notificationAPI, formatApiError } from '../utils/api';
+import {
+  agentAPI,
+  eventAPI,
+  studentAPI,
+  statsAPI,
+  invoiceAPI,
+  ticketAPI,
+  notificationAPI,
+  universityAPI,
+  applicationAPI,
+  admissionTrackingAPI,
+  invoiceReviewAPI,
+  studentVerificationAPI,
+  courseAPI,
+  formatApiError
+} from '../utils/api';
 import { toast } from 'sonner';
 
 const DataContext = createContext(null);
@@ -21,28 +36,32 @@ export const DataProvider = ({ children }) => {
   const [invoices, setInvoices] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [universities, setUniversities] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [reviewQueue, setReviewQueue] = useState([]);
+  const [verificationQueue, setVerificationQueue] = useState([]);
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   // Fetch all data
   const fetchAgents = useCallback(async () => {
+    if (user?.role !== 'admin') {
+      const selfAgent = user ? [user] : [];
+      setAgents(selfAgent);
+      return selfAgent;
+    }
     try {
       const response = await agentAPI.getAll();
       setAgents(response.data);
       return response.data;
     } catch (error) {
       console.error('Error fetching agents:', error);
-      // Fallback to mock data when backend is unavailable
-      const mockAgents = [
-        { id: 1, name: 'John Smith', email: 'john.smith@example.com', status: 'active', role: 'agent' },
-        { id: 2, name: 'Jane Doe', email: 'jane.doe@example.com', status: 'active', role: 'agent' },
-        { id: 3, name: 'Bob Wilson', email: 'bob.wilson@example.com', status: 'inactive', role: 'agent' }
-      ];
-      setAgents(mockAgents);
-      return mockAgents;
+      setAgents([]);
+      return [];
     }
-  }, []);
+  }, [user]);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -51,38 +70,8 @@ export const DataProvider = ({ children }) => {
       return response.data;
     } catch (error) {
       console.error('Error fetching events:', error);
-      // Fallback to mock data when backend is unavailable
-      const mockEvents = [
-        { 
-          id: 1, 
-          title: 'Tech Conference 2024', 
-          date: '2024-03-15', 
-          assignedAgents: [1, 2], 
-          createdAt: '2024-01-10T10:00:00Z',
-          location: 'Convention Center',
-          description: 'Annual technology conference'
-        },
-        { 
-          id: 2, 
-          title: 'Career Fair', 
-          date: '2024-04-20', 
-          assignedAgents: [1], 
-          createdAt: '2024-01-15T14:30:00Z',
-          location: 'University Campus',
-          description: 'Student career fair event'
-        },
-        { 
-          id: 3, 
-          title: 'Workshop Series', 
-          date: '2024-05-10', 
-          assignedAgents: [2, 3], 
-          createdAt: '2024-02-01T09:15:00Z',
-          location: 'Training Center',
-          description: 'Professional development workshops'
-        }
-      ];
-      setEvents(mockEvents);
-      return mockEvents;
+      setEvents([]);
+      return [];
     }
   }, []);
 
@@ -93,61 +82,8 @@ export const DataProvider = ({ children }) => {
       return response.data;
     } catch (error) {
       console.error('Error fetching students:', error);
-      // Fallback to mock data when backend is unavailable
-      const mockStudents = [
-        { 
-          id: 1, 
-          name: 'Alice Johnson', 
-          email: 'alice.j@student.edu',
-          eventId: 1, 
-          agentId: 1, 
-          submittedAt: '2024-01-20T10:30:00Z',
-          phone: '555-0101',
-          status: 'registered'
-        },
-        { 
-          id: 2, 
-          name: 'Bob Smith', 
-          email: 'bob.s@student.edu',
-          eventId: 1, 
-          agentId: 2, 
-          submittedAt: '2024-01-21T14:15:00Z',
-          phone: '555-0102',
-          status: 'registered'
-        },
-        { 
-          id: 3, 
-          name: 'Carol Williams', 
-          email: 'carol.w@student.edu',
-          eventId: 2, 
-          agentId: 1, 
-          submittedAt: '2024-01-22T09:45:00Z',
-          phone: '555-0103',
-          status: 'registered'
-        },
-        { 
-          id: 4, 
-          name: 'David Brown', 
-          email: 'david.b@student.edu',
-          eventId: 3, 
-          agentId: 2, 
-          submittedAt: '2024-01-23T16:20:00Z',
-          phone: '555-0104',
-          status: 'registered'
-        },
-        { 
-          id: 5, 
-          name: 'Eva Davis', 
-          email: 'eva.d@student.edu',
-          eventId: 2, 
-          agentId: 1, 
-          submittedAt: '2024-01-24T11:10:00Z',
-          phone: '555-0105',
-          status: 'registered'
-        }
-      ];
-      setStudents(mockStudents);
-      return mockStudents;
+      setStudents([]);
+      return [];
     }
   }, []);
 
@@ -231,6 +167,66 @@ export const DataProvider = ({ children }) => {
     }
   }, []);
 
+  const fetchUniversities = useCallback(async (params = {}) => {
+    try {
+      const response = await universityAPI.getAll(params);
+      const data = Array.isArray(response.data) ? response.data : (response.data?.universities || []);
+      setUniversities(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching universities:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchCourses = useCallback(async (params = {}) => {
+    try {
+      const response = await courseAPI.getAll(params);
+      const data = Array.isArray(response.data) ? response.data : (response.data?.courses || []);
+      setCourses(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchApplications = useCallback(async (params = {}) => {
+    try {
+      const response = await applicationAPI.getAll(params);
+      const data = Array.isArray(response.data) ? response.data : (response.data?.applications || []);
+      setApplications(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching applications:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchReviewQueue = useCallback(async (params = {}) => {
+    try {
+      const response = await invoiceReviewAPI.getAll(params);
+      const data = Array.isArray(response.data) ? response.data : (response.data?.reviews || []);
+      setReviewQueue(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching review queue:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchVerificationQueue = useCallback(async (params = {}) => {
+    try {
+      const response = await studentVerificationAPI.getQueue(params);
+      const data = Array.isArray(response.data) ? response.data : (response.data?.students || []);
+      setVerificationQueue(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching verification queue:', error);
+      return [];
+    }
+  }, []);
+
   // Initialize/refresh all data - called after login
   const refreshData = useCallback(async () => {
     setLoading(true);
@@ -242,7 +238,10 @@ export const DataProvider = ({ children }) => {
         fetchStats(), 
         fetchInvoices(), 
         fetchTickets(),
-        fetchNotifications()
+        fetchNotifications(),
+        fetchUniversities(),
+        fetchCourses(),
+        fetchApplications()
       ]);
       setInitialized(true);
     } catch (error) {
@@ -250,7 +249,7 @@ export const DataProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats, fetchInvoices, fetchTickets, fetchNotifications]);
+  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats, fetchInvoices, fetchTickets, fetchNotifications, fetchUniversities, fetchCourses, fetchApplications]);
 
   // Clear all data - called on logout
   const clearData = useCallback(() => {
@@ -261,6 +260,11 @@ export const DataProvider = ({ children }) => {
     setInvoices([]);
     setTickets([]);
     setNotifications([]);
+    setUniversities([]);
+    setCourses([]);
+    setApplications([]);
+    setReviewQueue([]);
+    setVerificationQueue([]);
     setInitialized(false);
   }, []);
 
@@ -434,9 +438,11 @@ export const DataProvider = ({ children }) => {
   const addStudent = async (studentData) => {
     try {
       const response = await studentAPI.create(studentData);
-      // Refresh students data from server to get latest state (including students added by other agents)
-      await fetchStudents({ eventId: studentData.eventId });
-      await fetchStats();
+      // Refresh all students data from server
+      await fetchStudents();
+      try {
+        await fetchStats();
+      } catch (_) {}
       return response.data;
     } catch (error) {
       toast.error('Failed to register student', { description: formatApiError(error) });
@@ -461,7 +467,11 @@ export const DataProvider = ({ children }) => {
   };
 
   const getStudentsByAgent = (agentId) => {
-    return students.filter(student => student.agentId === agentId);
+    if (!agentId) return [];
+    return students.filter(student => {
+      const sAgentId = student.agentId?.id || student.agentId?._id || student.agentId || student.agent?.id;
+      return String(sAgentId) === String(agentId);
+    });
   };
 
   const deleteStudent = async (id) => {
@@ -615,6 +625,17 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  const deleteInvoice = async (id) => {
+    try {
+      await invoiceAPI.delete(id);
+      setInvoices(prev => prev.filter(inv => inv.id !== id));
+      toast.success('Invoice deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete invoice', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
   // Ticket operations
   const createTicket = async (data) => {
     try {
@@ -683,6 +704,329 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  // University operations (Phase C)
+  const createUniversity = async (data) => {
+    try {
+      const response = await universityAPI.create(data);
+      setUniversities(prev => [...prev, response.data]);
+      toast.success('University created successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to create university', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateUniversity = async (id, data) => {
+    try {
+      const response = await universityAPI.update(id, data);
+      setUniversities(prev => prev.map(u => u.id === id ? response.data : u));
+      toast.success('University updated successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update university', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateUniversityStatus = async (id, status) => {
+    try {
+      const response = await universityAPI.updateStatus(id, status);
+      setUniversities(prev => prev.map(u => u.id === id ? response.data : u));
+      toast.success('University status updated');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update university status', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const deleteUniversity = async (id) => {
+    try {
+      await universityAPI.delete(id);
+      setUniversities(prev => prev.filter(u => u.id !== id));
+      toast.success('University deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete university', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Course operations
+  const createCourse = async (data) => {
+    try {
+      const response = await courseAPI.create(data);
+      const created = response.data?.course || response.data;
+      setCourses(prev => [created, ...prev]);
+      toast.success('Course created successfully');
+      return created;
+    } catch (error) {
+      toast.error('Failed to create course', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateCourse = async (id, data) => {
+    try {
+      const response = await courseAPI.update(id, data);
+      const updated = response.data?.course || response.data;
+      setCourses(prev => prev.map(c => (c.id === id || c._id === id) ? updated : c));
+      toast.success('Course updated successfully');
+      return updated;
+    } catch (error) {
+      toast.error('Failed to update course', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateCourseStatus = async (id, status) => {
+    try {
+      const response = await courseAPI.updateStatus(id, status);
+      const updated = response.data?.course || response.data;
+      setCourses(prev => prev.map(c => (c.id === id || c._id === id) ? updated : c));
+      toast.success(`Course ${status === 'active' ? 'activated' : 'deactivated'}`);
+      return updated;
+    } catch (error) {
+      toast.error('Failed to update course status', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const deleteCourse = async (id) => {
+    try {
+      await courseAPI.delete(id);
+      setCourses(prev => prev.filter(c => c.id !== id && c._id !== id));
+      toast.success('Course deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete course', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Application operations (Phase B & D)
+  const createApplication = async (data) => {
+    try {
+      const response = await applicationAPI.create(data);
+      setApplications(prev => [response.data, ...prev]);
+      toast.success('Application created successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to create application', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateApplication = async (id, data) => {
+    try {
+      const response = await applicationAPI.update(id, data);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      toast.success('Application updated successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update application', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateApplicationStatus = async (id, status, remarks) => {
+    try {
+      const response = await applicationAPI.updateStatus(id, status, remarks);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      toast.success('Application status updated');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update application status', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateWorkflowStatus = async (id, status, notes) => {
+    try {
+      const response = await applicationAPI.updateWorkflowStatus(id, status, notes);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update workflow status', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const deleteApplication = async (id) => {
+    try {
+      await applicationAPI.delete(id);
+      setApplications(prev => prev.filter(app => app.id !== id));
+      toast.success('Application deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete application', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Admission Tracking operations (Phase E)
+  const scheduleVisit = async (id, data) => {
+    try {
+      const response = await admissionTrackingAPI.scheduleVisit(id, data);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      toast.success('Campus visit scheduled successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to schedule visit', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const completeVisit = async (id, data) => {
+    try {
+      const response = await admissionTrackingAPI.completeVisit(id, data);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      toast.success('Campus visit marked as completed');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to complete visit', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const recordOffer = async (id, data) => {
+    try {
+      const response = await admissionTrackingAPI.createOffer(id, data);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      toast.success('University offer recorded successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to record offer', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const recordConditionalOffer = async (id, data) => {
+    try {
+      const response = await admissionTrackingAPI.createConditionalOffer(id, data);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      toast.success('Conditional offer recorded successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to record conditional offer', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const confirmAdmission = async (id, data) => {
+    try {
+      const response = await admissionTrackingAPI.confirmAdmission(id, data);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      toast.success('Student admission confirmed successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to confirm admission', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const recordEnrollment = async (id, data) => {
+    try {
+      const response = await admissionTrackingAPI.enroll(id, data);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      toast.success('Student enrollment recorded successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to record enrollment', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const updateDeposit = async (id, data) => {
+    try {
+      const response = await admissionTrackingAPI.updateDeposit(id, data);
+      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
+      toast.success('Deposit information updated successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update deposit', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Finance Review operations (Phase G)
+  const startInvoiceReview = async (invoiceId) => {
+    try {
+      const response = await invoiceReviewAPI.start(invoiceId);
+      setReviewQueue(prev => prev.map(r => r.id === invoiceId ? response.data : r));
+      setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, ...response.data } : i));
+      toast.success('Invoice review started');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to start review', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const approveInvoiceReview = async (invoiceId, data) => {
+    try {
+      const response = await invoiceReviewAPI.approve(invoiceId, data);
+      setReviewQueue(prev => prev.map(r => r.id === invoiceId ? response.data : r));
+      setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, ...response.data } : i));
+      toast.success('Invoice approved');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to approve invoice', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const rejectInvoiceReview = async (invoiceId, data) => {
+    try {
+      const response = await invoiceReviewAPI.reject(invoiceId, data);
+      setReviewQueue(prev => prev.map(r => r.id === invoiceId ? response.data : r));
+      setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, ...response.data } : i));
+      toast.success('Invoice review rejected');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to reject invoice', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Student Verification operations (Phase H)
+  const initiateStudentVerification = async (studentId, data) => {
+    try {
+      const response = await studentVerificationAPI.initiate(studentId, data);
+      setVerificationQueue(prev => prev.map(s => s.id === studentId ? { ...s, ...response.data } : s));
+      setStudents(prev => prev.map(s => s.id === studentId ? { ...s, ...response.data } : s));
+      toast.success('Student verification initiated');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to initiate verification', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const verifyStudent = async (studentId, data) => {
+    try {
+      const response = await studentVerificationAPI.verify(studentId, data);
+      setVerificationQueue(prev => prev.map(s => s.id === studentId ? { ...s, ...response.data } : s));
+      setStudents(prev => prev.map(s => s.id === studentId ? { ...s, ...response.data } : s));
+      toast.success('Student verified successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to verify student', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const rejectStudent = async (studentId, data) => {
+    try {
+      const response = await studentVerificationAPI.reject(studentId, data);
+      setVerificationQueue(prev => prev.map(s => s.id === studentId ? { ...s, ...response.data } : s));
+      setStudents(prev => prev.map(s => s.id === studentId ? { ...s, ...response.data } : s));
+      toast.success('Student verification rejected');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to reject verification', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
   const value = {
     agents,
     events,
@@ -690,6 +1034,10 @@ export const DataProvider = ({ children }) => {
     invoices,
     tickets,
     notifications,
+    universities,
+    applications,
+    reviewQueue,
+    verificationQueue,
     loading,
     initialized,
     refreshData,
@@ -724,10 +1072,50 @@ export const DataProvider = ({ children }) => {
     viewStudentDocument,
     requestStudentDocument,
     fetchStudentsForEvent,
+    // University operations
+    universities,
+    fetchUniversities,
+    createUniversity,
+    updateUniversity,
+    updateUniversityStatus,
+    deleteUniversity,
+    // Course operations
+    courses,
+    fetchCourses,
+    createCourse,
+    updateCourse,
+    updateCourseStatus,
+    deleteCourse,
+    // Application operations
+    fetchApplications,
+    createApplication,
+    updateApplication,
+    updateApplicationStatus,
+    updateWorkflowStatus,
+    deleteApplication,
+    // Admission tracking operations
+    scheduleVisit,
+    completeVisit,
+    recordOffer,
+    recordConditionalOffer,
+    confirmAdmission,
+    recordEnrollment,
+    updateDeposit,
     // Invoice operations
     createInvoice,
     updateInvoiceStatus,
+    deleteInvoice,
     fetchInvoices,
+    // Finance review operations
+    fetchReviewQueue,
+    startInvoiceReview,
+    approveInvoiceReview,
+    rejectInvoiceReview,
+    // Student verification operations
+    fetchVerificationQueue,
+    initiateStudentVerification,
+    verifyStudent,
+    rejectStudent,
     // Ticket operations
     createTicket,
     addTicketResponse,

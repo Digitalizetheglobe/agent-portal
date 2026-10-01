@@ -1,89 +1,50 @@
-const Student = require('../models/Student');
-const Event = require('../models/Event');
+const { Op } = require('sequelize');
+const { Student, Event, User } = require('../models');
 const { sendEmail, templates } = require('../utils/email');
-const { putObject, getObject, generateStoragePath } = require('../utils/storage');
+const { putObject, getObject, deleteObject, generateStoragePath } = require('../utils/storage');
 const { v4: uuidv4 } = require('uuid');
 const { createNotification } = require('./notificationController');
+const studentService = require('../services/studentService');
 
-// @desc    Get all students
+// @desc    Get all students (with search, filter, pagination)
 // @route   GET /api/students
 // @access  Private
 exports.getStudents = async (req, res) => {
   try {
-    const { eventId, agentId } = req.query;
-    let query = {};
+    const result = await studentService.getStudents(req.query, req.user);
 
-    if (eventId) query.eventId = eventId;
-    if (agentId) query.agentId = agentId;
+    // Set pagination headers
+    res.setHeader('X-Total-Count', result.total);
+    res.setHeader('X-Page', result.page);
+    res.setHeader('X-Total-Pages', result.totalPages);
+    res.setHeader('X-Limit', result.limit);
 
-    // For agents, check if they're assigned to the event before showing all students
-    if (req.user.role === 'agent' && eventId) {
-      const event = await Event.findById(eventId);
-      if (!event) {
-        return res.status(404).json({
-          success: false,
-          detail: 'Event not found'
-        });
-      }
-      
-      // Check if agent is assigned to this event
-      const hasAccess = event.assignedAgents.some(
-        id => id.toString() === req.user._id.toString()
-      );
-      
-      if (!hasAccess) {
-        return res.status(403).json({
-          success: false,
-          detail: 'Not assigned to this event'
-        });
-      }
-      
-      // Agent can see all students for this event (shared capacity)
-      // Don't filter by agentId when eventId is provided and agent has access
-    } else if (req.user.role === 'agent') {
-      // If no eventId specified, agents can only see their own students
-      query.agentId = req.user._id;
+    if (req.query.envelope === 'true' || req.query.format === 'envelope') {
+      return res.status(200).json(result);
     }
 
-    const students = await Student.find(query).sort({ createdAt: -1 });
-    res.status(200).json(students.map(student => student.toJSON()));
+    res.status(200).json(result.students);
   } catch (error) {
     console.error('Get students error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };
 
-// @desc    Get single student
+// @desc    Get single student by ID
 // @route   GET /api/students/:id
 // @access  Private
 exports.getStudent = async (req, res) => {
   try {
-    const student = await Student.findById(req.params.id);
-
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        detail: 'Student not found'
-      });
-    }
-
-    // Agents can only see their own students
-    if (req.user.role === 'agent' && student.agentId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        detail: 'Access denied'
-      });
-    }
-
-    res.status(200).json(student.toJSON());
+    const student = await studentService.getStudentById(req.params.id, req.user);
+    res.status(200).json(student);
   } catch (error) {
     console.error('Get student error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };
@@ -93,126 +54,24 @@ exports.getStudent = async (req, res) => {
 // @access  Private
 exports.createStudent = async (req, res) => {
   try {
-    const { eventId, agentId, customFields, name, email, phone, country, education, courseInterested, notes } = req.body;
-
-    // Verify event exists
-    const event = await Event.findById(eventId);
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        detail: 'Event not found'
-      });
-    }
-
-    // Check if agent has access to this event
-    if (req.user.role === 'agent') {
-      const hasAccess = event.assignedAgents.some(
-        id => id.toString() === req.user._id.toString()
-      );
-      if (!hasAccess) {
-        return res.status(403).json({
-          success: false,
-          detail: 'Not assigned to this event'
-        });
-      }
-    }
-
-    // Check if event has capacity limit
-    if (event.seatCapacity && event.seatCapacity > 0) {
-      // Use the filledSeats count from the Event model for better performance/sync
-      if (event.filledSeats >= event.seatCapacity) {
-        return res.status(400).json({
-          success: false,
-          detail: `Event capacity is full. Maximum ${event.seatCapacity} students allowed.`
-        });
-      }
-    }
-
-    // Duplicate Prevention: Check if email is already registered for this event
-    const normalizedEmail = email ? email.toLowerCase() : customFields?.email?.toLowerCase();
-    if (normalizedEmail) {
-      const existingStudent = await Student.findOne({ 
-        eventId, 
-        email: normalizedEmail 
-      });
-
-      if (existingStudent) {
-        return res.status(400).json({
-          success: false,
-          detail: 'A student with this email is already registered for this event.'
-        });
-      }
-    }
-
-    // Determine the agent ID
-    let assignedAgentId = agentId;
-    if (!assignedAgentId) {
-      // If no agentId provided (e.g., admin creating student), assign to first assigned agent or current user if agent
-      if (req.user.role === 'agent') {
-        assignedAgentId = req.user._id;
-      } else if (event.assignedAgents && event.assignedAgents.length > 0) {
-        assignedAgentId = event.assignedAgents[0];
-      } else {
-        return res.status(400).json({
-          success: false,
-          detail: 'No agent available for this event'
-        });
-      }
-    }
-
-    // Prepare student data with flexible structure
-    const studentData = {
-      eventId,
-      agentId: assignedAgentId,
-      customFields: new Map(),
-      documents: []
-    };
-
-    // Add custom fields if they exist
-    if (customFields && typeof customFields === 'object') {
-      Object.entries(customFields).forEach(([key, value]) => {
-        studentData.customFields.set(key, value);
-      });
-    }
-
-    // Add any legacy fields for backward compatibility
-    if (name) studentData.name = name;
-    if (email) studentData.email = email.toLowerCase();
-    if (phone) studentData.phone = phone;
-    if (country) studentData.country = country;
-    if (education) studentData.education = education;
-    if (courseInterested) studentData.courseInterested = courseInterested;
-    if (notes) studentData.notes = notes;
-
-    const student = await Student.create(studentData);
-
-    // Increment filledSeats in Event model
-    await Event.findByIdAndUpdate(eventId, { $inc: { filledSeats: 1 } });
-
-    // Send confirmation email to student (if email field exists)
-    const studentEmail = customFields?.email || email;
-    const studentName = customFields?.name || name;
-    if (studentEmail && studentName) {
-      const emailTemplate = templates.studentRegistration(studentName, event.title);
-      await sendEmail(studentEmail, emailTemplate.subject, emailTemplate.html);
-    }
-
-    res.status(201).json(student.toJSON());
+    const student = await studentService.createStudent(req.body, req.user);
+    res.status(201).json(student);
   } catch (error) {
     console.error('Create student error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       detail: error.message || 'Server error'
     });
   }
 };
 
-// @desc    Upload document for student
+// @desc    Upload or resubmit document for student
 // @route   POST /api/students/:id/documents
+// @route   POST /api/students/:id/documents/:docId/resubmit
 // @access  Private
 exports.uploadDocument = async (req, res) => {
   try {
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findByPk(req.params.id);
 
     if (!student) {
       return res.status(404).json({
@@ -221,8 +80,8 @@ exports.uploadDocument = async (req, res) => {
       });
     }
 
-    // Check access
-    if (req.user.role === 'agent' && student.agentId.toString() !== req.user._id.toString()) {
+    // Check access: Agents can only upload to their own student
+    if (req.user.role === 'agent' && student.agentId.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         success: false,
         detail: 'Access denied'
@@ -236,26 +95,96 @@ exports.uploadDocument = async (req, res) => {
       });
     }
 
+    const category = req.body.category || 'Other';
+    const targetDocId = req.params.docId || req.body.documentId;
+
     // Generate storage path
     const storagePath = generateStoragePath(`students/${req.params.id}`, req.file.originalname);
 
     // Upload to storage
     const result = await putObject(storagePath, req.file.buffer, req.file.mimetype);
 
-    // Create document record
+    const docs = Array.isArray(student.documents) ? [...student.documents] : [];
+    const nowIso = new Date().toISOString();
+
+    // Check if updating/resubmitting an existing document
+    let existingIndex = -1;
+    if (targetDocId) {
+      existingIndex = docs.findIndex(d => d.id === targetDocId || d._id === targetDocId);
+    } else {
+      existingIndex = docs.findIndex(d => (d.category || '').toLowerCase() === category.toLowerCase());
+    }
+
+    if (existingIndex !== -1) {
+      const existingDoc = docs[existingIndex];
+      const existingStatus = (existingDoc.status || '').toLowerCase();
+
+      // Guard: An already Approved document cannot be replaced by an agent
+      if (existingStatus === 'approved') {
+        if (req.user.role === 'agent') {
+          return res.status(400).json({
+            success: false,
+            detail: `Document for category '${existingDoc.category || category}' has already been approved and cannot be replaced.`
+          });
+        }
+      }
+
+      // Resubmission flow (CorrectionRequired -> Submitted, or replacing an unapproved submission)
+      const prevStatus = existingDoc.status;
+      const isResubmit = existingStatus === 'correctionrequired' || existingStatus === 'correction_required';
+      const history = Array.isArray(existingDoc.history) ? [...existingDoc.history] : [];
+      history.push({
+        action: isResubmit ? 'Resubmitted' : 'FileReplaced',
+        from: prevStatus,
+        to: 'Submitted',
+        remarks: isResubmit ? `Resubmitted by ${req.user.role}` : 'Updated document file',
+        by: req.user.id,
+        at: nowIso
+      });
+
+      docs[existingIndex] = {
+        ...existingDoc,
+        storagePath: result.path,
+        originalFilename: req.file.originalname,
+        contentType: req.file.mimetype,
+        size: result.size || req.file.size,
+        status: 'Submitted', // NEVER automatically approved
+        uploadedAt: nowIso,
+        uploadedBy: req.user.id,
+        history
+      };
+
+      student.documents = docs;
+      await student.save();
+
+      return res.status(200).json(docs[existingIndex]);
+    }
+
+    // New document submission
+    const docId = uuidv4();
     const docRecord = {
-      id: uuidv4(),
+      id: docId,
+      _id: docId,
       storagePath: result.path,
       originalFilename: req.file.originalname,
       contentType: req.file.mimetype,
       size: result.size || req.file.size,
-      category: req.body.category || 'Other',
-      status: 'pending',
-      uploadedAt: new Date()
+      category: category,
+      status: 'Submitted',
+      uploadedAt: nowIso,
+      uploadedBy: req.user.id,
+      history: [{
+        action: 'Submitted',
+        from: null,
+        to: 'Submitted',
+        remarks: 'Initial upload',
+        by: req.user.id,
+        at: nowIso
+      }]
     };
 
-    // Add to student's documents
-    student.documents.push(docRecord);
+    docs.push(docRecord);
+    student.documents = docs;
     await student.save();
 
     res.status(201).json(docRecord);
@@ -273,86 +202,11 @@ exports.uploadDocument = async (req, res) => {
 // @access  Private
 exports.updateStudent = async (req, res) => {
   try {
-    const { eventId, agentId, customFields, name, email, phone, country, education, courseInterested, notes } = req.body;
-
-    const student = await Student.findById(req.params.id);
-
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        detail: 'Student not found'
-      });
-    }
-
-    // Check access permissions
-    if (req.user.role === 'agent' && student.agentId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        detail: 'Access denied'
-      });
-    }
-
-    // Verify event exists if eventId is being updated
-    if (eventId && eventId !== student.eventId) {
-      const event = await Event.findById(eventId);
-      if (!event) {
-        return res.status(404).json({
-          success: false,
-          detail: 'Event not found'
-        });
-      }
-
-      // Check if agent has access to this event
-      if (req.user.role === 'agent') {
-        const hasAccess = event.assignedAgents.some(
-          id => id.toString() === req.user._id.toString()
-        );
-        if (!hasAccess) {
-          return res.status(403).json({
-            success: false,
-            detail: 'Not assigned to this event'
-          });
-        }
-      }
-    }
-
-    // Update fields
-    if (eventId !== undefined) student.eventId = eventId;
-    if (agentId !== undefined) {
-      // Only admins can change agentId
-      if (req.user.role !== 'admin') {
-        return res.status(403).json({
-          success: false,
-          detail: 'Only admins can change agent assignment'
-        });
-      }
-      student.agentId = agentId;
-    }
-
-    // Update custom fields
-    if (customFields && typeof customFields === 'object') {
-      // Clear existing custom fields and set new ones
-      student.customFields = new Map();
-      Object.entries(customFields).forEach(([key, value]) => {
-        student.customFields.set(key, value);
-      });
-    }
-
-    // Update legacy fields for backward compatibility
-    if (name !== undefined) student.name = name;
-    if (email !== undefined) student.email = email.toLowerCase();
-    if (phone !== undefined) student.phone = phone;
-    if (country !== undefined) student.country = country;
-    if (education !== undefined) student.education = education;
-    if (courseInterested !== undefined) student.courseInterested = courseInterested;
-    if (notes !== undefined) student.notes = notes;
-
-    await student.save();
-
-    res.status(200).json(student.toJSON());
+    const student = await studentService.updateStudent(req.params.id, req.body, req.user);
+    res.status(200).json(student);
   } catch (error) {
     console.error('Update student error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       detail: error.message || 'Server error'
     });
@@ -361,47 +215,42 @@ exports.updateStudent = async (req, res) => {
 
 // @desc    Delete student
 // @route   DELETE /api/students/:id
-// @access  Private (Admin only)
+// @access  Private
 exports.deleteStudent = async (req, res) => {
   try {
-    const student = await Student.findById(req.params.id);
-
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        detail: 'Student not found'
-      });
-    }
-
-    // Only admins can delete students
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        detail: 'Access denied. Only admins can delete students.'
-      });
-    }
-
-    // Delete associated documents from storage
-    if (student.documents && student.documents.length > 0) {
-      const { deleteObject } = require('../utils/storage');
-      for (const doc of student.documents) {
-        try {
-          await deleteObject(doc.storagePath);
-        } catch (error) {
-          console.error(`Failed to delete document ${doc.id}:`, error);
-        }
-      }
-    }
-
-    await Student.findByIdAndDelete(req.params.id);
-
-    res.status(200).json({
-      success: true,
-      message: 'Student deleted successfully'
-    });
+    const result = await studentService.deleteStudent(req.params.id, req.user);
+    res.status(200).json(result);
   } catch (error) {
     console.error('Delete student error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Get applications for a student
+// @route   GET /api/students/:id/applications
+// @access  Private (Admin & Agent; Agent only sees own)
+exports.getStudentApplications = async (req, res) => {
+  try {
+    const studentId = req.params.studentId || req.params.id;
+    const result = await studentService.getStudentApplications(studentId, req.query, req.user);
+
+    // Set pagination headers
+    res.setHeader('X-Total-Count', result.total);
+    res.setHeader('X-Page', result.page);
+    res.setHeader('X-Total-Pages', result.totalPages);
+    res.setHeader('X-Limit', result.limit);
+
+    if (req.query.envelope === 'true' || req.query.format === 'envelope') {
+      return res.status(200).json(result);
+    }
+
+    res.status(200).json(result.applications);
+  } catch (error) {
+    console.error('Get student applications error:', error);
+    res.status(error.statusCode || 500).json({
       success: false,
       detail: error.message || 'Server error'
     });
@@ -413,7 +262,7 @@ exports.deleteStudent = async (req, res) => {
 // @access  Private
 exports.downloadDocument = async (req, res) => {
   try {
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findByPk(req.params.id);
 
     if (!student) {
       return res.status(404).json({
@@ -422,16 +271,15 @@ exports.downloadDocument = async (req, res) => {
       });
     }
 
-    // Check access
-    if (req.user.role === 'agent' && student.agentId.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'agent' && student.agentId.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         success: false,
         detail: 'Access denied'
       });
     }
 
-    // Find document
-    const doc = student.documents.find(d => d.id === req.params.docId);
+    const docs = Array.isArray(student.documents) ? student.documents : [];
+    const doc = docs.find(d => d.id === req.params.docId || d._id === req.params.docId);
 
     if (!doc) {
       return res.status(404).json({
@@ -440,7 +288,6 @@ exports.downloadDocument = async (req, res) => {
       });
     }
 
-    // Download from storage
     const { data, contentType } = await getObject(doc.storagePath);
 
     res.setHeader('Content-Type', doc.contentType || contentType);
@@ -471,7 +318,7 @@ exports.updateStudentStatus = async (req, res) => {
       });
     }
 
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findByPk(req.params.id);
 
     if (!student) {
       return res.status(404).json({
@@ -480,8 +327,7 @@ exports.updateStudentStatus = async (req, res) => {
       });
     }
 
-    // Check access permissions (Admins can update all, agents only their own)
-    if (req.user.role === 'agent' && student.agentId.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'agent' && student.agentId.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         success: false,
         detail: 'Access denied'
@@ -497,7 +343,7 @@ exports.updateStudentStatus = async (req, res) => {
       title: 'Student Status Updated',
       message: `The status of ${student.name || 'your student'} has been updated to ${status}.`,
       type: 'info',
-      relatedId: student._id,
+      relatedId: student.id,
       relatedModel: 'Student'
     });
 
@@ -511,21 +357,49 @@ exports.updateStudentStatus = async (req, res) => {
   }
 };
 
-// @desc    Verify student document
+// @desc    Verify or review student document
 // @route   PATCH /api/students/:id/documents/:docId/verify
+// @route   PATCH /api/students/:id/documents/:docId/review
 // @access  Private (Admin only)
 exports.verifyStudentDocument = async (req, res) => {
   try {
-    const { status, remarks } = req.body;
-    
+    const { status, action, remarks } = req.body;
+
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
-        detail: 'Only admins can verify documents'
+        detail: 'Only admins can review or verify documents'
       });
     }
 
-    const student = await Student.findById(req.params.id);
+    // Normalize status / action to canonical lifecycle states
+    const raw = (action || status || '').toString().trim().toLowerCase();
+    let canonicalStatus = null;
+
+    if (raw === 'approved' || raw === 'approve') {
+      canonicalStatus = 'Approved';
+    } else if (raw === 'under_review' || raw === 'underreview' || raw === 'review') {
+      canonicalStatus = 'UnderReview';
+    } else if (raw === 'correction_required' || raw === 'correctionrequired' || raw === 'correction') {
+      canonicalStatus = 'CorrectionRequired';
+    } else if (raw === 'rejected' || raw === 'reject') {
+      canonicalStatus = 'Rejected';
+    } else {
+      return res.status(400).json({
+        success: false,
+        detail: 'Invalid document status/action. Allowed values: approve (Approved), under_review (UnderReview), correction_required (CorrectionRequired), reject (Rejected)'
+      });
+    }
+
+    // Remarks required when requesting correction or rejecting
+    if ((canonicalStatus === 'CorrectionRequired' || canonicalStatus === 'Rejected') && (!remarks || !remarks.trim())) {
+      return res.status(400).json({
+        success: false,
+        detail: `Remarks are required when marking a document as ${canonicalStatus}`
+      });
+    }
+
+    const student = await Student.findByPk(req.params.id);
 
     if (!student) {
       return res.status(404).json({
@@ -534,36 +408,71 @@ exports.verifyStudentDocument = async (req, res) => {
       });
     }
 
-    const docIndex = student.documents.findIndex(d => d.id === req.params.docId);
+    const docs = Array.isArray(student.documents) ? [...student.documents] : [];
+    const docIndex = docs.findIndex(d => d.id === req.params.docId || d._id === req.params.docId);
     if (docIndex === -1) {
       return res.status(404).json({
         success: false,
         detail: 'Document not found'
       });
     }
-    if (status) student.documents[docIndex].status = status;
-    if (remarks !== undefined) student.documents[docIndex].remarks = remarks;
 
+    const prevDoc = docs[docIndex];
+    const prevStatus = prevDoc.status;
+    const nowIso = new Date().toISOString();
+
+    const history = Array.isArray(prevDoc.history) ? [...prevDoc.history] : [];
+    history.push({
+      action: canonicalStatus,
+      from: prevStatus,
+      to: canonicalStatus,
+      remarks: remarks ? remarks.trim() : null,
+      by: req.user.id,
+      at: nowIso
+    });
+
+    // Update document with canonical status, reviewer identity, timestamp, remarks, and history
+    docs[docIndex] = {
+      ...prevDoc,
+      status: canonicalStatus,
+      verifiedBy: req.user.id,
+      reviewedBy: req.user.id,
+      verifiedAt: nowIso,
+      reviewedAt: nowIso,
+      remarks: remarks !== undefined ? (remarks.trim ? remarks.trim() : remarks) : prevDoc.remarks,
+      history
+    };
+
+    student.documents = docs;
     await student.save();
 
-    // Create notification for agent
+    // Notify agent
+    const notifTitle = canonicalStatus === 'Approved' ? 'Document Approved' :
+      canonicalStatus === 'CorrectionRequired' ? 'Document Correction Required' :
+        canonicalStatus === 'Rejected' ? 'Document Rejected' : 'Document Under Review';
+    const notifType = canonicalStatus === 'Approved' ? 'success' :
+      canonicalStatus === 'UnderReview' ? 'info' : 'warning';
+
     await createNotification({
       recipient: student.agentId,
-      title: status === 'approved' ? 'Document Approved' : 'Document Rejected',
-      message: `The ${student.documents[docIndex].category} document for ${student.name || 'your student'} has been ${status}.`,
-      type: status === 'approved' ? 'success' : 'warning',
-      relatedId: student._id,
+      title: notifTitle,
+      message: `The ${docs[docIndex].category} document for ${student.name || 'your student'} has been marked as ${canonicalStatus}.${remarks ? ' Reason: ' + remarks.trim() : ''}`,
+      type: notifType,
+      relatedId: student.id,
       relatedModel: 'Student'
     });
+
     res.status(200).json(student.toJSON());
   } catch (error) {
     console.error('Verify student document error:', error);
     res.status(500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };
+
+
 // @desc    Request missing document
 // @route   POST /api/students/:id/documents/request
 // @access  Private (Admin only)
@@ -578,7 +487,7 @@ exports.requestDocument = async (req, res) => {
       });
     }
 
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findByPk(req.params.id);
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -586,7 +495,7 @@ exports.requestDocument = async (req, res) => {
       });
     }
 
-    const event = await Event.findById(student.eventId);
+    const event = await Event.findByPk(student.eventId);
     const course = student.courseInterested || student.customFields?.courseInterested || 'N/A';
 
     // Create notification for agent
@@ -595,7 +504,7 @@ exports.requestDocument = async (req, res) => {
       title: 'Action Required: Missing Document',
       message: `Admin has requested the "${category}" document for student "${student.name || 'N/A'}" registered for "${event?.title || 'Unknown Event'}" (Course: ${course}).`,
       type: 'warning',
-      relatedId: student._id,
+      relatedId: student.id,
       relatedModel: 'Student'
     });
 
@@ -607,7 +516,7 @@ exports.requestDocument = async (req, res) => {
     console.error('Request document error:', error);
     res.status(500).json({
       success: false,
-      detail: 'Server error'
+      detail: error.message || 'Server error'
     });
   }
 };

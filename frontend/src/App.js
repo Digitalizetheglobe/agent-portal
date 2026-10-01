@@ -18,12 +18,22 @@ import AgentDashboard from "./pages/agent/AgentDashboard";
 import AgentEventsPage from "./pages/agent/AgentEventsPage";
 import AgentEventsManagementPage from "./pages/agent/AgentEventsManagementPage";
 import InvoicesPage from "./pages/agent/InvoicesPage";
+import AgentPayoffsPage from "./pages/agent/AgentPayoffsPage";
 import SupportPage from "./pages/agent/SupportPage";
 import AgentStudentsPage from "./pages/agent/AgentStudentsPage";
 
 import AdminInvoicesPage from "./pages/admin/AdminInvoicesPage";
+import AdminPayoffsPage from "./pages/admin/AdminPayoffsPage";
+import AdminStudentVerificationPage from "./pages/admin/AdminStudentVerificationPage";
 import AdminSupportPage from "./pages/admin/AdminSupportPage";
 import AgentReportPage from "./pages/admin/AgentReportPage";
+import UniversitiesPage from "./pages/admin/UniversitiesPage";
+import UniversityDetailsPage from "./pages/admin/UniversityDetailsPage";
+import CoursesPage from "./pages/admin/CoursesPage";
+import ApplicationsPage from "./pages/admin/ApplicationsPage";
+import ApplicationDetailsPage from "./pages/admin/ApplicationDetailsPage";
+import AgentUniversitiesPage from "./pages/agent/AgentUniversitiesPage";
+import AgentApplicationsPage from "./pages/agent/AgentApplicationsPage";
 import SettingsPage from "./pages/shared/SettingsPage";
 import NotificationsPage from "./pages/shared/NotificationsPage";
 
@@ -52,7 +62,16 @@ function App() {
                   <Route path="students" element={<StudentsPage />} />
                   <Route path="students/:studentId" element={<StudentDetailsPage />} />
                   <Route path="students/:studentId/edit" element={<StudentEditPage />} />
+                  <Route path="applications" element={<ApplicationsPage />} />
+                  <Route path="applications/:applicationId" element={<ApplicationDetailsPage />} />
+                  <Route path="applications/:id" element={<ApplicationDetailsPage />} />
+                  <Route path="universities" element={<UniversitiesPage />} />
+                  <Route path="universities/:universityId" element={<UniversityDetailsPage />} />
+                  <Route path="universities/:id" element={<UniversityDetailsPage />} />
+                  <Route path="courses" element={<CoursesPage />} />
                   <Route path="invoices" element={<AdminInvoicesPage />} />
+                  <Route path="payoffs" element={<AdminPayoffsPage />} />
+                  <Route path="verification" element={<AdminStudentVerificationPage />} />
                   <Route path="support" element={<AdminSupportPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
@@ -67,7 +86,14 @@ function App() {
                   <Route path="events/:eventId" element={<EventDetailsPage />} />
                   <Route path="students" element={<AgentStudentsPage />} />
                   <Route path="students/:studentId" element={<StudentDetailsPage />} />
+                  <Route path="applications" element={<AgentApplicationsPage />} />
+                  <Route path="applications/:applicationId" element={<ApplicationDetailsPage />} />
+                  <Route path="applications/:id" element={<ApplicationDetailsPage />} />
+                  <Route path="universities" element={<AgentUniversitiesPage />} />
+                  <Route path="universities/:universityId" element={<UniversityDetailsPage />} />
+                  <Route path="universities/:id" element={<UniversityDetailsPage />} />
                   <Route path="invoices" element={<InvoicesPage />} />
+                  <Route path="payoffs" element={<AgentPayoffsPage />} />
                   <Route path="support" element={<SupportPage />} />
                   <Route path="settings" element={<SettingsPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />

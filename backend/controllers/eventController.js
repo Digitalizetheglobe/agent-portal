@@ -1,7 +1,5 @@
-const Event = require('../models/Event');
-const Student = require('../models/Student');
-const User = require('../models/User');
-const Notification = require('../models/Notification');
+const { sequelize } = require('../config/db');
+const { Event, Student, User, Notification } = require('../models');
 const { sendEmail, templates } = require('../utils/email');
 
 // @desc    Get all events
@@ -9,14 +7,17 @@ const { sendEmail, templates } = require('../utils/email');
 // @access  Private
 exports.getEvents = async (req, res) => {
   try {
-    let query = {};
+    let where = {};
 
     // Agents only see assigned events
     if (req.user.role === 'agent') {
-      query.assignedAgents = req.user._id;
+      where = sequelize.literal(`"assignedAgents"::jsonb @> '["${req.user.id}"]'`);
     }
 
-    const events = await Event.find(query).sort({ date: -1 });
+    const events = await Event.findAll({
+      where,
+      order: [['date', 'DESC']]
+    });
     res.status(200).json(events.map(event => event.toJSON()));
   } catch (error) {
     res.status(500).json({
@@ -31,7 +32,7 @@ exports.getEvents = async (req, res) => {
 // @access  Private
 exports.getEvent = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findByPk(req.params.id);
 
     if (!event) {
       return res.status(404).json({
@@ -42,8 +43,9 @@ exports.getEvent = async (req, res) => {
 
     // Check if agent has access to this event
     if (req.user.role === 'agent') {
-      const hasAccess = event.assignedAgents.some(
-        agentId => agentId.toString() === req.user._id.toString()
+      const assigned = Array.isArray(event.assignedAgents) ? event.assignedAgents : [];
+      const hasAccess = assigned.some(
+        agentId => agentId.toString() === req.user.id.toString()
       );
       if (!hasAccess) {
         return res.status(403).json({
@@ -53,7 +55,12 @@ exports.getEvent = async (req, res) => {
       }
     }
 
-    res.status(200).json(event.toJSON());
+    const eventJson = event.toJSON();
+    if (req.user.role === 'agent') {
+      eventJson.assignedAgents = [req.user.id];
+    }
+
+    res.status(200).json(eventJson);
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -87,23 +94,27 @@ exports.createEvent = async (req, res) => {
       date,
       location,
       type: type || 'physical',
-      seatCapacity,
+      seatCapacity: seatCapacity ? parseInt(seatCapacity, 10) : 50,
       assignedAgents: assignedAgents || [],
       requiredDocuments: requiredDocuments || [],
       formFields: formFields || [],
       notifyAgents: notifyAgents !== false,
       notificationMessage: notificationMessage || '',
-      createdBy: req.user._id
+      createdBy: req.user.id
     });
 
     // Notify assigned agents
     if (notifyAgents !== false && assignedAgents && assignedAgents.length > 0) {
       for (const agentId of assignedAgents) {
-        const agent = await User.findById(agentId);
+        const agent = await User.findByPk(agentId);
         if (agent) {
           const messageText = notificationMessage || `You have been assigned to the event "${title}" scheduled for ${date}.`;
-          const emailTemplate = templates.eventAssignment(agent.name, title, date, messageText);
-          await sendEmail(agent.email, emailTemplate.subject, emailTemplate.html);
+          try {
+            const emailTemplate = templates.eventAssignment(agent.name, title, date, messageText);
+            await sendEmail(agent.email, emailTemplate.subject, emailTemplate.html);
+          } catch (mailErr) {
+            console.warn('Assignment email error:', mailErr.message);
+          }
         }
       }
     }
@@ -131,13 +142,13 @@ exports.updateEvent = async (req, res) => {
       type,
       seatCapacity, 
       assignedAgents, 
-      requiredDocuments,
+      requiredDocuments, 
       formFields, 
       notifyAgents, 
       notificationMessage 
     } = req.body;
 
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findByPk(req.params.id);
 
     if (!event) {
       return res.status(404).json({
@@ -147,7 +158,8 @@ exports.updateEvent = async (req, res) => {
     }
 
     // Get old assigned agents to compare
-    const oldAgentIds = event.assignedAgents.map(id => id.toString());
+    const oldAgents = Array.isArray(event.assignedAgents) ? event.assignedAgents : [];
+    const oldAgentIds = oldAgents.map(id => id.toString());
 
     // Update fields
     if (title !== undefined) event.title = title;
@@ -155,7 +167,7 @@ exports.updateEvent = async (req, res) => {
     if (date !== undefined) event.date = date;
     if (location !== undefined) event.location = location;
     if (type !== undefined) event.type = type;
-    if (seatCapacity !== undefined) event.seatCapacity = seatCapacity;
+    if (seatCapacity !== undefined) event.seatCapacity = parseInt(seatCapacity, 10);
     if (assignedAgents !== undefined) event.assignedAgents = assignedAgents;
     if (requiredDocuments !== undefined) event.requiredDocuments = requiredDocuments;
     if (formFields !== undefined) event.formFields = formFields;
@@ -166,13 +178,17 @@ exports.updateEvent = async (req, res) => {
 
     // Notify newly assigned agents
     if (notifyAgents !== false && assignedAgents) {
-      const newAgentIds = assignedAgents.filter(id => !oldAgentIds.includes(id));
+      const newAgentIds = assignedAgents.filter(id => !oldAgentIds.includes(id.toString()));
       for (const agentId of newAgentIds) {
-        const agent = await User.findById(agentId);
+        const agent = await User.findByPk(agentId);
         if (agent) {
           const messageText = notificationMessage || `You have been assigned to the event "${event.title}" scheduled for ${event.date}.`;
-          const emailTemplate = templates.eventAssignment(agent.name, event.title, event.date, messageText);
-          await sendEmail(agent.email, emailTemplate.subject, emailTemplate.html);
+          try {
+            const emailTemplate = templates.eventAssignment(agent.name, event.title, event.date, messageText);
+            await sendEmail(agent.email, emailTemplate.subject, emailTemplate.html);
+          } catch (mailErr) {
+            console.warn('Assignment email error:', mailErr.message);
+          }
         }
       }
     }
@@ -191,7 +207,7 @@ exports.updateEvent = async (req, res) => {
 // @access  Private (Admin only)
 exports.deleteEvent = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findByPk(req.params.id);
 
     if (!event) {
       return res.status(404).json({
@@ -201,10 +217,10 @@ exports.deleteEvent = async (req, res) => {
     }
 
     // Delete all students associated with this event
-    await Student.deleteMany({ eventId: event._id });
+    await Student.destroy({ where: { eventId: event.id } });
 
     // Delete event
-    await Event.deleteOne({ _id: event._id });
+    await event.destroy();
 
     res.status(200).json({
       success: true,
@@ -223,7 +239,7 @@ exports.deleteEvent = async (req, res) => {
 // @access  Private (Admin only)
 exports.notifyAgents = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findByPk(req.params.id);
 
     if (!event) {
       return res.status(404).json({
@@ -232,7 +248,8 @@ exports.notifyAgents = async (req, res) => {
       });
     }
 
-    if (!event.assignedAgents || event.assignedAgents.length === 0) {
+    const assigned = Array.isArray(event.assignedAgents) ? event.assignedAgents : [];
+    if (assigned.length === 0) {
       return res.status(400).json({
         success: false,
         detail: 'No agents assigned to this event'
@@ -244,13 +261,13 @@ exports.notifyAgents = async (req, res) => {
     const notificationMessage = message || `Important update regarding the event "${event.title}". Please check the details.`;
 
     // Create notifications for each assigned agent
-    const notificationPromises = event.assignedAgents.map(agentId => {
+    const notificationPromises = assigned.map(agentId => {
       return Notification.create({
         recipient: agentId,
         title: notificationTitle,
         message: notificationMessage,
         type: 'info',
-        relatedId: event._id,
+        relatedId: event.id,
         relatedModel: 'Event'
       });
     });
@@ -259,7 +276,7 @@ exports.notifyAgents = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Notifications sent to ${event.assignedAgents.length} agents`
+      message: `Notifications sent to ${assigned.length} agents`
     });
   } catch (error) {
     console.error('Notify agents error:', error);

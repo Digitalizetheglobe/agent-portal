@@ -4,21 +4,20 @@ import {
   Search, Plus, Download, Flag, User, Mail, Phone,
   ChevronRight, FileText, CheckCircle2, AlertCircle,
   X, MessageSquare, Bell, ArrowUpRight,
-  Pencil, LayoutGrid, List
+  Pencil, LayoutGrid, List, Shield, Clock, XCircle,
+  Check, Filter, RefreshCw, GraduationCap
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { toast } from 'sonner';
 import StudentRegistrationModal from '../../components/modals/StudentRegistrationModal';
 import { cn } from '@/lib/utils';
+import { studentVerificationAPI, formatApiError } from '../../utils/api';
+import {
+  STUDENT_VERIFICATION_STATUS,
+  STUDENT_VERIFICATION_STATUS_LABELS
+} from '../../constants/status';
 
 const STAGES = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
-const STAGE_COLORS = {
-  'Registered': '#378ADD',
-  'Contacted': '#EF9F27',
-  'Confirmed': '#7F77DD',
-  'Attended': '#639922',
-  'Converted': '#1D9E75'
-};
 const STAGE_PILLS = {
   'Registered': 'bg-[#E6F1FB] text-[#0C447C]',
   'Contacted': 'bg-[#FAEEDA] text-[#633806]',
@@ -38,6 +37,7 @@ const StudentsPage = () => {
     students,
     events,
     agents,
+    universities,
     deleteStudent,
     fetchStudents,
     updateStudentStatus,
@@ -48,18 +48,88 @@ const StudentsPage = () => {
   } = useData();
   const navigate = useNavigate();
 
+  // Tab: 'all' (All Students) or 'queue' (Verification Queue)
+  const [activeTab, setActiveTab] = useState('all');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [eventFilter, setEventFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
+  const [universityFilter, setUniversityFilter] = useState('all');
   const [docFilter, setDocFilter] = useState('all');
+  const [verificationFilter, setVerificationFilter] = useState('all');
   const [curStage, setCurStage] = useState('all');
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [displayMode, setDisplayMode] = useState('table');
 
+  // Verification Queue State
+  const [queueStudents, setQueueStudents] = useState([]);
+  const [loadingQueue, setLoadingQueue] = useState(false);
+  const [queueStatusFilter, setQueueStatusFilter] = useState('all');
+  const [queuePage, setQueuePage] = useState(1);
+  const [queueTotal, setQueueTotal] = useState(0);
+  const [queueTotalPages, setQueueTotalPages] = useState(1);
+  const [queueLimit] = useState(20);
+  const [queueActionLoading, setQueueActionLoading] = useState(false);
+
   useEffect(() => {
     fetchStudents();
   }, [fetchStudents]);
+
+  // Fetch Verification Queue
+  const fetchQueue = useCallback(async () => {
+    try {
+      setLoadingQueue(true);
+      const params = {
+        page: queuePage,
+        limit: queueLimit,
+        envelope: 'true'
+      };
+      if (queueStatusFilter !== 'all') {
+        params.status = queueStatusFilter;
+      }
+      if (searchQuery.trim()) {
+        params.search = searchQuery.trim();
+      }
+
+      const res = await studentVerificationAPI.getQueue(params);
+      if (res.data?.students) {
+        setQueueStudents(res.data.students);
+        setQueueTotal(res.data.total || 0);
+        setQueueTotalPages(res.data.totalPages || 1);
+      } else if (Array.isArray(res.data)) {
+        setQueueStudents(res.data);
+        setQueueTotal(res.data.length);
+        setQueueTotalPages(1);
+      }
+    } catch (err) {
+      console.error('Failed to fetch verification queue:', err);
+      toast.error('Failed to load verification queue');
+    } finally {
+      setLoadingQueue(false);
+    }
+  }, [queuePage, queueLimit, queueStatusFilter, searchQuery]);
+
+  useEffect(() => {
+    if (activeTab === 'queue') {
+      fetchQueue();
+    }
+  }, [activeTab, fetchQueue]);
+
+  // Quick initiate from queue
+  const handleQuickInitiate = async (studentId) => {
+    try {
+      setQueueActionLoading(true);
+      await studentVerificationAPI.initiate(studentId);
+      toast.success('Verification initiated');
+      fetchQueue();
+      fetchStudents();
+    } catch (err) {
+      toast.error('Failed to initiate verification', { description: formatApiError(err) });
+    } finally {
+      setQueueActionLoading(false);
+    }
+  };
 
   // Helper Functions
   const getDocStatus = useCallback((student) => {
@@ -72,18 +142,16 @@ const StudentsPage = () => {
 
     const uploadedDocs = student.documents || [];
 
-    // Check if any mandatory document is missing or rejected
     const mandatoryDocs = required.filter(d => d.mandatory !== false);
     const hasMissingMandatory = mandatoryDocs.some(req => {
-      const doc = uploadedDocs.find(d => d.category === req.value);
-      return !doc || doc.status === 'rejected';
+      const doc = uploadedDocs.find(d => (d.category || '').toLowerCase() === (req.value || '').toLowerCase());
+      return !doc || (doc.status || '').toLowerCase() !== 'approved';
     });
 
     if (hasMissingMandatory) return 'missing';
 
-    // Check if any document is pending
-    const hasPending = uploadedDocs.some(d => d.status === 'pending');
-    if (hasPending) return 'pending';
+    const hasUnapproved = uploadedDocs.some(d => (d.status || '').toLowerCase() !== 'approved');
+    if (hasUnapproved) return 'pending';
 
     return 'complete';
   }, [events]);
@@ -104,6 +172,61 @@ const StudentsPage = () => {
     return 'N/A';
   };
 
+  const getUniversityName = useCallback((s) => {
+    if (!s) return 'Not specified';
+    const cf = s.customFields || {};
+    const uId = s.universityId || cf.universityId || (cf instanceof Map ? cf.get('universityId') : null);
+    if (uId && universities) {
+      const u = universities.find(uni => String(uni.id) === String(uId) || String(uni._id) === String(uId));
+      if (u) return u.name;
+    }
+    const uName = s.university || cf.university || cf.universityName || (cf instanceof Map ? (cf.get('university') || cf.get('universityName')) : null);
+    if (uName && uName !== 'Not specified') return uName;
+    if (s.applications && s.applications.length > 0) {
+      const app = s.applications[0];
+      return app.university?.name || app.universityName || 'Not specified';
+    }
+    return 'Not specified';
+  }, [universities]);
+
+  const getVerificationStatus = (s) => {
+    return s?.verificationStatus || STUDENT_VERIFICATION_STATUS.PENDING;
+  };
+
+  const getVerificationBadge = (status) => {
+    switch (status) {
+      case STUDENT_VERIFICATION_STATUS.VERIFIED:
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            Verified
+          </span>
+        );
+      case STUDENT_VERIFICATION_STATUS.UNDER_REVIEW:
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800">
+            <Clock className="w-3 h-3 text-blue-600" />
+            Under Review
+          </span>
+        );
+      case STUDENT_VERIFICATION_STATUS.REJECTED:
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800">
+            <XCircle className="w-3 h-3 text-red-600" />
+            Rejected
+          </span>
+        );
+      case STUDENT_VERIFICATION_STATUS.PENDING:
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800">
+            <AlertCircle className="w-3 h-3 text-amber-600" />
+            Pending
+          </span>
+        );
+    }
+  };
+
   // Derived Data & Filtering
   const baseFilteredStudents = useMemo(() => {
     return students.filter(s => {
@@ -117,11 +240,17 @@ const StudentsPage = () => {
       if (searchQuery && !name.includes(q) && !email.includes(q) && !phone.includes(q) && !country.includes(q)) return false;
       if (eventFilter !== 'all' && (s.eventId !== eventFilter && s._id !== eventFilter)) return false;
       if (countryFilter !== 'all' && (s.country || cf.country) !== countryFilter) return false;
+      if (universityFilter !== 'all') {
+        const uId = s.universityId || cf.universityId || (cf instanceof Map ? cf.get('universityId') : null);
+        const uName = getUniversityName(s);
+        if (String(uId) !== String(universityFilter) && uName !== universityFilter) return false;
+      }
       if (docFilter !== 'all' && getDocStatus(s) !== docFilter) return false;
+      if (verificationFilter !== 'all' && getVerificationStatus(s) !== verificationFilter) return false;
 
       return true;
     });
-  }, [students, searchQuery, eventFilter, countryFilter, docFilter]);
+  }, [students, searchQuery, eventFilter, countryFilter, universityFilter, docFilter, verificationFilter, getDocStatus, getUniversityName]);
 
   const filteredStudents = useMemo(() => {
     if (curStage === 'all') return baseFilteredStudents;
@@ -132,30 +261,18 @@ const StudentsPage = () => {
     const total = baseFilteredStudents.length;
     const missingDocs = baseFilteredStudents.filter(s => getDocStatus(s) === 'missing').length;
     const pendingDocs = baseFilteredStudents.filter(s => getDocStatus(s) === 'pending').length;
-    const confirmed = baseFilteredStudents.filter(s => s.status === 'Confirmed').length;
-    const attended = baseFilteredStudents.filter(s => s.status === 'Attended').length;
-    const converted = baseFilteredStudents.filter(s => s.status === 'Converted').length;
+    const verifiedStudents = baseFilteredStudents.filter(s => getVerificationStatus(s) === 'Verified').length;
+    const unverifiedStudents = baseFilteredStudents.filter(s => getVerificationStatus(s) === 'Pending' || getVerificationStatus(s) === 'UnderReview').length;
 
     return {
       total,
       missingDocs,
       pendingDocs,
-      confirmed,
-      attended,
-      converted,
-      confirmedPerc: total ? Math.round((confirmed / total) * 100) : 0,
-      attendedPerc: total ? Math.round((attended / total) * 100) : 0,
-      convRate: total ? Math.round((converted / total) * 100) : 0
+      verifiedStudents,
+      unverifiedStudents,
+      verifiedPerc: total ? Math.round((verifiedStudents / total) * 100) : 0
     };
-  }, [baseFilteredStudents]);
-
-  const stageCounts = useMemo(() => {
-    const counts = { all: baseFilteredStudents.length };
-    STAGES.forEach(stage => {
-      counts[stage] = baseFilteredStudents.filter(s => s.status === stage).length;
-    });
-    return counts;
-  }, [baseFilteredStudents]);
+  }, [baseFilteredStudents, getDocStatus]);
 
   const uniqueCountries = useMemo(() => {
     const countries = new Set();
@@ -166,8 +283,6 @@ const StudentsPage = () => {
     });
     return Array.from(countries);
   }, [students]);
-
-  // Helper Functions
 
   const getEventName = (eventId) => {
     const event = events.find(e => e.id === eventId || e._id === eventId);
@@ -200,20 +315,21 @@ const StudentsPage = () => {
   };
 
   const getAgentName = (agentId) => {
-    if (!agentId) return 'Admin';
+    if (!agentId) return 'Admin / Direct';
+    if (typeof agentId === 'object' && agentId !== null) return agentId.name || 'Admin';
     const agent = agents.find(a => a.id === agentId || a._id === agentId);
     return agent?.name || 'Unknown Agent';
   };
 
   const getInitials = (name) => {
-    if (!name) return '??';
+    if (!name || name === 'N/A') return '??';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const handleStatusChange = async (studentId, newStatus) => {
     try {
       await updateStudentStatus(studentId, newStatus);
-      toast.success(`Status updated to ${newStatus}`);
+      toast.success(`Pipeline status updated to ${newStatus}`);
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
@@ -221,11 +337,29 @@ const StudentsPage = () => {
   };
 
   const handleVerifyDocument = async (studentId, docId, status) => {
+    let remarks = '';
+    const sLower = (status || '').toLowerCase();
+    if (sLower.includes('correction')) {
+      remarks = prompt('Enter correction reason / instructions for agent:');
+      if (remarks === null) return;
+      if (!remarks.trim()) {
+        toast.error('Remarks are required when requesting correction');
+        return;
+      }
+    } else if (sLower === 'rejected') {
+      remarks = prompt('Enter reason for document rejection:');
+      if (remarks === null) return;
+      if (!remarks.trim()) {
+        toast.error('Remarks are required when rejecting a document');
+        return;
+      }
+    }
+
     try {
-      await verifyStudentDocument(studentId, docId, { status, remarks: `${status.charAt(0).toUpperCase() + status.slice(1)} by admin` });
-      toast.success(`Document ${status}`);
+      await verifyStudentDocument(studentId, docId, { status, remarks });
+      toast.success(`Document marked as ${status}`);
     } catch (error) {
-      toast.error(`Failed to ${status} document`);
+      toast.error(`Failed to update document status`);
     }
   };
 
@@ -250,270 +384,506 @@ const StudentsPage = () => {
   return (
     <div className="p-6 font-sans bg-[#F9FAFB] min-h-screen">
       {/* Top Row */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Student Management</h1>
           <p className="text-sm text-[#6B7280] mt-0.5">
-            {baseFilteredStudents.length.toLocaleString()} students
-            {eventFilter !== 'all' ? ` in ${getEventName(eventFilter)}` : ' across all events'}
+            {baseFilteredStudents.length.toLocaleString()} students across all events and verification states
           </p>
         </div>
         <div className="flex gap-2">
           <button
-            className="inline-flex items-center text-xs font-semibold h-10 px-4 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all hover:text-[#042C53]"
-            onClick={() => toast.info('Export started...')}>
+            className="inline-flex items-center text-xs font-semibold h-10 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-all hover:text-[#042C53]"
+            onClick={() => toast.info('Export started...')}
+          >
             <Download size={14} className="mr-2" /> Export
           </button>
-          {/* <button
-            className="inline-flex items-center gap-2 text-xs font-semibold h-10 px-4 rounded-lg border border-[#FAC775] bg-[#FAEEDA] text-[#633806] transition-all hover:bg-[#FAC775]"
-            onClick={() => toast.info('Stale students flagged')}>
-            <Flag size={14} /> Flag stale <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
-          </button> */}
           <button
             className="flex items-center gap-2 text-xs font-bold h-10 px-5 rounded-lg bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10 transition-all active:scale-95"
-            onClick={() => setShowAddModal(true)}>
-            <Plus size={14} /> Add student
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus size={14} /> Add Student
           </button>
         </div>
       </div>
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
-        {[
-          { label: 'Total Students', val: kpis.total, sub: eventFilter !== 'all' ? 'Event reach' : 'Global reach', color: '#0C447C' },
-          { label: 'Doc Pending', val: kpis.pendingDocs, sub: 'Needs verification', color: '#EF9F27' },
-          { label: 'Confirmed', val: kpis.confirmed, sub: `${kpis.confirmedPerc}% of current`, color: '#3C3489' },
-          { label: 'Attended', val: kpis.attended, sub: `${kpis.attendedPerc}% of current`, color: '#27500A' },
-          { label: 'Converted', val: kpis.converted, sub: `${kpis.convRate}% conv. rate`, color: '#085041' }
-        ].map((kpi, i) => (
-          <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm">
-            <div className="text-[10px] text-[#6B7280] mb-1.5 uppercase font-bold tracking-wider">{kpi.label}</div>
-            <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpi.val.toLocaleString()}</div>
-            <div className="text-[10px] mt-1 font-semibold" style={{ color: kpi.color }}>{kpi.sub}</div>
+      {/* Tabs: All Students vs Verification Queue */}
+      <div className="flex border-b border-slate-200 mb-6 gap-6">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={cn(
+            "pb-3 text-sm font-bold transition-all relative",
+            activeTab === 'all'
+              ? "text-[#042C53] border-b-2 border-[#042C53]"
+              : "text-[#6B7280] hover:text-[#111827]"
+          )}
+        >
+          All Students
+          <span className="ml-2 px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-slate-700">
+            {students.length}
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('queue')}
+          className={cn(
+            "pb-3 text-sm font-bold transition-all relative flex items-center gap-2",
+            activeTab === 'queue'
+              ? "text-[#042C53] border-b-2 border-[#042C53]"
+              : "text-[#6B7280] hover:text-[#111827]"
+          )}
+        >
+          <Shield className="w-4 h-4" />
+          Verification Queue
+          <span className="px-2 py-0.5 rounded-full text-[11px] bg-amber-100 text-amber-800 font-bold">
+            Queue
+          </span>
+        </button>
+      </div>
+
+      {activeTab === 'all' ? (
+        <>
+          {/* KPI Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+            {[
+              { label: 'Total Students', val: kpis.total, sub: 'Global reach', color: '#0C447C' },
+              { label: 'Verified Students', val: kpis.verifiedStudents, sub: `${kpis.verifiedPerc}% verified`, color: '#085041' },
+              { label: 'Pending Verification', val: kpis.unverifiedStudents, sub: 'Requires review', color: '#EF9F27' },
+              { label: 'Missing Docs', val: kpis.missingDocs, sub: 'Incomplete documents', color: '#791F1F' },
+              { label: 'Doc Pending', val: kpis.pendingDocs, sub: 'Needs verification', color: '#3C3489' }
+            ].map((kpi, i) => (
+              <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm">
+                <div className="text-[10px] text-[#6B7280] mb-1.5 uppercase font-bold tracking-wider">{kpi.label}</div>
+                <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpi.val.toLocaleString()}</div>
+                <div className="text-[10px] mt-1 font-semibold" style={{ color: kpi.color }}>{kpi.sub}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Pipeline Strip */}
-      {/* <div className="flex mb-6 rounded-xl overflow-hidden border border-[#E5E7EB] bg-white shadow-sm">
-        <div 
-          className={`flex-1 px-4 py-3.5 cursor-pointer border-r border-[#F3F4F6] transition-all flex flex-col ${curStage === 'all' ? 'bg-[#F3F4F6] border-b-2 border-[#042C53]' : 'hover:bg-[#F9FAFB]'}`} 
-          onClick={() => setCurStage('all')}
-        >
-          <div className="w-2 h-2 rounded-full mb-2 bg-[#888780]"></div>
-          <div className="text-lg font-bold text-[#111827] font-['Outfit']">{stageCounts.all}</div>
-          <div className="text-[10px] text-[#6B7280] font-semibold">All students</div>
-        </div>
-        {STAGES.map(stage => (
-          <div 
-            key={stage} 
-            className={`flex-1 px-4 py-3.5 cursor-pointer border-r border-[#F3F4F6] last:border-r-0 transition-all flex flex-col ${curStage === stage ? 'bg-[#F3F4F6] border-b-2 border-[#042C53]' : 'hover:bg-[#F9FAFB]'}`} 
-            onClick={() => setCurStage(stage)}
-          >
-            <div className="w-2 h-2 rounded-full mb-2" style={{ background: STAGE_COLORS[stage] }}></div>
-            <div className="text-lg font-bold text-[#111827] font-['Outfit']">{stageCounts[stage]}</div>
-            <div className="text-[10px] text-[#6B7280] font-semibold">{stage}</div>
+          {/* Controls Bar */}
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+              <input
+                type="text"
+                placeholder="Search by student name, email, or phone…"
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-[#D1D5DB] outline-none focus:border-[#042C53] focus:ring-2 focus:ring-[#042C53]/5 transition-all bg-white"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <select
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[140px] outline-none"
+              value={eventFilter}
+              onChange={(e) => setEventFilter(e.target.value)}
+            >
+              <option value="all">All Events</option>
+              {events.map(ev => (
+                <option key={ev.id || ev._id} value={ev.id || ev._id}>{ev.title}</option>
+              ))}
+            </select>
+            <select
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
+              value={universityFilter}
+              onChange={(e) => setUniversityFilter(e.target.value)}
+            >
+              <option value="all">All Universities</option>
+              {universities?.map(u => (
+                <option key={u.id || u._id} value={u.id || u._id}>{u.name}</option>
+              ))}
+            </select>
+            <select
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[130px] outline-none"
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+            >
+              <option value="all">All Countries</option>
+              {uniqueCountries.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <select
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
+              value={verificationFilter}
+              onChange={(e) => setVerificationFilter(e.target.value)}
+            >
+              <option value="all">All Verification</option>
+              <option value="Pending">Pending Verification</option>
+              <option value="UnderReview">Under Review</option>
+              <option value="Verified">Verified</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+            <select
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[120px] outline-none"
+              value={docFilter}
+              onChange={(e) => setDocFilter(e.target.value)}
+            >
+              <option value="all">All Docs</option>
+              <option value="complete">Complete</option>
+              <option value="pending">Pending</option>
+              <option value="missing">Missing</option>
+            </select>
+
+            <div className="flex bg-white border border-slate-200 rounded-xl p-1 gap-1">
+              <button
+                onClick={() => setDisplayMode('table')}
+                className={cn(
+                  "h-8 w-8 flex items-center justify-center p-0 rounded-lg transition-all",
+                  displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#0C447C]"
+                )}
+                title="Table view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setDisplayMode('grid')}
+                className={cn(
+                  "h-8 w-8 flex items-center justify-center p-0 rounded-lg transition-all",
+                  displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#0C447C]"
+                )}
+                title="Grid view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        ))}
-      </div> */}
 
-      {/* Controls */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="relative flex-1 min-w-[250px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-          <input
-            type="text"
-            placeholder="Search by name, email, or phone…"
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-[#D1D5DB] outline-none focus:border-[#042C53] focus:ring-2 focus:ring-[#042C53]/5 transition-all"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <select
-          className="text-sm px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
-          value={eventFilter}
-          onChange={(e) => setEventFilter(e.target.value)}
-        >
-          <option value="all">All Events</option>
-          {events.map(ev => (
-            <option key={ev.id || ev._id} value={ev.id || ev._id}>{ev.title}</option>
-          ))}
-        </select>
-        <select
-          className="text-sm px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
-          value={countryFilter}
-          onChange={(e) => setCountryFilter(e.target.value)}
-        >
-          <option value="all">All Countries</option>
-          {uniqueCountries.map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <select
-          className="text-sm px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
-          value={docFilter}
-          onChange={(e) => setDocFilter(e.target.value)}
-        >
-          <option value="all">All Doc Status</option>
-          <option value="complete">Complete</option>
-          <option value="pending">Pending</option>
-        </select>
-
-        <div className="flex bg-white border border-slate-200 rounded-xl p-1 gap-1">
-          <button
-            onClick={() => setDisplayMode('table')}
-            className={cn(
-              "h-8 w-8 flex items-center justify-center p-0 rounded-lg transition-all",
-              displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#0C447C] transition-colors"
-            )}
-          >
-            <List className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setDisplayMode('grid')}
-            className={cn(
-              "h-8 w-8 flex items-center justify-center p-0 rounded-lg transition-all",
-              displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-[#0C447C] transition-colors"
-            )}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content View */}
-      {displayMode === 'table' ? (
-        <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[22%]">Student</th>
-                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[15%]">Event</th>
-                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Country</th>
-                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[14%]">Pipeline Status</th>
-                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Documents</th>
-                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Agent</th>
-                <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[13%]">Registered</th>
-                <th className="w-[5%]"></th>
-              </tr>
-            </thead>
-            <tbody>
+          {/* Table / Grid View */}
+          {displayMode === 'table' ? (
+            <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[20%]">Student</th>
+                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">University</th>
+                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Event</th>
+                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[10%]">Country</th>
+                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[11%]">Pipeline</th>
+                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Verification</th>
+                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[9%]">Documents</th>
+                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[9%]">Agent</th>
+                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[9%]">Registered</th>
+                    <th className="w-[5%]"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan="10" className="text-center py-16 text-[#6B7280]">
+                        <User size={48} className="mx-auto mb-4 opacity-20" />
+                        <p className="font-semibold text-sm">No students match the current filters</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStudents.map(s => {
+                      const docStatus = getDocStatus(s);
+                      const verStatus = getVerificationStatus(s);
+                      return (
+                        <tr
+                          key={s.id || s._id}
+                          className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors"
+                          onClick={() => setSelectedStudentId(s.id || s._id)}
+                        >
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-[#E6F1FB] text-[#0C447C] shrink-0">
+                                {getInitials(getStudentName(s))}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-[#111827] truncate">{getStudentName(s)}</div>
+                                <div className="text-[10px] text-[#6B7280] truncate">{getStudentValue(s, 'email', 'Email Address') !== 'N/A' ? getStudentValue(s, 'email', 'Email Address') : 'No email'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-xs truncate max-w-[130px] font-medium text-slate-700" title={getUniversityName(s)}>
+                            {getUniversityName(s)}
+                          </td>
+                          <td className="px-4 py-3.5 text-xs truncate max-w-[120px]">{getEventName(s.eventId)}</td>
+                          <td className="px-4 py-3.5 text-xs">{getStudentValue(s, 'country', 'Country of Interest')}</td>
+                          <td className="px-4 py-3.5">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
+                              {s.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {getVerificationBadge(verStatus)}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {docStatus === 'complete' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#EAF3DE] text-[#27500A]">Complete</span>}
+                            {docStatus === 'missing' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FCEBEB] text-[#791F1F]">Missing</span>}
+                            {docStatus === 'pending' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FAEEDA] text-[#633806]">Pending</span>}
+                          </td>
+                          <td className="px-4 py-3.5 text-xs truncate max-w-[100px]">{getAgentName(s.agentId).split(' ')[0]}</td>
+                          <td className="px-4 py-3.5 text-xs text-[#6B7280]">{new Date(s.createdAt || s.submittedAt).toLocaleDateString()}</td>
+                          <td className="px-4 py-3.5 text-right">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/admin/students/${s.id || s._id}`);
+                              }}
+                              className="w-7 h-7 rounded-lg border border-[#D1D5DB] flex items-center justify-center text-[#6B7280] hover:text-[#042C53] hover:border-[#042C53] transition-all"
+                              title="View student profile"
+                            >
+                              <ChevronRight size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {filteredStudents.length === 0 ? (
-                <tr>
-                  <td colSpan="8" className="text-center py-16 text-[#6B7280]">
-                    <User size={48} className="mx-auto mb-4 opacity-20" />
-                    <p>No students match the current filters</p>
-                  </td>
-                </tr>
+                <div className="col-span-full text-center py-16 text-[#6B7280] bg-white border border-[#E5E7EB] rounded-xl">
+                  <User size={48} className="mx-auto mb-4 opacity-20" />
+                  <p>No students match the current filters</p>
+                </div>
               ) : (
                 filteredStudents.map(s => {
                   const docStatus = getDocStatus(s);
+                  const verStatus = getVerificationStatus(s);
                   return (
-                    <tr
+                    <div
                       key={s.id || s._id}
-                      className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors"
+                      className="bg-white border border-[#E5E7EB] rounded-2xl p-5 hover:border-[#042C53] hover:shadow-md transition-all cursor-pointer group"
                       onClick={() => setSelectedStudentId(s.id || s._id)}
                     >
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-[#E6F1FB] text-[#0C447C]">
-                            {getInitials(getStudentName(s))}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-bold text-[#111827] truncate">{getStudentName(s)}</div>
-                            <div className="text-[10px] text-[#6B7280] truncate">{getStudentValue(s, 'email', 'Email Address') !== 'N/A' ? getStudentValue(s, 'email', 'Email Address') : 'No email provided'}</div>
-                          </div>
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold bg-[#E6F1FB] text-[#0C447C] ring-4 ring-[#E6F1FB]/30">
+                          {getInitials(getStudentName(s))}
                         </div>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs">{getEventName(s.eventId)}</td>
-                      <td className="px-4 py-3.5 text-xs">{getStudentValue(s, 'country', 'Country of Interest')}</td>
-                      <td className="px-4 py-3.5">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
-                          {s.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        {docStatus === 'complete' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#EAF3DE] text-[#27500A]">Complete</span>}
-                        {docStatus === 'missing' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FCEBEB] text-[#791F1F]">Missing</span>}
-                        {docStatus === 'pending' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FAEEDA] text-[#633806]">Pending</span>}
-                      </td>
-                      <td className="px-4 py-3.5 text-xs">{getAgentName(s.agentId).split(' ')[0]}</td>
-                      <td className="px-4 py-3.5 text-xs">{new Date(s.createdAt || s.submittedAt).toLocaleDateString()}</td>
-                      <td className="px-4 py-3.5">
-                        <div className="w-7 h-7 rounded-lg border border-[#D1D5DB] flex items-center justify-center text-[#6B7280] hover:text-[#111827] hover:border-[#111827] transition-all">
-                          <ChevronRight size={14} />
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
+                            {s.status}
+                          </span>
+                          {getVerificationBadge(verStatus)}
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+
+                      <div className="mb-4">
+                        <h3 className="font-bold text-[#111827] text-base group-hover:text-[#042C53] transition-colors line-clamp-1">{getStudentName(s)}</h3>
+                        <p className="text-xs text-[#6B7280] mt-0.5 truncate">{getStudentValue(s, 'email', 'Email Address')}</p>
+                      </div>
+
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
+                          <GraduationCap size={12} className="text-[#9CA3AF]" />
+                          <span className="truncate">{getUniversityName(s)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
+                          <Flag size={12} className="text-[#9CA3AF]" />
+                          <span>{getStudentValue(s, 'country', 'Country') || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
+                          <FileText size={12} className="text-[#9CA3AF]" />
+                          <span className="truncate">{getEventName(s.eventId)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
+                          <User size={12} className="text-[#9CA3AF]" />
+                          <span>Agent: {getAgentName(s.agentId)}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-[#F3F4F6] flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">{new Date(s.createdAt || s.submittedAt).toLocaleDateString()}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/admin/students/${s.id || s._id}`);
+                          }}
+                          className="text-[#042C53] group-hover:translate-x-1 transition-transform"
+                          title="Open Student Profile"
+                        >
+                          <ArrowUpRight size={14} />
+                        </button>
+                      </div>
+                    </div>
                   );
                 })
               )}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {filteredStudents.length === 0 ? (
-            <div className="col-span-full text-center py-16 text-[#6B7280] bg-white border border-[#E5E7EB] rounded-xl">
-              <User size={48} className="mx-auto mb-4 opacity-20" />
-              <p>No students match the current filters</p>
             </div>
-          ) : (
-            filteredStudents.map(s => {
-              const docStatus = getDocStatus(s);
-              return (
-                <div
-                  key={s.id || s._id}
-                  className="bg-white border border-[#E5E7EB] rounded-2xl p-5 hover:border-[#042C53] hover:shadow-md transition-all cursor-pointer group"
-                  onClick={() => setSelectedStudentId(s.id || s._id)}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold bg-[#E6F1FB] text-[#0C447C] ring-4 ring-[#E6F1FB]/30">
-                      {getInitials(getStudentName(s))}
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
-                        {s.status}
-                      </span>
-                      {docStatus === 'pending' && <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-[#FAEEDA] text-[#633806]">Pending Verification</span>}
-                      {docStatus === 'missing' && <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-[#FCEBEB] text-[#791F1F]">Docs Missing</span>}
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <h3 className="font-bold text-[#111827] text-base group-hover:text-[#042C53] transition-colors line-clamp-1">{getStudentName(s)}</h3>
-                    <p className="text-xs text-[#6B7280] mt-0.5 truncate">{getStudentValue(s, 'email', 'Email Address')}</p>
-                  </div>
-
-                  <div className="space-y-2.5 mb-5">
-                    <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
-                      <Flag size={12} className="text-[#9CA3AF]" />
-                      <span>{getStudentValue(s, 'country', 'Country') || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
-                      <FileText size={12} className="text-[#9CA3AF]" />
-                      <span className="truncate">{getEventName(s.eventId)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
-                      <User size={12} className="text-[#9CA3AF]" />
-                      <span>Agent: {getAgentName(s.agentId)}</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-[#F3F4F6] flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">{new Date(s.createdAt || s.submittedAt).toLocaleDateString()}</span>
-                    <button className="text-[#042C53] group-hover:translate-x-1 transition-transform">
-                      <ArrowUpRight size={14} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
           )}
+        </>
+      ) : (
+        /* Verification Queue Tab */
+        <div className="space-y-4 animate-in fade-in duration-300">
+          {/* Queue Filter Bar */}
+          <div className="flex items-center justify-between gap-4 flex-wrap bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-sm">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-[#042C53]" /> Filter Queue:
+              </span>
+              <div className="flex gap-1.5">
+                {[
+                  { label: 'All States', val: 'all' },
+                  { label: 'Pending', val: 'Pending' },
+                  { label: 'Under Review', val: 'UnderReview' },
+                  { label: 'Rejected', val: 'Rejected' },
+                  { label: 'Verified', val: 'Verified' }
+                ].map(opt => (
+                  <button
+                    key={opt.val}
+                    onClick={() => {
+                      setQueueStatusFilter(opt.val);
+                      setQueuePage(1);
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                      queueStatusFilter === opt.val
+                        ? "bg-[#042C53] text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fetchQueue}
+                className="inline-flex items-center text-xs font-semibold h-9 px-3 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700"
+                title="Refresh Queue"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", loadingQueue && "animate-spin")} /> Refresh
+              </button>
+              <span className="text-xs text-slate-500 font-medium">
+                Total: <strong className="text-slate-900">{queueTotal}</strong> records
+              </span>
+            </div>
+          </div>
+
+          {/* Queue Table */}
+          <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm">
+            <table className="w-full border-collapse text-sm text-left">
+              <thead>
+                <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[25%]">Student</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[15%]">Contact</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[12%]">Country</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[15%]">Verification Status</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[15%]">Agent</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider text-right w-[18%]">Verification Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F3F4F6]">
+                {loadingQueue ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-16 text-[#6B7280]">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#042C53] mx-auto mb-3"></div>
+                      <p className="font-semibold text-xs">Loading verification queue...</p>
+                    </td>
+                  </tr>
+                ) : queueStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-16 text-[#6B7280]">
+                      <Shield size={48} className="mx-auto mb-3 opacity-20 text-[#042C53]" />
+                      <p className="font-bold text-sm text-slate-800">No students in verification queue</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Students will appear here based on their verification status filter.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  queueStudents.map((qs) => {
+                    const vStatus = qs.verificationStatus || 'Pending';
+                    return (
+                      <tr key={qs.id || qs._id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-[#E6F1FB] text-[#0C447C] shrink-0">
+                              {getInitials(qs.name)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-[#111827] truncate">{qs.name || 'Unknown Student'}</div>
+                              <div className="text-[10px] text-[#6B7280] truncate">{qs.email || 'No email'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-slate-600">
+                          {qs.phone || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3.5 text-xs font-medium text-slate-700">
+                          {qs.country || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {getVerificationBadge(vStatus)}
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-slate-600">
+                          {getAgentName(qs.agentId || qs.agent)}
+                        </td>
+                        <td className="px-4 py-3.5 text-right space-x-2">
+                          {vStatus === 'Pending' && (
+                            <button
+                              disabled={queueActionLoading}
+                              onClick={() => handleQuickInitiate(qs.id || qs._id)}
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-[#042C53] text-white hover:bg-[#0C447C] transition-all shadow-sm"
+                            >
+                              Start Verification
+                            </button>
+                          )}
+                          {vStatus === 'UnderReview' && (
+                            <button
+                              onClick={() => navigate(`/admin/students/${qs.id || qs._id}`)}
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm"
+                            >
+                              Review & Decide
+                            </button>
+                          )}
+                          {vStatus === 'Rejected' && (
+                            <button
+                              disabled={queueActionLoading}
+                              onClick={() => handleQuickInitiate(qs.id || qs._id)}
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition-all shadow-sm"
+                            >
+                              Re-initiate
+                            </button>
+                          )}
+                          <button
+                            onClick={() => navigate(`/admin/students/${qs.id || qs._id}`)}
+                            className="px-2 py-1 text-xs font-semibold rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-all"
+                            title="View student profile"
+                          >
+                            Profile
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+
+            {/* Pagination Controls */}
+            {queueTotalPages > 1 && (
+              <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 bg-white">
+                <span>
+                  Showing page {queuePage} of {queueTotalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    disabled={queuePage <= 1 || loadingQueue}
+                    onClick={() => setQueuePage(p => Math.max(p - 1, 1))}
+                    className="px-3 py-1 rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50 font-semibold"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    disabled={queuePage >= queueTotalPages || loadingQueue}
+                    onClick={() => setQueuePage(p => Math.min(p + 1, queueTotalPages))}
+                    className="px-3 py-1 rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50 font-semibold"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Detail Panel */}
+      {/* Detail Slide-out Drawer */}
       {selectedStudent && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[1000] flex justify-end" onClick={() => setSelectedStudentId(null)}>
           <div
@@ -538,6 +908,20 @@ const StudentsPage = () => {
                 </span>
                 <button className="p-1.5 rounded-lg hover:bg-gray-100 text-[#6B7280]" onClick={() => setSelectedStudentId(null)}><X size={18} /></button>
               </div>
+            </div>
+
+            {/* Student Verification Summary Box */}
+            <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl mb-6 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] text-[#6B7280] font-bold uppercase tracking-wider">Student Verification</div>
+                <div className="mt-1">{getVerificationBadge(getVerificationStatus(selectedStudent))}</div>
+              </div>
+              <button
+                onClick={() => navigate(`/admin/students/${selectedStudent.id || selectedStudent._id}`)}
+                className="text-xs font-bold text-[#042C53] hover:underline flex items-center gap-1"
+              >
+                Manage <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             {getDocStatus(selectedStudent) === 'missing' && (
@@ -571,6 +955,7 @@ const StudentsPage = () => {
 
             <div className="grid grid-cols-2 gap-4 mb-6">
               {[
+                { label: 'Target University', val: getUniversityName(selectedStudent) },
                 { label: 'Preferred Country', val: getStudentValue(selectedStudent, 'country', 'Country of Interest') },
                 { label: 'Course Interest', val: getStudentValue(selectedStudent, 'courseInterested', 'Target Course') },
                 { label: 'Education', val: (() => { const val = getStudentValue(selectedStudent, 'education', 'Highest Qualification'); return val !== 'N/A' ? val : getStudentValue(selectedStudent, 'education', 'Education Level'); })() },
@@ -616,10 +1001,16 @@ const StudentsPage = () => {
                     </div>
                     {doc ? (
                       <div className="flex items-center gap-2">
-                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${doc.status === 'approved' ? 'bg-[#EAF3DE] text-[#27500A]' : doc.status === 'rejected' ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-[#FAEEDA] text-[#633806]'}`}>
-                          {doc.status}
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                          (doc.status || '').toLowerCase() === 'approved' ? 'bg-[#EAF3DE] text-[#27500A]' :
+                          (doc.status || '').toLowerCase().includes('correction') ? 'bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A]' :
+                          (doc.status || '').toLowerCase() === 'rejected' ? 'bg-[#FCEBEB] text-[#791F1F]' :
+                          (doc.status || '').toLowerCase() === 'underreview' ? 'bg-[#E6F1FB] text-[#0C447C]' :
+                          'bg-[#FAEEDA] text-[#633806]'
+                        }`}>
+                          {doc.status || 'Submitted'}
                         </span>
-                        {doc.status === 'pending' && (
+                        {(doc.status || '').toLowerCase() !== 'approved' && (
                           <div className="flex gap-1">
                             <button
                               className="px-2 py-1 text-[9px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50"
@@ -629,19 +1020,25 @@ const StudentsPage = () => {
                             </button>
                             <button
                               className="px-2 py-1 text-[9px] font-bold rounded-lg bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:bg-[#DCEFC0]"
-                              onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'approved')}
+                              onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'Approved')}
                             >
                               Approve
                             </button>
                             <button
+                              className="px-2 py-1 text-[9px] font-bold rounded-lg bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] hover:bg-[#FEF3C7]"
+                              onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'CorrectionRequired')}
+                            >
+                              Correction
+                            </button>
+                            <button
                               className="px-2 py-1 text-[9px] font-bold rounded-lg bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] hover:bg-[#FADADA]"
-                              onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'rejected')}
+                              onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'Rejected')}
                             >
                               Reject
                             </button>
                           </div>
                         )}
-                        {doc.status !== 'pending' && (
+                        {(doc.status || '').toLowerCase() === 'approved' && (
                           <button
                             className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all"
                             onClick={() => viewStudentDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id)}
@@ -669,31 +1066,18 @@ const StudentsPage = () => {
             </div>
 
             <div className="flex flex-wrap gap-2 pt-5 border-t border-[#F3F4F6]">
-              {/* <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => toast.success('Follow-up message sent')}>
-                <MessageSquare size={14} /> Message Student <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
-              </button> */}
-              <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => navigate(`/admin/students/${selectedStudent.id || selectedStudent._id}/edit`)}>
-                <Pencil size={14} /> Edit Student <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
+              <button
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg bg-[#042C53] text-white hover:bg-[#0C447C] transition-all"
+                onClick={() => navigate(`/admin/students/${selectedStudent.id || selectedStudent._id}`)}
+              >
+                <Shield size={14} /> Full Profile & Verification <ArrowUpRight className="w-3.5 h-3.5 ml-1" />
               </button>
-              <button className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all" onClick={() => {
-                const agent = agents.find(a => a.id === selectedStudent.agentId || a._id === selectedStudent.agentId);
-                if (agent && agent.email) {
-                  window.location.href = `mailto:${agent.email}?subject=Alert regarding student: ${getStudentName(selectedStudent)}&body=Hello ${agent.name},%0D%0A%0D%0APlease check the status of your student ${getStudentName(selectedStudent)}.%0D%0A%0D%0AThank you.`;
-                  toast.success('Opened email client to alert agent');
-                } else {
-                  toast.error('Agent contact information not found');
-                }
-              }}>
-                <Bell size={14} /> Alert Agent <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
+              <button
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all"
+                onClick={() => navigate(`/admin/students/${selectedStudent.id || selectedStudent._id}/edit`)}
+              >
+                <Pencil size={14} /> Edit
               </button>
-              <div className="w-full flex gap-2">
-                <button className="flex-1 px-4 py-2 text-[11px] font-bold rounded-lg bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:opacity-90 transition-all" onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Attended')}>
-                  Mark Attended
-                </button>
-                <button className="flex-1 inline-flex items-center justify-center px-4 py-2 text-[11px] font-bold rounded-lg bg-[#042C53] text-[#B5D4F4] hover:opacity-90 transition-all" onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Converted')}>
-                  Mark Converted <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
-                </button>
-              </div>
               <button
                 className="w-full mt-2 px-4 py-2 text-[11px] font-bold rounded-lg bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] hover:bg-[#F7C1C1] transition-all"
                 onClick={() => {
@@ -710,6 +1094,7 @@ const StudentsPage = () => {
           </div>
         </div>
       )}
+
       {/* Student Registration Modal */}
       <StudentRegistrationModal
         open={showAddModal}

@@ -41,8 +41,13 @@ const upload = multer({
 // All routes are protected
 router.use(protect);
 
-// Routes accessible by all authenticated users
-router.get('/', getAgents);
+// Agent own-profile route (mounted before /:id)
+router.get('/me', (req, res) => {
+  res.status(200).json(req.user.toJSON ? req.user.toJSON() : req.user);
+});
+
+// Admin only routes
+router.get('/', restrictTo('admin'), getAgents);
 router.get('/:id', getAgent);
 
 // Admin only routes

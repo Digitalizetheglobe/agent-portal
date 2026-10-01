@@ -10,7 +10,12 @@ import {
   ChevronRight,
   FileText,
   LifeBuoy,
-  Settings
+  Settings,
+  Building2,
+  BookOpen,
+  FileCheck,
+  CreditCard,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -24,7 +29,12 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     { to: '/admin/agents', icon: Users, label: 'Agents' },
     { to: '/admin/events', icon: Calendar, label: 'Events' },
     { to: '/admin/students', icon: GraduationCap, label: 'Students' },
+    { to: '/admin/applications', icon: FileCheck, label: 'Applications' },
+    { to: '/admin/universities', icon: Building2, label: 'Universities' },
+    { to: '/admin/courses', icon: BookOpen, label: 'Courses' },
     { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
+    { to: '/admin/payoffs', icon: CreditCard, label: 'Payoffs' },
+    { to: '/admin/verification', icon: ShieldCheck, label: 'Verification' },
     { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
     { to: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
@@ -33,7 +43,10 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     { to: '/agent/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/agent/events-management', icon: CalendarCheck, label: 'Events Management' },
     { to: '/agent/students', icon: GraduationCap, label: 'Students' },
+    { to: '/agent/applications', icon: FileCheck, label: 'Applications' },
+    { to: '/agent/universities', icon: Building2, label: 'Universities' },
     { to: '/agent/invoices', icon: FileText, label: 'Invoices' },
+    { to: '/agent/payoffs', icon: CreditCard, label: 'Payoffs' },
     { to: '/agent/support', icon: LifeBuoy, label: 'Support' },
     { to: '/agent/settings', icon: Settings, label: 'Settings' },
   ];

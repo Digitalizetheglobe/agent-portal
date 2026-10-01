@@ -1,7 +1,7 @@
-const User = require('../models/User');
-const Event = require('../models/Event');
+const { Op } = require('sequelize');
+const { User, Event } = require('../models');
 const { sendEmail, templates } = require('../utils/email');
-const { putObject, getObject, generateStoragePath } = require('../utils/storage');
+const { putObject, getObject, deleteObject, generateStoragePath } = require('../utils/storage');
 const { v4: uuidv4 } = require('uuid');
 const { createNotification } = require('./notificationController');
 
@@ -10,7 +10,10 @@ const { createNotification } = require('./notificationController');
 // @access  Private
 exports.getAgents = async (req, res) => {
   try {
-    const agents = await User.find({ role: 'agent' }).sort({ createdAt: -1 });
+    const agents = await User.findAll({
+      where: { role: 'agent' },
+      order: [['createdAt', 'DESC']]
+    });
     res.status(200).json(agents.map(agent => agent.toJSON()));
   } catch (error) {
     console.error('Get agents error:', error);
@@ -23,10 +26,20 @@ exports.getAgents = async (req, res) => {
 
 // @desc    Get single agent
 // @route   GET /api/agents/:id
-// @access  Private
+// @access  Private (Admin or own agent profile)
 exports.getAgent = async (req, res) => {
   try {
-    const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
+    // If authenticated user is an agent, they can only view their own profile
+    if (req.user.role === 'agent' && req.params.id.toString() !== req.user.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        detail: 'Access denied'
+      });
+    }
+
+    const agent = await User.findOne({
+      where: { id: req.params.id, role: 'agent' }
+    });
 
     if (!agent) {
       return res.status(404).json({
@@ -54,10 +67,12 @@ exports.createAgent = async (req, res) => {
 
     // Check if email or userId already exists
     const existingUser = await User.findOne({
-      $or: [
-        { email: email.toLowerCase() },
-        ...(userId ? [{ userId }] : [])
-      ]
+      where: {
+        [Op.or]: [
+          { email: email.toLowerCase() },
+          ...(userId ? [{ userId }] : [])
+        ]
+      }
     });
 
     if (existingUser) {
@@ -67,7 +82,7 @@ exports.createAgent = async (req, res) => {
       });
     }
 
-    // Create agent — agents start unverified and require admin approval
+    // Create agent
     const agent = await User.create({
       name,
       email: email.toLowerCase(),
@@ -81,24 +96,27 @@ exports.createAgent = async (req, res) => {
       region,
       agencyName,
       businessRegistrationNumber,
-      fullAddress
+      fullAddress,
+      verificationDocuments: []
     });
 
     // Send welcome email
-    const emailTemplate = templates.welcomeAgent(name, userId);
-    await sendEmail(email, emailTemplate.subject, emailTemplate.html);
+    try {
+      const emailTemplate = templates.welcomeAgent(name, userId);
+      await sendEmail(email, emailTemplate.subject, emailTemplate.html);
+    } catch (emailErr) {
+      console.warn('Welcome email failed:', emailErr.message);
+    }
 
     res.status(201).json(agent.toJSON());
   } catch (error) {
     console.error('Create agent error:', error);
-    
-    if (error.code === 11000) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(400).json({
         success: false,
         detail: 'Email or User ID already exists'
       });
     }
-
     res.status(500).json({
       success: false,
       detail: error.message || 'Server error'
@@ -120,7 +138,10 @@ exports.createAdmin = async (req, res) => {
       });
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await User.findOne({
+      where: { email: email.toLowerCase() }
+    });
+
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -128,7 +149,6 @@ exports.createAdmin = async (req, res) => {
       });
     }
 
-    // Admins are always verified — no approval workflow needed
     const admin = await User.create({
       name,
       email: email.toLowerCase(),
@@ -143,7 +163,7 @@ exports.createAdmin = async (req, res) => {
     res.status(201).json(admin.toJSON());
   } catch (error) {
     console.error('Create admin error:', error);
-    if (error.code === 11000) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(400).json({ success: false, detail: 'Email already exists' });
     }
     res.status(500).json({ success: false, detail: error.message || 'Server error' });
@@ -157,7 +177,9 @@ exports.updateAgent = async (req, res) => {
   try {
     const { name, email, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress } = req.body;
 
-    const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
+    const agent = await User.findOne({
+      where: { id: req.params.id, role: 'agent' }
+    });
 
     if (!agent) {
       return res.status(404).json({
@@ -168,7 +190,9 @@ exports.updateAgent = async (req, res) => {
 
     // Check if email is being changed and already exists
     if (email && email.toLowerCase() !== agent.email) {
-      const existingEmail = await User.findOne({ email: email.toLowerCase() });
+      const existingEmail = await User.findOne({
+        where: { email: email.toLowerCase() }
+      });
       if (existingEmail) {
         return res.status(400).json({
           success: false,
@@ -205,7 +229,9 @@ exports.updateAgent = async (req, res) => {
 // @access  Private (Admin only)
 exports.deleteAgent = async (req, res) => {
   try {
-    const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
+    const agent = await User.findOne({
+      where: { id: req.params.id, role: 'agent' }
+    });
 
     if (!agent) {
       return res.status(404).json({
@@ -215,13 +241,16 @@ exports.deleteAgent = async (req, res) => {
     }
 
     // Remove agent from all events
-    await Event.updateMany(
-      {},
-      { $pull: { assignedAgents: agent._id } }
-    );
+    const events = await Event.findAll();
+    for (const event of events) {
+      if (Array.isArray(event.assignedAgents) && event.assignedAgents.some(a => a?.toString() === agent.id.toString())) {
+        event.assignedAgents = event.assignedAgents.filter(a => a?.toString() !== agent.id.toString());
+        await event.save();
+      }
+    }
 
     // Delete agent
-    await User.deleteOne({ _id: agent._id });
+    await agent.destroy();
 
     res.status(200).json({
       success: true,
@@ -250,7 +279,7 @@ exports.uploadVerificationDocument = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.user._id);
+    const user = await User.findByPk(req.user.id);
     
     if (!user || user.role !== 'agent') {
       return res.status(403).json({
@@ -266,7 +295,11 @@ exports.uploadVerificationDocument = async (req, res) => {
     const result = await putObject(storagePath, req.file.buffer, req.file.mimetype);
 
     // Add to verificationDocuments
-    user.verificationDocuments.push({
+    const docId = uuidv4();
+    const docs = Array.isArray(user.verificationDocuments) ? [...user.verificationDocuments] : [];
+    docs.push({
+      id: docId,
+      _id: docId,
       docType: docType || 'Other',
       fileUrl: result.path,
       fileName: req.file.originalname,
@@ -274,6 +307,7 @@ exports.uploadVerificationDocument = async (req, res) => {
       uploadedAt: new Date()
     });
 
+    user.verificationDocuments = docs;
     await user.save();
 
     res.status(200).json(user.toJSON());
@@ -293,7 +327,9 @@ exports.verifyAgent = async (req, res) => {
   try {
     const { isVerified, verificationStatus, remarks, documentId, documentStatus } = req.body;
     
-    const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
+    const agent = await User.findOne({
+      where: { id: req.params.id, role: 'agent' }
+    });
     
     if (!agent) {
       return res.status(404).json({
@@ -310,11 +346,15 @@ exports.verifyAgent = async (req, res) => {
       agent.verificationStatus = verificationStatus;
     }
 
+    let updatedDocType = 'document';
     if (documentId && documentStatus) {
-      const doc = agent.verificationDocuments.id(documentId);
+      const docs = Array.isArray(agent.verificationDocuments) ? [...agent.verificationDocuments] : [];
+      const doc = docs.find(d => d.id === documentId || d._id === documentId);
       if (doc) {
         doc.status = documentStatus;
         if (remarks) doc.remarks = remarks;
+        updatedDocType = doc.docType || 'document';
+        agent.verificationDocuments = docs;
       }
     } else if (remarks !== undefined) {
       agent.verificationRemarks = remarks;
@@ -325,23 +365,22 @@ exports.verifyAgent = async (req, res) => {
     // Notify agent about verification/document status change
     if (isVerified !== undefined) {
       await createNotification({
-        recipient: agent._id,
+        recipient: agent.id,
         title: isVerified ? 'Account Verified' : 'Account Unverified',
         message: isVerified 
           ? 'Congratulations! Your agency account has been verified.' 
           : 'Your account verification status has been updated.',
         type: isVerified ? 'success' : 'info',
-        relatedId: agent._id,
+        relatedId: agent.id,
         relatedModel: 'Agent'
       });
     } else if (documentId && documentStatus) {
-       const doc = agent.verificationDocuments.id(documentId);
-       await createNotification({
-        recipient: agent._id,
+      await createNotification({
+        recipient: agent.id,
         title: documentStatus === 'approved' ? 'Compliance Document Approved' : 'Compliance Document Rejected',
-        message: `Your ${doc?.docType || 'document'} has been ${documentStatus}.`,
+        message: `Your ${updatedDocType} has been ${documentStatus}.`,
         type: documentStatus === 'approved' ? 'success' : 'warning',
-        relatedId: agent._id,
+        relatedId: agent.id,
         relatedModel: 'Agent'
       });
     }
@@ -361,7 +400,9 @@ exports.verifyAgent = async (req, res) => {
 // @access  Private (Admin or Agent themselves)
 exports.downloadVerificationDocument = async (req, res) => {
   try {
-    const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
+    const agent = await User.findOne({
+      where: { id: req.params.id, role: 'agent' }
+    });
 
     if (!agent) {
       return res.status(404).json({
@@ -371,7 +412,7 @@ exports.downloadVerificationDocument = async (req, res) => {
     }
 
     // Check access (Admins can download all, agents only their own)
-    if (req.user.role === 'agent' && agent._id.toString() !== req.user._id.toString()) {
+    if (req.user.role === 'agent' && agent.id.toString() !== req.user.id.toString()) {
       return res.status(403).json({
         success: false,
         detail: 'Access denied'
@@ -379,7 +420,8 @@ exports.downloadVerificationDocument = async (req, res) => {
     }
 
     // Find document
-    const doc = agent.verificationDocuments.id(req.params.docId);
+    const docs = Array.isArray(agent.verificationDocuments) ? agent.verificationDocuments : [];
+    const doc = docs.find(d => d.id === req.params.docId || d._id === req.params.docId);
 
     if (!doc) {
       return res.status(404).json({
@@ -409,7 +451,7 @@ exports.downloadVerificationDocument = async (req, res) => {
 // @access  Private (Agent only)
 exports.deleteVerificationDocument = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const user = await User.findByPk(req.user.id);
     
     if (!user || user.role !== 'agent') {
       return res.status(403).json({
@@ -419,7 +461,8 @@ exports.deleteVerificationDocument = async (req, res) => {
     }
 
     // Find document
-    const doc = user.verificationDocuments.id(req.params.docId);
+    const docs = Array.isArray(user.verificationDocuments) ? [...user.verificationDocuments] : [];
+    const doc = docs.find(d => d.id === req.params.docId || d._id === req.params.docId);
 
     if (!doc) {
       return res.status(404).json({
@@ -432,8 +475,7 @@ exports.deleteVerificationDocument = async (req, res) => {
     await deleteObject(doc.fileUrl);
 
     // Remove from verificationDocuments
-    user.verificationDocuments.pull(req.params.docId);
-
+    user.verificationDocuments = docs.filter(d => d.id !== req.params.docId && d._id !== req.params.docId);
     await user.save();
 
     res.status(200).json(user.toJSON());
@@ -445,4 +487,3 @@ exports.deleteVerificationDocument = async (req, res) => {
     });
   }
 };
-
