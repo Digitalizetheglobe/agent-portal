@@ -297,7 +297,7 @@ export const invoiceAPI = {
   delete: (id) => api.delete(`/invoices/${id}`)
 };
 
-// Invoice Review APIs (Phase G)
+// Invoice Review APIs (Phase G & FA-2/FA-3)
 export const invoiceReviewAPI = {
   getAll: (params = {}) => api.get('/invoice-reviews', { params }),
   getByInvoiceId: (invoiceId) => api.get(`/invoice-reviews/${invoiceId}`),
@@ -305,7 +305,17 @@ export const invoiceReviewAPI = {
   setRate: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/rate`, data),
   approve: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/approve`, data),
   reject: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/reject`, data),
+  correction: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/correction`, data),
+  resubmit: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/resubmit`, data),
   getHistory: (invoiceId) => api.get(`/invoice-reviews/${invoiceId}/history`)
+};
+
+// Payoff APIs (FA-2 & FA-3)
+export const payoffAPI = {
+  getAll: (params = {}) => api.get('/payoffs', { params }),
+  getById: (id) => api.get(`/payoffs/${id}`),
+  settle: (id, data = {}) => api.patch(`/payoffs/${id}/settle`, data),
+  cancel: (id, data = {}) => api.patch(`/payoffs/${id}/cancel`, data)
 };
 
 // Student Verification APIs (Phase H)

@@ -61,6 +61,8 @@ const StudentsPage = () => {
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [displayMode, setDisplayMode] = useState('table');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   // Verification Queue State
   const [queueStudents, setQueueStudents] = useState([]);
@@ -256,6 +258,17 @@ const StudentsPage = () => {
     if (curStage === 'all') return baseFilteredStudents;
     return baseFilteredStudents.filter(s => s.status === curStage);
   }, [baseFilteredStudents, curStage]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedStudents = useMemo(
+    () => filteredStudents.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredStudents, currentPage]
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, eventFilter, countryFilter, universityFilter, docFilter, verificationFilter, curStage]);
 
   const kpis = useMemo(() => {
     const total = baseFilteredStudents.length;
@@ -574,7 +587,7 @@ const StudentsPage = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredStudents.map(s => {
+                    pagedStudents.map(s => {
                       const docStatus = getDocStatus(s);
                       const verStatus = getVerificationStatus(s);
                       return (
@@ -641,7 +654,7 @@ const StudentsPage = () => {
                   <p>No students match the current filters</p>
                 </div>
               ) : (
-                filteredStudents.map(s => {
+                pagedStudents.map(s => {
                   const docStatus = getDocStatus(s);
                   const verStatus = getVerificationStatus(s);
                   return (
@@ -703,6 +716,32 @@ const StudentsPage = () => {
                   );
                 })
               )}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {filteredStudents.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between text-xs text-slate-600 mb-6">
+              <span>
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredStudents.length)} of {filteredStudents.length.toLocaleString()} students
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage(currentPage - 1)}
+                  className="px-3 py-1 rounded border border-slate-200 bg-white disabled:opacity-40 hover:bg-slate-50 font-semibold"
+                >
+                  Previous
+                </button>
+                <span className="font-semibold">Page {currentPage} of {totalPages}</span>
+                <button
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage(currentPage + 1)}
+                  className="px-3 py-1 rounded border border-slate-200 bg-white disabled:opacity-40 hover:bg-slate-50 font-semibold"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </>

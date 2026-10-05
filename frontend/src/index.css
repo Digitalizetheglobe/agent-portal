@@ -120,3 +120,32 @@ code {
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
+
+/* FA-4.2 Financial Design Utilities */
+@layer utilities {
+    .financial-numeral {
+        font-family: 'Outfit', -apple-system, sans-serif;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .financial-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6B7280;
+    }
+
+    .btn-financial-action {
+        height: 2rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+        border-radius: 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 150ms ease-in-out;
+    }
+}

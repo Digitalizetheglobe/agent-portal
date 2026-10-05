@@ -23,11 +23,21 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Input } from '../../components/ui/input';
+import { Textarea } from '../../components/ui/textarea';
+import { Label } from '../../components/ui/label';
 import InvoiceModal from '../../components/modals/InvoiceModal';
 import { invoiceReviewAPI } from '../../utils/api';
+import { FinancialStatusBadge, FinancialStateHierarchy } from '../../components/common/FinancialStatusBadge';
+import {
+  formatCurrency,
+  formatFinancialDate,
+  formatFinancialDateTime,
+  formatPercentage
+} from '../../utils/financialFormatters';
+import { toast } from 'sonner';
 
 const InvoicesPage = () => {
-  const { invoices, fetchInvoices, loading } = useData();
+  const { invoices, fetchInvoices, payoffs, fetchPayoffs, loading } = useData();
   const { user } = useAuth();
 
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
@@ -37,11 +47,19 @@ const InvoicesPage = () => {
   const [reviewHistory, setReviewHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Correction and resubmission state
+  const [agentCorrectionRemarks, setAgentCorrectionRemarks] = useState('');
+  const [resubmitting, setResubmitting] = useState(false);
+  const [resubmitError, setResubmitError] = useState('');
+
   useEffect(() => {
     if (fetchInvoices) {
       fetchInvoices();
     }
-  }, [fetchInvoices]);
+    if (fetchPayoffs) {
+      fetchPayoffs();
+    }
+  }, [fetchInvoices, fetchPayoffs]);
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter(inv =>
@@ -50,28 +68,57 @@ const InvoicesPage = () => {
     );
   }, [invoices, searchTerm]);
 
+  // Financial summary metrics aligned with true workflow (FA-4.3)
   const stats = useMemo(() => {
     const total = invoices.length;
-    const pending = invoices.filter(i => i.status === 'Pending');
-    const paid = invoices.filter(i => i.status === 'Paid');
-    const rejected = invoices.filter(i => i.status === 'Rejected');
 
-    const pendingAmount = pending.reduce((sum, i) => sum + (i.amount || 0), 0);
-    const paidAmount = paid.reduce((sum, i) => sum + (i.amount || 0), 0);
+    // 1. In Review: PendingReview, Resubmitted, UnderReview
+    const inReviewInvoices = invoices.filter(i =>
+      ['PendingReview', 'Resubmitted', 'UnderReview'].includes(i.financeReviewStatus)
+    );
+
+    // 2. Action Required: CorrectionRequired
+    const actionRequiredInvoices = invoices.filter(i =>
+      i.financeReviewStatus === 'CorrectionRequired'
+    );
+
+    // 3. Approved invoices
+    const approvedInvoices = invoices.filter(i => i.financeReviewStatus === 'Approved');
+
+    // 4. Payoff statistics from authoritative payoffs
+    const agentPayoffs = payoffs || [];
+    const pendingPayoffs = agentPayoffs.filter(p => p.status === 'PENDING');
+    const settledPayoffs = agentPayoffs.filter(p => p.status === 'SETTLED');
+
+    const pendingPayoutAmount = pendingPayoffs.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
+    const settledPayoutAmount = settledPayoffs.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
 
     return {
       total,
-      pendingCount: pending.length,
-      pendingAmount,
-      paidAmount,
-      rejectedCount: rejected.length
+      inReviewCount: inReviewInvoices.length,
+      actionRequiredCount: actionRequiredInvoices.length,
+      approvedCount: approvedInvoices.length,
+      pendingPayoutCount: pendingPayoffs.length,
+      pendingPayoutAmount,
+      settledPayoutCount: settledPayoffs.length,
+      settledPayoutAmount
     };
-  }, [invoices]);
+  }, [invoices, payoffs]);
+
+  // Authoritative payoff associated with the modal's selected invoice
+  const selectedAssociatedPayoff = useMemo(() => {
+    if (!selectedInvoice) return null;
+    return (payoffs || []).find(
+      p => (p.invoiceId?._id || p.invoiceId?.id || p.invoiceId) === (selectedInvoice?._id || selectedInvoice?.id)
+    );
+  }, [selectedInvoice, payoffs]);
 
   const handleOpenView = async (invoice) => {
     setSelectedInvoice(invoice);
     setIsViewOpen(true);
     setReviewHistory([]);
+    setAgentCorrectionRemarks(invoice.remarks || '');
+    setResubmitError('');
     if (invoice.id) {
       setLoadingHistory(true);
       try {
@@ -86,30 +133,24 @@ const InvoicesPage = () => {
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'Paid':
-        return <Badge className="bg-[#EAF3DE] text-[#27500A] border-[#C0DD97] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full"><CheckCircle2 className="w-3 h-3 mr-1" /> Paid</Badge>;
-      case 'Pending':
-        return <Badge className="bg-[#FAEEDA] text-[#633806] border-[#FAC775] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full"><Clock className="w-3 h-3 mr-1" /> Pending</Badge>;
-      case 'Rejected':
-        return <Badge className="bg-[#FCEBEB] text-[#791F1F] border-[#F7C1C1] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full"><XCircle className="w-3 h-3 mr-1" /> Rejected</Badge>;
-      default:
-        return <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">{status}</Badge>;
-    }
-  };
-
-  const getReviewBadge = (status) => {
-    switch (status) {
-      case 'Approved':
-        return <Badge className="bg-[#EAF3DE] text-[#27500A] border-[#C0DD97] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"><CheckCircle2 className="w-3 h-3 mr-1" /> Approved</Badge>;
-      case 'UnderReview':
-        return <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"><Clock className="w-3 h-3 mr-1" /> Under Review</Badge>;
-      case 'Rejected':
-        return <Badge className="bg-[#FCEBEB] text-[#791F1F] border-[#F7C1C1] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"><XCircle className="w-3 h-3 mr-1" /> Rejected</Badge>;
-      case 'PendingReview':
-      default:
-        return <Badge className="bg-[#FAEEDA] text-[#633806] border-[#FAC775] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"><Clock className="w-3 h-3 mr-1" /> Pending Review</Badge>;
+  const handleResubmit = async () => {
+    if (!selectedInvoice?.id) return;
+    setResubmitting(true);
+    setResubmitError('');
+    try {
+      const res = await invoiceReviewAPI.resubmit(selectedInvoice.id, {
+        remarks: agentCorrectionRemarks.trim() || undefined
+      });
+      toast.success('Invoice resubmitted for finance review successfully');
+      setSelectedInvoice(res.data);
+      if (fetchInvoices) await fetchInvoices();
+    } catch (err) {
+      console.error('Failed to resubmit invoice:', err);
+      const msg = err.response?.data?.detail || err.message || 'Failed to resubmit invoice';
+      setResubmitError(msg);
+      toast.error('Resubmission failed', { description: msg });
+    } finally {
+      setResubmitting(false);
     }
   };
 
@@ -120,9 +161,9 @@ const InvoicesPage = () => {
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Applications</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Amount</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Finance Review</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payment Status</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Gross Amount</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Financial Lifecycle</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payoff Status</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Raised At</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Action</TableHead>
           </TableRow>
@@ -140,31 +181,52 @@ const InvoicesPage = () => {
           ) : (
             list.map((invoice) => {
               const appCount = invoice.applications?.length || invoice.studentIds?.length || 0;
+              const linkedPayoff = (payoffs || []).find(
+                p => (p.invoiceId?._id || p.invoiceId?.id || p.invoiceId) === (invoice._id || invoice.id)
+              );
+
               return (
                 <TableRow key={invoice.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0">
                   <TableCell className="px-6 py-4 font-bold text-[#111827]">
-                    {invoice.invoiceNumber}
+                    <span className="font-mono text-xs">{invoice.invoiceNumber}</span>
                   </TableCell>
                   <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center">
                     {appCount} {appCount === 1 ? 'Application' : 'Applications'}
                   </TableCell>
-                  <TableCell className="px-6 py-4 font-bold text-[#111827] text-center">
-                    {invoice.amount > 0 ? `$${Number(invoice.amount).toLocaleString()}` : <span className="text-xs text-amber-600 font-medium">Pending Review</span>}
+                  <TableCell className="px-6 py-4 font-bold text-[#111827] text-center font-['Outfit'] tabular-nums">
+                    {invoice.amount > 0 ? (
+                      formatCurrency(invoice.amount, invoice.currency)
+                    ) : (
+                      <span className="text-xs text-amber-600 font-medium">Pending Review</span>
+                    )}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
-                    {getReviewBadge(invoice.financeReviewStatus || 'PendingReview')}
+                    <FinancialStateHierarchy
+                      reviewStatus={invoice.financeReviewStatus || 'PendingReview'}
+                      payoffStatus={linkedPayoff?.status}
+                      settledAt={linkedPayoff?.settledAt}
+                      orientation="horizontal"
+                      size="sm"
+                    />
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
-                    {getStatusBadge(invoice.status || 'Pending')}
+                    {linkedPayoff ? (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <FinancialStatusBadge status={linkedPayoff.status} size="sm" />
+                        <span className="text-[10px] text-gray-500 font-mono">{linkedPayoff.payoffNumber}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 font-medium">Pre-Payoff</span>
+                    )}
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center">
-                    {invoice.raisedAt ? format(new Date(invoice.raisedAt), 'MMM dd, yyyy') : 'N/A'}
+                  <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center font-['Outfit'] tabular-nums">
+                    {formatFinancialDate(invoice.raisedAt)}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 text-[11px] font-bold text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB]"
+                      className="btn-financial-action text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB]"
                       onClick={() => handleOpenView(invoice)}
                     >
                       <FileText className="w-3.5 h-3.5 mr-1" /> View Invoice
@@ -185,7 +247,7 @@ const InvoicesPage = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Invoice Management</h1>
-          <p className="text-sm font-medium text-[#6B7280] mt-0.5">Track your commission invoices, review statuses, and payout milestones.</p>
+          <p className="text-sm font-medium text-[#6B7280] mt-0.5">Track your commission claims, review statuses, and offline payout milestones.</p>
         </div>
         <div className="flex gap-3">
           <Button
@@ -198,18 +260,19 @@ const InvoicesPage = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* True Financial Lifecycle KPI Cards (FA-4.3) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Total Invoices', val: stats.total, sub: 'All time volume', color: '#0C447C' },
-          { label: 'Pending Settlement', val: `$${(stats.pendingAmount / 1000).toFixed(1)}k`, sub: `${stats.pendingCount} unpaid`, color: '#633806' },
-          { label: 'Total Settled', val: `$${(stats.paidAmount / 1000).toFixed(1)}k`, sub: 'Received payouts', color: '#27500A' },
-          { label: 'Action Required', val: stats.rejectedCount, sub: 'Rejected / Needs update', color: '#791F1F' }
+          { label: 'Total Invoices', val: stats.total, sub: 'All submitted claims', color: '#0C447C', highlight: false },
+          { label: 'In Review', val: stats.inReviewCount, sub: 'Finance triage queue', color: '#1D4ED8', highlight: false },
+          { label: 'Action Required', val: stats.actionRequiredCount, sub: 'Finance requested changes', color: '#B45309', highlight: stats.actionRequiredCount > 0 },
+          { label: 'Pending Payout', val: formatCurrency(stats.pendingPayoutAmount), sub: `${stats.pendingPayoutCount} approved payoffs`, color: '#633806', highlight: false },
+          { label: 'Total Settled', val: formatCurrency(stats.settledPayoutAmount), sub: `${stats.settledPayoutCount} offline payouts`, color: '#27500A', highlight: false }
         ].map((kpi, i) => (
-          <Card key={i} className="border-[#E5E7EB] bg-white shadow-none">
+          <Card key={i} className={`border-[#E5E7EB] bg-white shadow-none ${kpi.highlight ? 'border-amber-400 bg-amber-50/30 ring-1 ring-amber-400/20' : ''}`}>
             <CardContent className="p-4">
               <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">{kpi.label}</p>
-              <p className="text-2xl font-bold text-[#111827] mt-1 font-['Outfit']">{kpi.val}</p>
+              <p className="text-2xl font-bold text-[#111827] mt-1 font-['Outfit'] tabular-nums">{kpi.val}</p>
               <p className="text-[10px] font-semibold mt-1" style={{ color: kpi.color }}>{kpi.sub}</p>
             </CardContent>
           </Card>
@@ -227,34 +290,64 @@ const InvoicesPage = () => {
         />
       </div>
 
-      {/* Tabs */}
+      {/* Tabs Aligned to Financial Lifecycle (FA-4.3) */}
       <Tabs defaultValue="all" className="w-full">
         <TabsList className="bg-transparent h-auto p-0 gap-6 border-b border-[#E5E7EB] w-full justify-start rounded-none">
-          {['all', 'pending', 'paid', 'rejected'].map(tab => (
-            <TabsTrigger
-              key={tab}
-              value={tab}
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
-            >
-              {tab} Invoices
-            </TabsTrigger>
-          ))}
+          <TabsTrigger
+            value="all"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
+          >
+            All Invoices ({invoices.length})
+          </TabsTrigger>
+          <TabsTrigger
+            value="action_required"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#B45309] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#B45309] transition-all capitalize flex items-center gap-1.5"
+          >
+            Action Required
+            {stats.actionRequiredCount > 0 && (
+              <span className="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                {stats.actionRequiredCount}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger
+            value="in_review"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
+          >
+            In Review ({stats.inReviewCount})
+          </TabsTrigger>
+          <TabsTrigger
+            value="approved"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
+          >
+            Approved ({stats.approvedCount})
+          </TabsTrigger>
+          <TabsTrigger
+            value="rejected"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
+          >
+            Rejected ({invoices.filter(i => i.financeReviewStatus === 'Rejected').length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-6">
           <InvoiceList list={filteredInvoices} />
         </TabsContent>
 
-        <TabsContent value="pending" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.status === 'Pending')} />
+        <TabsContent value="action_required" className="mt-6">
+          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'CorrectionRequired')} />
         </TabsContent>
 
-        <TabsContent value="paid" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.status === 'Paid')} />
+        <TabsContent value="in_review" className="mt-6">
+          <InvoiceList list={filteredInvoices.filter(i => ['PendingReview', 'Resubmitted', 'UnderReview'].includes(i.financeReviewStatus))} />
+        </TabsContent>
+
+        <TabsContent value="approved" className="mt-6">
+          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'Approved' || i.status === 'Paid')} />
         </TabsContent>
 
         <TabsContent value="rejected" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.status === 'Rejected')} />
+          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'Rejected')} />
         </TabsContent>
       </Tabs>
 
@@ -282,31 +375,196 @@ const InvoicesPage = () => {
               </div>
 
               <div className="p-8 space-y-6 flex-1 max-h-[70vh] overflow-y-auto">
-                {/* Rejection Alert if rejected */}
-                {selectedInvoice.financeReviewStatus === 'Rejected' && selectedInvoice.financeRejectionReason && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-1">
-                    <span className="text-xs font-bold text-red-800 flex items-center gap-1.5">
-                      <AlertCircle className="w-4 h-4 text-red-600" /> Finance Review Rejection
-                    </span>
-                    <p className="text-xs text-red-700">{selectedInvoice.financeRejectionReason}</p>
-                    {selectedInvoice.financeReviewNotes && (
-                      <p className="text-[11px] text-red-600 mt-1 italic">{selectedInvoice.financeReviewNotes}</p>
+                {/* Status-specific Top LifeCycle Banners */}
+
+                {/* 1. Correction Required Hero Banner */}
+                {selectedInvoice.financeReviewStatus === 'CorrectionRequired' && (
+                  <div className="p-5 bg-amber-50/90 border-2 border-amber-300 rounded-xl space-y-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2 text-amber-950 font-bold text-sm">
+                        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                        <span>ACTION REQUIRED: Finance Requested Corrections</span>
+                      </div>
+                      <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                        Action Needed
+                      </Badge>
+                    </div>
+
+                    <div className="text-xs text-amber-950 bg-white/80 p-3.5 rounded-lg border border-amber-200 space-y-1">
+                      <span className="font-bold text-amber-900 uppercase tracking-wider text-[10px] block">
+                        Finance Review Instructions / Notes:
+                      </span>
+                      <p className="leading-relaxed whitespace-pre-wrap font-medium">
+                        {selectedInvoice.financeReviewNotes || selectedInvoice.financeRejectionReason || selectedInvoice.remarks || 'Finance requested clarification on the submitted claim. Please update your response below and resubmit for review.'}
+                      </p>
+                    </div>
+
+                    {resubmitError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                        <span>{resubmitError}</span>
+                      </div>
                     )}
+
+                    <div className="space-y-2 pt-1">
+                      <Label htmlFor="agentRemarksInput" className="text-xs font-bold text-amber-950 block">
+                        Your Response / Clarification Memo for Finance:
+                      </Label>
+                      <Textarea
+                        id="agentRemarksInput"
+                        rows={3}
+                        value={agentCorrectionRemarks}
+                        onChange={(e) => setAgentCorrectionRemarks(e.target.value)}
+                        placeholder="Explain the corrections made or clarify any discrepancies..."
+                        className="text-xs bg-white resize-none border-amber-300 focus-visible:ring-amber-500 rounded-lg p-3"
+                      />
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                        <p className="text-[11px] text-amber-800">
+                          * Institutional commission rates and tuition values remain authoritative and locked.
+                        </p>
+                        <Button
+                          size="sm"
+                          onClick={handleResubmit}
+                          disabled={resubmitting}
+                          className="h-8 px-4 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm shrink-0 self-end sm:self-auto"
+                        >
+                          {resubmitting ? 'Resubmitting...' : 'Resubmit for Review'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Approved Commission Claim Card */}
+                {selectedInvoice.financeReviewStatus === 'Approved' && (
+                  <div className="p-5 bg-[#F4F9F2] border border-[#C0DD97] rounded-xl space-y-4 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#D8ECCE]">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-emerald-950">Approved Commission Claim</h4>
+                          <p className="text-[11px] text-emerald-800 font-medium">Verified by Finance compliance and scheduled for offline settlement</p>
+                        </div>
+                      </div>
+                      <FinancialStateHierarchy
+                        reviewStatus="Approved"
+                        payoffStatus={selectedAssociatedPayoff?.status}
+                        settledAt={selectedAssociatedPayoff?.settledAt}
+                        settlementReference={selectedAssociatedPayoff?.settlementReference}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="bg-white/90 p-3 rounded-lg border border-[#D8ECCE]">
+                        <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider block">Contractual Commission Rate</span>
+                        <span className="text-base font-bold text-emerald-900 financial-numeral">
+                          {formatPercentage(selectedInvoice.commissionRate)}
+                        </span>
+                        <span className="text-[10px] text-gray-500 block mt-0.5">Institutional verified rate</span>
+                      </div>
+                      <div className="bg-white/90 p-3 rounded-lg border border-[#D8ECCE]">
+                        <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider block">Approved Gross Amount</span>
+                        <span className="text-base font-bold text-emerald-900 financial-numeral">
+                          {formatCurrency(selectedInvoice.amount, selectedInvoice.currency)}
+                        </span>
+                        <span className="text-[10px] text-gray-500 block mt-0.5">Authoritative financial snapshot</span>
+                      </div>
+                      <div className="bg-white/90 p-3 rounded-lg border border-[#D8ECCE]">
+                        <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider block">Linked Payoff Stage</span>
+                        <span className="text-xs font-mono font-bold text-gray-900 block truncate">
+                          {selectedAssociatedPayoff?.payoffNumber || 'Payoff Pending'}
+                        </span>
+                        {selectedAssociatedPayoff?.status === 'SETTLED' ? (
+                          <span className="text-[11px] font-semibold text-emerald-700 block mt-0.5">
+                            Settled offline {selectedAssociatedPayoff.settledAt ? `on ${formatFinancialDate(selectedAssociatedPayoff.settledAt)}` : ''}
+                            {selectedAssociatedPayoff.settlementReference ? ` • Ref: ${selectedAssociatedPayoff.settlementReference}` : ''}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-amber-700 block mt-0.5">
+                            Awaiting offline settlement confirmation
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Resubmitted Status Banner */}
+                {selectedInvoice.financeReviewStatus === 'Resubmitted' && (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3 shadow-sm">
+                    <Clock className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-bold text-blue-900">Claim Resubmitted & Queued for Re-Review</h4>
+                      <p className="text-xs text-blue-700 leading-relaxed font-medium">
+                        Your corrections and response note have been registered. Institutional Finance will re-evaluate the claim against institutional records.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Under Review Status Banner */}
+                {selectedInvoice.financeReviewStatus === 'UnderReview' && (
+                  <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex items-start gap-3 shadow-sm">
+                    <Clock className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-bold text-indigo-900">Finance Review in Progress</h4>
+                      <p className="text-xs text-indigo-700 leading-relaxed font-medium">
+                        Finance auditors are currently cross-checking student tuition deposits, verifying course completion milestones, and verifying commission eligibility.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. Pending Review Status Banner */}
+                {selectedInvoice.financeReviewStatus === 'PendingReview' && (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-start gap-3 shadow-sm">
+                    <Clock className="w-5 h-5 text-gray-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-bold text-gray-900">Queued for Finance Review</h4>
+                      <p className="text-xs text-gray-600 leading-relaxed font-medium">
+                        This invoice claim has been placed in the review queue. Finance will inspect student eligibility and assign the applicable contractual rate.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 6. Rejection Banner */}
+                {selectedInvoice.financeReviewStatus === 'Rejected' && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-2 shadow-sm">
+                    <div className="flex items-center gap-2 text-xs font-bold text-red-800">
+                      <XCircle className="w-4 h-4 text-red-600" />
+                      <span>Claim Rejected by Finance</span>
+                    </div>
+                    <div className="bg-white/80 p-3 rounded-lg border border-red-200 text-xs text-red-900 space-y-1">
+                      <span className="font-bold block text-[10px] uppercase text-red-800 tracking-wider">Reason for Rejection:</span>
+                      <p className="font-medium">{selectedInvoice.financeRejectionReason || 'Institutional criteria not met.'}</p>
+                      {selectedInvoice.financeReviewNotes && (
+                        <p className="text-[11px] text-red-700 italic pt-1 border-t border-red-100">
+                          Notes: {selectedInvoice.financeReviewNotes}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
                 {/* Meta Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 bg-gray-50/70 p-5 rounded-xl border border-gray-200">
                   <div>
-                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Invoice Details</p>
-                    <div className="mt-2 space-y-1">
-                      <p className="text-sm font-bold text-[#111827]">{selectedInvoice.invoiceNumber}</p>
+                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Invoice & Financial State</p>
+                    <div className="mt-2 space-y-1.5">
+                      <p className="text-sm font-bold text-[#111827] font-mono">{selectedInvoice.invoiceNumber}</p>
                       <p className="text-xs text-[#6B7280]">
-                        {selectedInvoice.raisedAt ? format(new Date(selectedInvoice.raisedAt), 'MMMM dd, yyyy') : 'N/A'}
+                        Claim Date: {selectedInvoice.raisedAt ? formatFinancialDate(selectedInvoice.raisedAt) : 'N/A'}
                       </p>
-                      <div className="pt-2 flex flex-wrap gap-2">
-                        {getStatusBadge(selectedInvoice.status)}
-                        {getReviewBadge(selectedInvoice.financeReviewStatus)}
+                      <div className="pt-1">
+                        <FinancialStateHierarchy
+                          reviewStatus={selectedInvoice.financeReviewStatus}
+                          payoffStatus={selectedAssociatedPayoff?.status}
+                          settledAt={selectedAssociatedPayoff?.settledAt}
+                          size="sm"
+                        />
                       </div>
                     </div>
                   </div>
@@ -321,54 +579,63 @@ const InvoicesPage = () => {
                   <div className="sm:text-right">
                     <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Total Settlement</p>
                     <div className="mt-2">
-                      <p className="text-3xl font-bold text-[#042C53] font-['Outfit']">
-                        {selectedInvoice.amount > 0 ? `$${Number(selectedInvoice.amount).toLocaleString()}` : '$0.00 (Pending)'}
+                      <p className="text-2xl font-bold text-[#042C53] font-['Outfit'] financial-numeral">
+                        {selectedInvoice.amount > 0 ? (
+                          formatCurrency(selectedInvoice.amount, selectedInvoice.currency)
+                        ) : (
+                          `${formatCurrency(0, selectedInvoice.currency)} (Pending)`
+                        )}
                       </p>
-                      <p className="text-[10px] font-semibold text-[#6B7280] mt-1">
-                        Commission: {selectedInvoice.commissionRate > 0 ? `${selectedInvoice.commissionRate}%` : 'Admin Review Pending'}
+                      <p className="text-[11px] font-semibold text-[#6B7280] mt-1">
+                        Commission: {selectedInvoice.commissionRate > 0 ? formatPercentage(selectedInvoice.commissionRate) : 'Review Pending'}
                       </p>
+                      {selectedAssociatedPayoff?.payoffNumber && (
+                        <p className="text-[10px] font-mono text-gray-500 mt-0.5">
+                          Payoff: {selectedAssociatedPayoff.payoffNumber}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Applications Breakdown */}
-                <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
+                <div className="border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm">
                   <Table>
                     <TableHeader className="bg-[#F9FAFB]">
                       <TableRow>
                         <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Application #</TableHead>
                         <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Student Name</TableHead>
                         <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">University & Course</TableHead>
-                        <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3 text-right">Tuition</TableHead>
+                        <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3 text-right">Commissionable Tuition</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {selectedInvoice.applications && selectedInvoice.applications.length > 0 ? (
                         selectedInvoice.applications.map((app, idx) => (
-                          <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0">
-                            <TableCell className="px-6 py-4 text-xs font-bold text-[#111827]">
+                          <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB]">
+                            <TableCell className="px-6 py-3.5 text-xs font-bold text-[#111827] font-mono">
                               {app.applicationNumber}
                             </TableCell>
-                            <TableCell className="px-6 py-4 text-xs text-[#4B5563]">
+                            <TableCell className="px-6 py-3.5 text-xs text-[#4B5563]">
                               <span className="font-semibold text-gray-900 block">{app.student?.name || 'Student'}</span>
                               <span className="text-[11px] text-gray-500">{app.student?.email}</span>
                             </TableCell>
-                            <TableCell className="px-6 py-4 text-xs text-[#4B5563]">
+                            <TableCell className="px-6 py-3.5 text-xs text-[#4B5563]">
                               <span className="font-medium text-gray-900 block">{app.university?.name || 'University'}</span>
                               <span className="text-[11px] text-gray-500">{app.courseName}</span>
                             </TableCell>
-                            <TableCell className="px-6 py-4 text-right text-xs font-bold text-gray-900">
-                              {app.tuitionFee ? `$${Number(app.tuitionFee).toLocaleString()}` : 'Unknown'}
+                            <TableCell className="px-6 py-3.5 text-right text-xs font-bold text-gray-900 financial-numeral">
+                              {app.tuitionFee ? formatCurrency(app.tuitionFee, selectedInvoice.currency) : 'N/A'}
                             </TableCell>
                           </TableRow>
                         ))
                       ) : (
                         selectedInvoice.studentIds?.map((student, idx) => (
                           <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0">
-                            <TableCell className="px-6 py-4 text-sm font-bold text-[#111827]">LEGACY-APP</TableCell>
-                            <TableCell className="px-6 py-4 text-sm text-[#4B5563]">{student.name || 'Student'}</TableCell>
-                            <TableCell className="px-6 py-4 text-sm text-[#4B5563]">{student.email}</TableCell>
-                            <TableCell className="px-6 py-4 text-right text-sm font-bold text-gray-900">N/A</TableCell>
+                            <TableCell className="px-6 py-3.5 text-xs font-bold text-[#111827] font-mono">LEGACY-CLAIM</TableCell>
+                            <TableCell className="px-6 py-3.5 text-xs text-[#4B5563]">{student.name || 'Student'}</TableCell>
+                            <TableCell className="px-6 py-3.5 text-xs text-[#4B5563]">{student.email}</TableCell>
+                            <TableCell className="px-6 py-3.5 text-right text-xs font-bold text-gray-900">N/A</TableCell>
                           </TableRow>
                         ))
                       )}
@@ -404,15 +671,15 @@ const InvoicesPage = () => {
                     <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
                       <History className="w-3.5 h-3.5 text-gray-500" /> Review Timeline
                     </span>
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2 text-xs">
+                    <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2.5 text-xs">
                       {reviewHistory.map((item, idx) => (
-                        <div key={idx} className="flex items-start justify-between border-b border-gray-200/60 pb-2 last:border-0 last:pb-0">
-                          <div>
+                        <div key={idx} className="flex items-start justify-between border-b border-gray-200/60 pb-2.5 last:border-0 last:pb-0">
+                          <div className="space-y-0.5">
                             <span className="font-bold text-gray-900">{item.action}</span>
-                            {item.notes && <p className="text-[11px] text-gray-600 mt-0.5">{item.notes}</p>}
+                            {item.notes && <p className="text-[11px] text-gray-600 font-medium leading-relaxed">{item.notes}</p>}
                           </div>
-                          <span className="text-[10px] text-gray-400">
-                            {item.changedAt ? new Date(item.changedAt).toLocaleString() : ''}
+                          <span className="text-[10px] text-gray-400 font-mono shrink-0 ml-4">
+                            {item.changedAt ? formatFinancialDateTime(item.changedAt) : ''}
                           </span>
                         </div>
                       ))}
@@ -426,13 +693,26 @@ const InvoicesPage = () => {
                 <div className="text-[10px] text-[#9CA3AF] font-medium max-w-xs">
                   Institutional Settlement &bull; QStudy International Portal
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => setIsViewOpen(false)}
-                  className="h-9 px-6 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white"
-                >
-                  Close View
-                </Button>
+                <div className="flex items-center gap-2">
+                  {selectedInvoice.financeReviewStatus === 'CorrectionRequired' && (
+                    <Button
+                      size="sm"
+                      onClick={handleResubmit}
+                      disabled={resubmitting}
+                      className="h-9 px-5 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white shadow-sm"
+                    >
+                      {resubmitting ? 'Resubmitting...' : 'Resubmit Invoice'}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsViewOpen(false)}
+                    className="h-9 px-6 text-xs font-bold"
+                  >
+                    Close View
+                  </Button>
+                </div>
               </div>
             </div>
           )}

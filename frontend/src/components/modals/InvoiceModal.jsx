@@ -13,7 +13,6 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
-import { Checkbox } from '../ui/checkbox';
 import { invoiceAPI, formatApiError } from '../../utils/api';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -134,15 +133,6 @@ const InvoiceModal = ({
     const next = selectedAppIds.includes(appId)
       ? selectedAppIds.filter((id) => id !== appId)
       : [...selectedAppIds, appId];
-    applySelection(next);
-  };
-
-  const handleCheckedChange = (appId, checked) => {
-    if (preselectedApplication) return;
-
-    const next = checked
-      ? (selectedAppIds.includes(appId) ? selectedAppIds : [...selectedAppIds, appId])
-      : selectedAppIds.filter((id) => id !== appId);
     applySelection(next);
   };
 
@@ -282,13 +272,16 @@ const InvoiceModal = ({
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) => handleCheckedChange(app.id, checked === true)}
-                            onClick={(event) => event.stopPropagation()}
-                            disabled={Boolean(preselectedApplication)}
-                            className="data-[state=checked]:bg-[#042C53] data-[state=checked]:border-[#042C53]"
-                          />
+                          <span
+                            role="checkbox"
+                            aria-checked={isSelected}
+                            aria-disabled={Boolean(preselectedApplication)}
+                            className={`h-4 w-4 shrink-0 rounded-sm border flex items-center justify-center ${
+                              isSelected ? 'bg-[#042C53] border-[#042C53] text-white' : 'border-gray-300 bg-white'
+                            } ${preselectedApplication ? 'opacity-50' : ''}`}
+                          >
+                            {isSelected && <Check className="h-3 w-3" />}
+                          </span>
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-bold text-[#111827]">

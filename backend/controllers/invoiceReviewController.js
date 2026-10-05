@@ -16,7 +16,7 @@ exports.getReviewQueue = async (req, res) => {
       return res.status(200).json(result);
     }
 
-    res.status(200).json(result.reviews);
+    res.status(200).json(result.invoices || result.reviews || []);
   } catch (error) {
     console.error('Get review queue error:', error);
     res.status(error.statusCode || 500).json({
@@ -78,7 +78,7 @@ exports.setCommissionRate = async (req, res) => {
   }
 };
 
-// @desc    Approve invoice review
+// @desc    Approve invoice review (creates snapshots & payoff)
 // @route   PATCH /api/invoice-reviews/:invoiceId/approve
 // @access  Private (Admin only)
 exports.approveInvoice = async (req, res) => {
@@ -91,6 +91,46 @@ exports.approveInvoice = async (req, res) => {
     res.status(200).json(updated);
   } catch (error) {
     console.error('Approve invoice error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Request correction on invoice
+// @route   PATCH /api/invoice-reviews/:invoiceId/correction
+// @access  Private (Admin only)
+exports.requestCorrection = async (req, res) => {
+  try {
+    const updated = await invoiceReviewService.requestCorrection(
+      req.params.invoiceId,
+      req.body,
+      req.user
+    );
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('Request correction error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Resubmit invoice after correction
+// @route   PATCH /api/invoice-reviews/:invoiceId/resubmit
+// @access  Private (Agent owner only)
+exports.resubmitInvoice = async (req, res) => {
+  try {
+    const updated = await invoiceReviewService.resubmitInvoice(
+      req.params.invoiceId,
+      req.body,
+      req.user
+    );
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('Resubmit invoice error:', error);
     res.status(error.statusCode || 500).json({
       success: false,
       detail: error.message || 'Server error'

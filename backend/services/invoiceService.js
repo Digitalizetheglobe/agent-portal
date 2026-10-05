@@ -666,6 +666,18 @@ class InvoiceService {
       } else if (!invoice.remarks || !invoice.remarks.includes('[Settled by Admin')) {
         invoice.remarks = settlementPrefix;
       }
+
+      // Legacy synchronization with Payoff entity
+      const { Payoff } = require('../models');
+      const payoff = await Payoff.findOne({ where: { invoiceId: invoice.id } });
+      if (payoff && payoff.status === 'PENDING') {
+        payoff.status = 'SETTLED';
+        payoff.settledAt = invoice.paidAt;
+        payoff.settledBy = currentUser.id;
+        payoff.settlementReference = remarks ? remarks.trim().slice(0, 100) : `LEGACY-${invoice.invoiceNumber}`;
+        payoff.settlementNotes = remarks ? remarks.trim() : 'Settled via legacy invoice status update';
+        await payoff.save();
+      }
     } else if (remarks !== undefined) {
       invoice.remarks = remarks;
     }

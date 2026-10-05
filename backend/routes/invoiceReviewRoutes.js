@@ -5,6 +5,8 @@ const {
   getInvoiceForReview,
   startReview,
   approveInvoice,
+  requestCorrection,
+  resubmitInvoice,
   rejectInvoice,
   setCommissionRate,
   getReviewHistory
@@ -22,6 +24,8 @@ router.get('/:invoiceId/history', getReviewHistory);
 router.patch('/:invoiceId/start', restrictTo('admin'), startReview);
 router.patch('/:invoiceId/rate', restrictTo('admin'), setCommissionRate);
 router.patch('/:invoiceId/approve', restrictTo('admin'), approveInvoice);
+router.patch('/:invoiceId/correction', restrictTo('admin'), requestCorrection);
+router.patch('/:invoiceId/resubmit', resubmitInvoice);
 router.patch('/:invoiceId/reject', restrictTo('admin'), rejectInvoice);
 router.get('/:invoiceId', getInvoiceForReview);
 

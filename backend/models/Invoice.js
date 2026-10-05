@@ -58,7 +58,7 @@ const Invoice = sequelize.define('Invoice', {
 
   // Finance Review Milestone
   financeReviewStatus: {
-    type: DataTypes.ENUM('PendingReview', 'UnderReview', 'Approved', 'Rejected'),
+    type: DataTypes.ENUM('PendingReview', 'UnderReview', 'CorrectionRequired', 'Resubmitted', 'Approved', 'Rejected'),
     defaultValue: 'PendingReview'
   },
   financeReviewedBy: {

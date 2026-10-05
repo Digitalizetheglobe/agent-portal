@@ -19,124 +19,96 @@ import {
   User,
   History,
   AlertCircle,
-  ArrowRight,
-  ShieldCheck,
-  Receipt
+  Receipt,
+  ShieldCheck
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { Input } from '../../components/ui/input';
-import { invoiceReviewAPI } from '../../utils/api';
+import { payoffAPI, invoiceReviewAPI } from '../../utils/api';
+import { FinancialStatusBadge } from '../../components/common/FinancialStatusBadge';
+import { formatCurrency, formatFinancialDate } from '../../utils/financialFormatters';
 
 const AgentPayoffsPage = () => {
-  const { invoices, fetchInvoices } = useData();
+  const { payoffs, fetchPayoffs, loading } = useData();
   const { user } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPayoff, setSelectedPayoff] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [reviewHistory, setReviewHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
-    if (fetchInvoices) {
-      fetchInvoices();
+    if (fetchPayoffs) {
+      fetchPayoffs();
     }
-  }, [fetchInvoices]);
+  }, [fetchPayoffs]);
 
   const handleOpenView = async (item) => {
     setSelectedPayoff(item);
     setIsViewOpen(true);
     setReviewHistory([]);
-    if (item.id) {
+    const invoiceId = item.invoiceId?.id || item.invoiceId;
+    if (invoiceId && typeof invoiceId === 'string') {
+      setLoadingHistory(true);
       try {
-        const res = await invoiceReviewAPI.getHistory(item.id);
+        const res = await invoiceReviewAPI.getHistory(invoiceId);
         const data = Array.isArray(res.data) ? res.data : (res.data?.history || []);
         setReviewHistory(data);
       } catch (err) {
         console.error('Failed to load review history:', err);
+      } finally {
+        setLoadingHistory(false);
       }
     }
   };
 
   const filteredPayoffs = useMemo(() => {
-    return invoices.filter(inv =>
-      inv.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.remarks?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [invoices, searchTerm]);
+    return (payoffs || []).filter(p => {
+      const term = searchTerm.toLowerCase();
+      const pNum = (p.payoffNumber || '').toLowerCase();
+      const invNum = (p.invoiceId?.invoiceNumber || p.invoiceNumber || '').toLowerCase();
+      const ref = (p.settlementReference || '').toLowerCase();
+      return pNum.includes(term) || invNum.includes(term) || ref.includes(term);
+    });
+  }, [payoffs, searchTerm]);
 
-  // Financial summary metrics
+  // Financial summary metrics derived from authoritative payoffs
   const stats = useMemo(() => {
-    const total = invoices.length;
-    const paid = invoices.filter(i => i.status === 'Paid');
-    const eligible = invoices.filter(i => i.financeReviewStatus === 'Approved' && i.status !== 'Paid');
-    const inReview = invoices.filter(i => (i.financeReviewStatus === 'PendingReview' || i.financeReviewStatus === 'UnderReview') && i.status !== 'Paid');
-    const rejected = invoices.filter(i => i.financeReviewStatus === 'Rejected' || i.status === 'Rejected');
+    const list = payoffs || [];
+    const pending = list.filter(p => p.status === 'PENDING');
+    const settled = list.filter(p => p.status === 'SETTLED');
+    const cancelled = list.filter(p => p.status === 'CANCELLED');
 
-    const totalEarnedAmount = invoices.filter(i => i.status !== 'Rejected' && i.financeReviewStatus !== 'Rejected').reduce((sum, i) => sum + (i.amount || 0), 0);
-    const paidAmount = paid.reduce((sum, i) => sum + (i.amount || 0), 0);
-    const eligibleAmount = eligible.reduce((sum, i) => sum + (i.amount || 0), 0);
-    const inReviewAmount = inReview.reduce((sum, i) => sum + (i.amount || 0), 0);
+    const totalEarnedAmount = list.filter(p => p.status !== 'CANCELLED').reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
+    const settledAmount = settled.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
+    const pendingAmount = pending.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
 
     return {
-      total,
+      total: list.length,
       totalEarnedAmount,
-      paidCount: paid.length,
-      paidAmount,
-      eligibleCount: eligible.length,
-      eligibleAmount,
-      inReviewCount: inReview.length,
-      inReviewAmount,
-      rejectedCount: rejected.length
+      settledCount: settled.length,
+      settledAmount,
+      pendingCount: pending.length,
+      pendingAmount,
+      cancelledCount: cancelled.length
     };
-  }, [invoices]);
+  }, [payoffs]);
 
-  const getPayoffBadge = (invoice) => {
-    if (invoice.status === 'Paid') {
-      return (
-        <Badge className="bg-[#EAF3DE] text-[#27500A] border-[#C0DD97] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-          <CheckCircle2 className="w-3 h-3 mr-1" /> Settled / Paid
-        </Badge>
-      );
-    }
-    if (invoice.financeReviewStatus === 'Approved') {
-      return (
-        <Badge className="bg-[#E6F1FB] text-[#042C53] border-blue-200 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-          <CheckCircle2 className="w-3 h-3 mr-1" /> Ready for Payout
-        </Badge>
-      );
-    }
-    if (invoice.financeReviewStatus === 'UnderReview') {
-      return (
-        <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-          <Clock className="w-3 h-3 mr-1" /> In Review
-        </Badge>
-      );
-    }
-    if (invoice.financeReviewStatus === 'Rejected' || invoice.status === 'Rejected') {
-      return (
-        <Badge className="bg-[#FCEBEB] text-[#791F1F] border-[#F7C1C1] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-          <XCircle className="w-3 h-3 mr-1" /> Action Required
-        </Badge>
-      );
-    }
-    return (
-      <Badge className="bg-[#FAEEDA] text-[#633806] border-[#FAC775] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-        <Clock className="w-3 h-3 mr-1" /> Pending Review
-      </Badge>
-    );
-  };
+  const getPayoffBadge = (status) => (
+    <FinancialStatusBadge status={status || 'PENDING'} size="md" />
+  );
 
-  const PayoffList = ({ list }) => (
+  const PayoffTable = ({ list }) => (
     <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm">
       <Table>
         <TableHeader>
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Payoff Ref #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Applications</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Commission Rate</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payoff Amount</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Gross Commission</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Net Amount</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement Status</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement / Paid Date</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement Details</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Action</TableHead>
           </TableRow>
         </TableHeader>
@@ -146,47 +118,49 @@ const AgentPayoffsPage = () => {
               <TableCell colSpan={7} className="text-center py-20 text-[#6B7280]">
                 <div className="flex flex-col items-center gap-3">
                   <CreditCard className="w-10 h-10 opacity-20" />
-                  <p className="text-sm font-medium">No payoff records found matching this view.</p>
+                  <p className="text-sm font-medium">No payoff records found in this view.</p>
                 </div>
               </TableCell>
             </TableRow>
           ) : (
-            list.map((inv) => {
-              const appCount = inv.applications?.length || inv.studentIds?.length || 0;
+            list.map((payoff) => {
+              const invoice = payoff.invoiceId || {};
+
               return (
-                <TableRow key={inv.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0">
+                <TableRow key={payoff.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0">
                   <TableCell className="px-6 py-4 font-bold text-[#111827]">
-                    <div className="flex items-center gap-1.5 font-mono">
-                      <span>{inv.invoiceNumber}</span>
-                    </div>
+                    <span className="font-mono text-xs">{payoff.payoffNumber}</span>
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center">
-                    {appCount} {appCount === 1 ? 'Application' : 'Applications'}
+                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563]">
+                    {invoice.invoiceNumber || 'N/A'}
                   </TableCell>
-                  <TableCell className="px-6 py-4 font-semibold text-[#111827] text-center">
-                    {inv.commissionRate ? `${inv.commissionRate}%` : 'Pending'}
+                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center font-['Outfit'] tabular-nums">
+                    {formatCurrency(payoff.grossCommission, payoff.currency)}
                   </TableCell>
-                  <TableCell className="px-6 py-4 font-bold text-[#042C53] text-center font-['Outfit'] text-base">
-                    ${Number(inv.amount || 0).toLocaleString()}
+                  <TableCell className="px-6 py-4 font-bold text-[#042C53] text-center font-['Outfit'] text-base tabular-nums">
+                    {formatCurrency(payoff.netAmount || payoff.grossCommission, payoff.currency)}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
-                    {getPayoffBadge(inv)}
+                    {getPayoffBadge(payoff.status)}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center">
-                    {inv.paidAt
-                      ? format(new Date(inv.paidAt), 'MMM dd, yyyy')
-                      : inv.raisedAt
-                      ? format(new Date(inv.raisedAt), 'MMM dd, yyyy')
-                      : 'Pending'}
+                    {payoff.status === 'SETTLED' ? (
+                      <div>
+                        <span className="font-mono text-[11px] text-gray-800 font-bold block">{payoff.settlementReference}</span>
+                        <span className="text-[10px] text-gray-500 font-['Outfit'] tabular-nums">{formatFinancialDate(payoff.settledAt)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 italic">Pending Bank Transfer</span>
+                    )}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 text-[11px] font-bold text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB]"
-                      onClick={() => handleOpenView(inv)}
+                      className="btn-financial-action text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB]"
+                      onClick={() => handleOpenView(payoff)}
                     >
-                      <Receipt className="w-3.5 h-3.5 mr-1" /> View Breakdown
+                      <Receipt className="w-3.5 h-3.5 mr-1" /> View Details
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -204,21 +178,21 @@ const AgentPayoffsPage = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
-            Payoff & Commission Management
+            Commission Payoff & Settlement Ledger
           </h1>
           <p className="text-sm font-medium text-[#6B7280] mt-0.5">
-            Track earned student enrollment commissions, review eligibility, and payment settlements.
+            Track authorized payouts and verified bank wire settlements for your approved invoices.
           </p>
         </div>
       </div>
 
-      {/* Financial KPIs */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Commission Earned', val: `$${(stats.totalEarnedAmount / 1000).toFixed(1)}k`, sub: `${stats.total} total claims`, color: '#0C447C' },
-          { label: 'Settled Payouts', val: `$${(stats.paidAmount / 1000).toFixed(1)}k`, sub: `${stats.paidCount} successfully paid`, color: '#27500A' },
-          { label: 'Ready for Payoff', val: `$${(stats.eligibleAmount / 1000).toFixed(1)}k`, sub: `${stats.eligibleCount} approved & queued`, color: '#042C53' },
-          { label: 'In Finance Review', val: `$${(stats.inReviewAmount / 1000).toFixed(1)}k`, sub: `${stats.inReviewCount} awaiting approval`, color: '#633806' }
+          { label: 'Settled Payouts', val: `$${(stats.settledAmount / 1000).toFixed(1)}k`, sub: `${stats.settledCount} confirmed transfers`, color: '#27500A' },
+          { label: 'Pending Settlement', val: `$${(stats.pendingAmount / 1000).toFixed(1)}k`, sub: `${stats.pendingCount} approved & queued`, color: '#633806' },
+          { label: 'Total Volume', val: `$${(stats.totalEarnedAmount / 1000).toFixed(1)}k`, sub: `${stats.total} total payoffs`, color: '#0C447C' },
+          { label: 'Cancelled Payoffs', val: stats.cancelledCount, sub: 'Voided records', color: '#791F1F' }
         ].map((kpi, i) => (
           <Card key={i} className="border-[#E5E7EB] bg-white shadow-none">
             <CardContent className="p-4">
@@ -234,7 +208,7 @@ const AgentPayoffsPage = () => {
       <div className="relative w-full md:w-96">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
         <Input
-          placeholder="Search by payoff reference # or remarks..."
+          placeholder="Search by payoff #, invoice #, or UTR..."
           className="pl-9 h-10 border-[#E5E7EB] text-sm focus-visible:ring-[#042C53]/10 bg-white"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -251,116 +225,150 @@ const AgentPayoffsPage = () => {
             All Payoffs ({filteredPayoffs.length})
           </TabsTrigger>
           <TabsTrigger
+            value="pending"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#633806] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#633806] transition-all capitalize"
+          >
+            Pending Settlement ({filteredPayoffs.filter(p => p.status === 'PENDING').length})
+          </TabsTrigger>
+          <TabsTrigger
             value="settled"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#27500A] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#27500A] transition-all capitalize"
           >
-            Settled / Paid ({filteredPayoffs.filter(i => i.status === 'Paid').length})
+            Settled ({filteredPayoffs.filter(p => p.status === 'SETTLED').length})
           </TabsTrigger>
           <TabsTrigger
-            value="ready"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
+            value="cancelled"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#791F1F] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#791F1F] transition-all capitalize"
           >
-            Ready for Payoff ({filteredPayoffs.filter(i => i.financeReviewStatus === 'Approved' && i.status !== 'Paid').length})
-          </TabsTrigger>
-          <TabsTrigger
-            value="inReview"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
-          >
-            In Review ({filteredPayoffs.filter(i => (i.financeReviewStatus === 'PendingReview' || i.financeReviewStatus === 'UnderReview') && i.status !== 'Paid').length})
+            Cancelled ({filteredPayoffs.filter(p => p.status === 'CANCELLED').length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-6">
-          <PayoffList list={filteredPayoffs} />
+          <PayoffTable list={filteredPayoffs} />
+        </TabsContent>
+
+        <TabsContent value="pending" className="mt-6">
+          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'PENDING')} />
         </TabsContent>
 
         <TabsContent value="settled" className="mt-6">
-          <PayoffList list={filteredPayoffs.filter(i => i.status === 'Paid')} />
+          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'SETTLED')} />
         </TabsContent>
 
-        <TabsContent value="ready" className="mt-6">
-          <PayoffList list={filteredPayoffs.filter(i => i.financeReviewStatus === 'Approved' && i.status !== 'Paid')} />
-        </TabsContent>
-
-        <TabsContent value="inReview" className="mt-6">
-          <PayoffList list={filteredPayoffs.filter(i => (i.financeReviewStatus === 'PendingReview' || i.financeReviewStatus === 'UnderReview') && i.status !== 'Paid')} />
+        <TabsContent value="cancelled" className="mt-6">
+          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'CANCELLED')} />
         </TabsContent>
       </Tabs>
 
-      {/* Payoff Breakdown Inspection Dialog */}
+      {/* Payoff Inspection Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
+        <DialogContent className="max-w-3xl p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
           {selectedPayoff && (
-            <div className="relative min-h-[560px] flex flex-col">
-              {/* Header */}
+            <div className="relative min-h-[500px] flex flex-col">
               <div className="bg-[#042C53] p-8 text-white flex justify-between items-start">
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <CreditCard className="w-6 h-6 text-blue-200" />
-                    <h2 className="text-2xl font-bold font-['Outfit']">COMMISSION SETTLEMENT</h2>
+                    <h2 className="text-2xl font-bold font-['Outfit']">COMMISSION PAYOFF</h2>
                   </div>
                   <p className="text-blue-100 text-xs font-medium">
-                    Settlement Reference: <span className="font-mono font-bold text-white">{selectedPayoff.invoiceNumber}</span>
+                    Payoff Ref: <span className="font-mono font-bold text-white">{selectedPayoff.payoffNumber}</span> &bull; Invoice: {selectedPayoff.invoiceId?.invoiceNumber || 'N/A'}
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-blue-200 font-semibold uppercase tracking-wider block">Net Settlement</span>
+                  <span className="text-xs text-blue-200 font-semibold uppercase tracking-wider block">Net Payoff Amount</span>
                   <span className="text-3xl font-bold font-['Outfit'] block mt-0.5">
-                    ${Number(selectedPayoff.amount || 0).toLocaleString()}
+                    ${Number(selectedPayoff.netAmount || 0).toLocaleString()}
                   </span>
                   <span className="text-[11px] text-blue-200 block">
-                    Commission Rate: {selectedPayoff.commissionRate ? `${selectedPayoff.commissionRate}%` : 'Pending Review'}
+                    Currency: {selectedPayoff.currency || 'USD'}
                   </span>
                 </div>
               </div>
 
               <div className="p-8 space-y-6 flex-1 max-h-[70vh] overflow-y-auto">
-                {/* Status Bar */}
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Current Payoff State</span>
-                    <div className="mt-1">{getPayoffBadge(selectedPayoff)}</div>
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Disbursement Status</span>
+                    <div className="mt-1">{getPayoffBadge(selectedPayoff.status)}</div>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Settlement Date</span>
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Created On</span>
                     <span className="text-xs font-bold text-gray-900 mt-1 block">
-                      {selectedPayoff.paidAt ? format(new Date(selectedPayoff.paidAt), 'MMMM dd, yyyy') : 'Pending Payout Execution'}
+                      {selectedPayoff.createdAt ? format(new Date(selectedPayoff.createdAt), 'MMMM dd, yyyy') : 'N/A'}
                     </span>
                   </div>
                 </div>
 
-                {/* Settlement remarks / Transaction Reference */}
-                {selectedPayoff.remarks && (
-                  <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-200 space-y-1">
-                    <span className="text-xs font-bold text-[#042C53] flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-[#042C53]" /> Settlement Transaction Reference & Remarks
+                {/* Status Notice */}
+                {selectedPayoff.status === 'SETTLED' && (
+                  <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 space-y-2">
+                    <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Confirmed Bank Wire Transfer
                     </span>
-                    <p className="text-xs text-gray-700 whitespace-pre-wrap">{selectedPayoff.remarks}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-emerald-900 pt-1">
+                      <div>
+                        <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Bank Reference / UTR</span>
+                        <span className="font-mono font-bold">{selectedPayoff.settlementReference}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Transfer Confirmation Date</span>
+                        <span>{selectedPayoff.settledAt ? format(new Date(selectedPayoff.settledAt), 'MMMM dd, yyyy') : 'N/A'}</span>
+                      </div>
+                    </div>
+                    {selectedPayoff.settlementNotes && (
+                      <p className="text-xs text-emerald-800 pt-1 border-t border-emerald-200/60 mt-1 italic">
+                        Memo: {selectedPayoff.settlementNotes}
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {/* Applications Table */}
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-gray-900 block">Enrolled Applications Breakdown</span>
-                  <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
-                    <Table>
-                      <TableHeader className="bg-[#F9FAFB]">
-                        <TableRow>
-                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Application #</TableHead>
-                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Student Name</TableHead>
-                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">University & Course</TableHead>
-                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3 text-right">Tuition Fee</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedPayoff.applications && selectedPayoff.applications.length > 0 ? (
-                          selectedPayoff.applications.map((app, idx) => (
+                {selectedPayoff.status === 'PENDING' && (
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-1">
+                    <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-amber-600" /> Queued for Bank Settlement
+                    </span>
+                    <p className="text-xs text-amber-800">
+                      Your commission claim has been verified and approved by Finance. Offline disbursement will be processed and the bank transfer reference (UTR) will appear here once confirmed.
+                    </p>
+                  </div>
+                )}
+
+                {selectedPayoff.status === 'CANCELLED' && (
+                  <div className="p-4 bg-red-50 rounded-xl border border-red-200 space-y-1">
+                    <span className="text-xs font-bold text-red-900 flex items-center gap-1.5">
+                      <XCircle className="w-4 h-4 text-red-600" /> Cancelled Payoff Record
+                    </span>
+                    <p className="text-xs text-red-800">
+                      This payoff was voided. Please contact the finance desk if you require clarification.
+                    </p>
+                  </div>
+                )}
+
+                {/* Linked Invoice Applications Breakdown */}
+                {selectedPayoff.invoiceId?.applications && selectedPayoff.invoiceId.applications.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-gray-900 block">Enrolled Student Applications Linked to this Payoff</span>
+                    <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
+                      <Table>
+                        <TableHeader className="bg-[#F9FAFB]">
+                          <TableRow>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Application #</TableHead>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Student Name</TableHead>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">University & Course</TableHead>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3 text-right">Tuition Fee</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedPayoff.invoiceId.applications.map((app, idx) => (
                             <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0">
                               <TableCell className="px-6 py-4 text-xs font-bold text-[#111827]">
                                 {app.applicationNumber}
                               </TableCell>
                               <TableCell className="px-6 py-4 text-xs text-[#4B5563]">
-                                <span className="font-semibold text-gray-900 block">{app.student?.name || 'Applicant'}</span>
+                                <span className="font-semibold text-gray-900 block">{app.student?.name || 'Student'}</span>
                                 <span className="text-[11px] text-gray-500">{app.student?.email}</span>
                               </TableCell>
                               <TableCell className="px-6 py-4 text-xs text-[#4B5563]">
@@ -371,51 +379,23 @@ const AgentPayoffsPage = () => {
                                 {app.tuitionFee ? `$${Number(app.tuitionFee).toLocaleString()}` : 'Unknown'}
                               </TableCell>
                             </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-center py-6 text-xs text-gray-500">
-                              Student applications recorded.
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-
-                {/* Review Audit Timeline */}
-                {reviewHistory.length > 0 && (
-                  <div className="space-y-2 pt-2">
-                    <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                      <History className="w-3.5 h-3.5 text-gray-500" /> Settlement & Verification Timeline
-                    </span>
-                    <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2 text-xs">
-                      {reviewHistory.map((item, idx) => (
-                        <div key={idx} className="flex items-start justify-between border-b border-gray-200/60 pb-2 last:border-0 last:pb-0">
-                          <div>
-                            <span className="font-bold text-gray-900">{item.action}</span>
-                            {item.notes && <p className="text-[11px] text-gray-600 mt-0.5">{item.notes}</p>}
-                          </div>
-                          <span className="text-[10px] text-gray-400">
-                            {item.changedAt ? new Date(item.changedAt).toLocaleString() : ''}
-                          </span>
-                        </div>
-                      ))}
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Footer */}
               <div className="p-6 border-t border-[#E5E7EB] bg-[#F9FAFB] flex justify-between items-center">
                 <div className="text-[10px] text-[#9CA3AF] font-medium">
-                  Authoritative Payoff Settlement Record &bull; QStudy Portal
+                  Authoritative Payoff Record &bull; QStudy International Portal
                 </div>
                 <Button
                   size="sm"
+                  variant="outline"
                   onClick={() => setIsViewOpen(false)}
-                  className="h-9 px-6 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white"
+                  className="h-9 px-6 text-xs font-bold"
                 >
                   Close
                 </Button>

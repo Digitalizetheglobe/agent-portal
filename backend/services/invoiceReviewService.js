@@ -1,8 +1,17 @@
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/db');
-const { Invoice, Application, Student, University, User } = require('../models');
+const { Invoice, Application, Student, University, User, CommissionSnapshot, Payoff } = require('../models');
+const { hasAuthoritativeTuition } = require('../utils/tuitionUtils');
+const payoffService = require('./payoffService');
 
-const ALLOWED_REVIEW_STATUSES = ['PendingReview', 'UnderReview', 'Approved', 'Rejected'];
+const ALLOWED_REVIEW_STATUSES = [
+  'PendingReview',
+  'UnderReview',
+  'CorrectionRequired',
+  'Resubmitted',
+  'Approved',
+  'Rejected'
+];
 const ALLOWED_INVOICE_STATUSES = ['Pending', 'Paid', 'Rejected'];
 
 // Helper to format review record
@@ -78,6 +87,18 @@ const formatReview = async (invoice) => {
     inv.applications = applications.map(app => app.toJSON());
   }
 
+  // Commission Snapshots
+  const snapshots = await CommissionSnapshot.findAll({
+    where: { invoiceId: inv.id }
+  });
+  inv.commissionSnapshots = snapshots.map(s => s.toJSON());
+
+  // Linked Payoff
+  const payoff = await Payoff.findOne({
+    where: { invoiceId: inv.id }
+  });
+  inv.payoff = payoff ? payoff.toJSON() : null;
+
   return inv;
 };
 
@@ -121,8 +142,8 @@ class InvoiceReviewService {
         where.financeReviewStatus = financeReviewStatus;
       }
     } else if (all !== 'true') {
-      // Default to PendingReview
-      where.financeReviewStatus = 'PendingReview';
+      // Default surfaces PendingReview and Resubmitted invoices
+      where.financeReviewStatus = { [Op.in]: ['PendingReview', 'Resubmitted'] };
     }
 
     // 2. Invoice payment status filter
@@ -140,12 +161,14 @@ class InvoiceReviewService {
       where.agentId = agentId;
     }
 
-    // 4. Search filter
+    // 4. Search filter (invoiceNumber, remarks, agent agency)
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
       where[Op.or] = [
         { invoiceNumber: { [Op.iLike]: term } },
-        { remarks: { [Op.iLike]: term } }
+        { remarks: { [Op.iLike]: term } },
+        { financeReviewNotes: { [Op.iLike]: term } },
+        { financeRejectionReason: { [Op.iLike]: term } }
       ];
     }
 
@@ -173,6 +196,8 @@ class InvoiceReviewService {
             'universityId',
             'courseName',
             'courseLevel',
+            'tuitionFee',
+            'currency',
             'status',
             'isInvoiceEligible',
             'isInvoiced',
@@ -182,15 +207,18 @@ class InvoiceReviewService {
             { model: Student, as: 'student', attributes: ['id', 'name', 'email', 'country'] },
             { model: University, as: 'university', attributes: ['id', 'name', 'code', 'country', 'city'] }
           ]
+        },
+        {
+          model: Payoff,
+          as: 'payoff'
         }
       ],
-      order: [['raisedAt', 'DESC']],
+      order: [['createdAt', 'DESC']],
       limit: parsedLimit,
       offset,
       distinct: true
     });
 
-    const formatted = await Promise.all(rows.map(inv => formatReview(inv)));
     const totalPages = Math.ceil(count / parsedLimit) || 1;
 
     return {
@@ -198,19 +226,18 @@ class InvoiceReviewService {
       page: parsedPage,
       limit: parsedLimit,
       totalPages,
-      reviews: formatted,
-      data: formatted,
+      invoices: rows.map(inv => inv.toJSON()),
       pagination: {
+        total: count,
         page: parsedPage,
         limit: parsedLimit,
-        total: count,
         totalPages
       }
     };
   }
 
   /**
-   * Get single invoice review detail
+   * Get single invoice for review with full context
    */
   async getInvoiceForReview(invoiceId, currentUser) {
     const invoice = await Invoice.findByPk(invoiceId, {
@@ -218,7 +245,7 @@ class InvoiceReviewService {
         {
           model: User,
           as: 'agent',
-          attributes: ['id', 'name', 'email', 'agencyName']
+          attributes: ['id', 'name', 'email', 'agencyName', 'phone', 'region']
         },
         {
           model: User,
@@ -228,22 +255,17 @@ class InvoiceReviewService {
         {
           model: Application,
           as: 'applications',
-          attributes: [
-            'id',
-            'applicationNumber',
-            'studentId',
-            'agentId',
-            'universityId',
-            'courseName',
-            'courseLevel',
-            'status',
-            'isInvoiceEligible',
-            'isInvoiced',
-            'invoiceId'
-          ],
           include: [
-            { model: Student, as: 'student', attributes: ['id', 'name', 'email', 'country'] },
-            { model: University, as: 'university', attributes: ['id', 'name', 'code', 'country', 'city'] }
+            {
+              model: Student,
+              as: 'student',
+              attributes: ['id', 'name', 'email', 'country', 'education', 'status', 'verificationStatus', 'documents']
+            },
+            {
+              model: University,
+              as: 'university',
+              attributes: ['id', 'name', 'code', 'country', 'city', 'website', 'logoUrl']
+            }
           ]
         }
       ]
@@ -266,7 +288,7 @@ class InvoiceReviewService {
   }
 
   /**
-   * Start review on an invoice (PendingReview -> UnderReview)
+   * Start review on an invoice (PendingReview/Resubmitted -> UnderReview)
    */
   async startReview(invoiceId, currentUser) {
     if (currentUser.role !== 'admin') {
@@ -301,12 +323,13 @@ class InvoiceReviewService {
         throw err;
       }
 
-      if (invoice.financeReviewStatus !== 'PendingReview') {
+      if (invoice.financeReviewStatus !== 'PendingReview' && invoice.financeReviewStatus !== 'Resubmitted') {
         const err = new Error(`Invalid review transition from ${invoice.financeReviewStatus} to UnderReview`);
         err.statusCode = 400;
         throw err;
       }
 
+      const prevStatus = invoice.financeReviewStatus;
       invoice.financeReviewStatus = 'UnderReview';
       invoice.financeReviewedBy = currentUser.id;
       invoice.financeReviewedAt = new Date();
@@ -315,7 +338,7 @@ class InvoiceReviewService {
       const history = Array.isArray(invoice.financeReviewHistory) ? [...invoice.financeReviewHistory] : [];
       history.push({
         action: 'REVIEW_STARTED',
-        from: 'PendingReview',
+        from: prevStatus,
         to: 'UnderReview',
         notes: null,
         changedBy: currentUser.id,
@@ -369,6 +392,12 @@ class InvoiceReviewService {
       throw err;
     }
 
+    if (invoice.financeReviewStatus === 'Approved') {
+      const err = new Error('Cannot modify commission rate on an already approved invoice');
+      err.statusCode = 400;
+      throw err;
+    }
+
     const apps = await Application.findAll({
       where: { invoiceId: invoice.id },
       attributes: ['id', 'tuitionFee']
@@ -397,6 +426,7 @@ class InvoiceReviewService {
 
   /**
    * Approve invoice review (UnderReview -> Approved)
+   * Transaction-safe: creates CommissionSnapshots + Payoff
    */
   async approveInvoice(invoiceId, { notes, commissionRate }, currentUser) {
     if (currentUser.role !== 'admin') {
@@ -419,8 +449,8 @@ class InvoiceReviewService {
       }
 
       // Transition validation
-      if (invoice.financeReviewStatus === 'PendingReview') {
-        const err = new Error('Cannot approve review directly from PendingReview. Review must be started first.');
+      if (invoice.financeReviewStatus === 'PendingReview' || invoice.financeReviewStatus === 'Resubmitted') {
+        const err = new Error('Cannot approve review directly before review has started. Review must be started first.');
         err.statusCode = 400;
         throw err;
       }
@@ -433,6 +463,12 @@ class InvoiceReviewService {
 
       if (invoice.financeReviewStatus === 'Rejected') {
         const err = new Error('Cannot approve a rejected review');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (invoice.financeReviewStatus === 'CorrectionRequired') {
+        const err = new Error('Cannot approve an invoice in CorrectionRequired state. It must be resubmitted and reviewed first.');
         err.statusCode = 400;
         throw err;
       }
@@ -451,16 +487,7 @@ class InvoiceReviewService {
           err.statusCode = 400;
           throw err;
         }
-
-        const apps = await Application.findAll({
-          where: { invoiceId: invoice.id },
-          attributes: ['id', 'tuitionFee'],
-          transaction: t
-        });
-
-        const totalTuition = apps.reduce((sum, a) => sum + (parseFloat(a.tuitionFee) || 0), 0);
         invoice.commissionRate = parsedRate;
-        invoice.amount = Math.round((totalTuition * (parsedRate / 100)) * 100) / 100;
       }
 
       // Invariant: An invoice cannot be approved without a verified positive commission rate
@@ -470,6 +497,59 @@ class InvoiceReviewService {
         throw err;
       }
 
+      // Fetch linked applications
+      const apps = await Application.findAll({
+        where: { invoiceId: invoice.id },
+        transaction: t
+      });
+
+      if (apps.length === 0) {
+        const err = new Error('Invoice has no linked applications');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // Verify authoritative tuition on each application
+      for (const app of apps) {
+        if (!hasAuthoritativeTuition(app)) {
+          const err = new Error(`Application ${app.applicationNumber || app.id} lacks verified authoritative tuition fee`);
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+
+      const activeRate = parseFloat(invoice.commissionRate);
+      let calculatedTotalGross = 0;
+
+      // ─── CommissionSnapshot Generation ──────────────────────────────────────
+      for (const app of apps) {
+        const contractualTuition = parseFloat(app.tuitionFee);
+        const commissionableTuition = contractualTuition;
+        const grossAmount = Math.round((commissionableTuition * (activeRate / 100)) * 100) / 100;
+        calculatedTotalGross += grossAmount;
+
+        // Idempotent creation check
+        const existingSnapshot = await CommissionSnapshot.findOne({
+          where: { applicationId: app.id, invoiceId: invoice.id },
+          transaction: t
+        });
+
+        if (!existingSnapshot) {
+          await CommissionSnapshot.create({
+            applicationId: app.id,
+            invoiceId: invoice.id,
+            contractualTuition,
+            commissionableTuition,
+            commissionRate: activeRate,
+            grossAmount,
+            lockedAt: new Date(),
+            lockedBy: currentUser.id
+          }, { transaction: t });
+        }
+      }
+
+      calculatedTotalGross = Math.round(calculatedTotalGross * 100) / 100;
+      invoice.amount = calculatedTotalGross;
       invoice.financeReviewStatus = 'Approved';
       invoice.financeReviewedBy = currentUser.id;
       invoice.financeReviewedAt = new Date();
@@ -486,6 +566,166 @@ class InvoiceReviewService {
         notes: notes ? notes.trim() : 'Invoice approved by finance',
         commissionRate: invoice.commissionRate,
         amount: invoice.amount,
+        changedBy: currentUser.id,
+        changedAt: new Date().toISOString()
+      });
+      invoice.financeReviewHistory = history;
+
+      await invoice.save({ transaction: t });
+
+      // ─── Payoff Generation ────────────────────────────────────────────────
+      await payoffService.createPayoffForApprovedInvoice(invoice, calculatedTotalGross, currentUser, t);
+
+      await t.commit();
+
+      return await this.getInvoiceForReview(invoice.id, currentUser);
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
+  }
+
+  /**
+   * Request correction on invoice (UnderReview -> CorrectionRequired)
+   * Admin only.
+   */
+  async requestCorrection(invoiceId, { reason, remarks }, currentUser) {
+    if (currentUser.role !== 'admin') {
+      const err = new Error('Access denied. Only admin can request invoice corrections.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const note = (remarks || reason || '').trim();
+    if (!note) {
+      const err = new Error('Correction reason/remarks are required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const t = await sequelize.transaction();
+    try {
+      const invoice = await Invoice.findByPk(invoiceId, {
+        lock: t.LOCK.UPDATE,
+        transaction: t
+      });
+
+      if (!invoice) {
+        const err = new Error('Invoice not found');
+        err.statusCode = 404;
+        throw err;
+      }
+
+      if (invoice.financeReviewStatus === 'PendingReview' || invoice.financeReviewStatus === 'Resubmitted') {
+        const err = new Error('Cannot request correction before review has started. Review must be started first.');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (invoice.financeReviewStatus === 'Approved') {
+        const err = new Error('Cannot request correction on an already approved invoice');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (invoice.financeReviewStatus === 'Rejected') {
+        const err = new Error('Cannot request correction on a rejected invoice');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (invoice.financeReviewStatus !== 'UnderReview') {
+        const err = new Error(`Invalid transition from ${invoice.financeReviewStatus} to CorrectionRequired`);
+        err.statusCode = 400;
+        throw err;
+      }
+
+      invoice.financeReviewStatus = 'CorrectionRequired';
+      invoice.financeReviewedBy = currentUser.id;
+      invoice.financeReviewedAt = new Date();
+      invoice.financeReviewNotes = note;
+
+      const history = Array.isArray(invoice.financeReviewHistory) ? [...invoice.financeReviewHistory] : [];
+      history.push({
+        action: 'CORRECTION_REQUIRED',
+        from: 'UnderReview',
+        to: 'CorrectionRequired',
+        notes: note,
+        changedBy: currentUser.id,
+        changedAt: new Date().toISOString()
+      });
+      invoice.financeReviewHistory = history;
+
+      await invoice.save({ transaction: t });
+      await t.commit();
+
+      return await this.getInvoiceForReview(invoice.id, currentUser);
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
+  }
+
+  /**
+   * Resubmit invoice after correction (CorrectionRequired -> Resubmitted)
+   * Caller must be the agent who owns the invoice (or admin).
+   */
+  async resubmitInvoice(invoiceId, { remarks, invoiceUrl }, currentUser) {
+    const t = await sequelize.transaction();
+    try {
+      const invoice = await Invoice.findByPk(invoiceId, {
+        lock: t.LOCK.UPDATE,
+        transaction: t
+      });
+
+      if (!invoice) {
+        const err = new Error('Invoice not found');
+        err.statusCode = 404;
+        throw err;
+      }
+
+      // Role & ownership check
+      if (currentUser.role === 'agent' && invoice.agentId.toString() !== currentUser.id.toString()) {
+        const err = new Error('Access denied. You do not own this invoice.');
+        err.statusCode = 403;
+        throw err;
+      }
+
+      // Lifecycle check
+      if (invoice.financeReviewStatus === 'Rejected') {
+        const err = new Error('Rejected invoices cannot be resubmitted');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (invoice.financeReviewStatus === 'Approved') {
+        const err = new Error('Approved invoices cannot be resubmitted');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (invoice.financeReviewStatus !== 'CorrectionRequired') {
+        const err = new Error(`Invoice is not in CorrectionRequired state (current: ${invoice.financeReviewStatus})`);
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // Allowed agent updates only (remarks, invoiceUrl)
+      if (remarks !== undefined) {
+        invoice.remarks = remarks ? remarks.trim() : invoice.remarks;
+      }
+      if (invoiceUrl !== undefined) {
+        invoice.invoiceUrl = invoiceUrl ? invoiceUrl.trim() : invoice.invoiceUrl;
+      }
+
+      invoice.financeReviewStatus = 'Resubmitted';
+
+      const history = Array.isArray(invoice.financeReviewHistory) ? [...invoice.financeReviewHistory] : [];
+      history.push({
+        action: 'RESUBMITTED',
+        from: 'CorrectionRequired',
+        to: 'Resubmitted',
+        notes: remarks ? remarks.trim() : 'Invoice resubmitted by agent',
         changedBy: currentUser.id,
         changedAt: new Date().toISOString()
       });
@@ -531,8 +771,8 @@ class InvoiceReviewService {
       }
 
       // Transition validation
-      if (invoice.financeReviewStatus === 'PendingReview') {
-        const err = new Error('Cannot reject review directly from PendingReview. Review must be started first.');
+      if (invoice.financeReviewStatus === 'PendingReview' || invoice.financeReviewStatus === 'Resubmitted') {
+        const err = new Error('Cannot reject review directly before review has started. Review must be started first.');
         err.statusCode = 400;
         throw err;
       }
@@ -575,7 +815,6 @@ class InvoiceReviewService {
       });
       invoice.financeReviewHistory = history;
 
-      // Note: Invoice.status remains untouched!
       await invoice.save({ transaction: t });
       await t.commit();
 
@@ -590,20 +829,7 @@ class InvoiceReviewService {
    * Get review audit history
    */
   async getReviewHistory(invoiceId, currentUser) {
-    const invoice = await Invoice.findByPk(invoiceId);
-
-    if (!invoice) {
-      const err = new Error('Invoice not found');
-      err.statusCode = 404;
-      throw err;
-    }
-
-    if (currentUser.role === 'agent' && invoice.agentId.toString() !== currentUser.id.toString()) {
-      const err = new Error('Access denied');
-      err.statusCode = 403;
-      throw err;
-    }
-
+    const invoice = await this.getInvoiceForReview(invoiceId, currentUser);
     return Array.isArray(invoice.financeReviewHistory) ? invoice.financeReviewHistory : [];
   }
 }

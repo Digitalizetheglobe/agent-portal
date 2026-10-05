@@ -10,6 +10,8 @@ const PasswordResetToken = require('./PasswordResetToken');
 const University = require('./University');
 const Application = require('./Application');
 const Course = require('./Course');
+const CommissionSnapshot = require('./CommissionSnapshot');
+const Payoff = require('./Payoff');
 
 // User <-> Student
 User.hasMany(Student, { foreignKey: 'agentId', as: 'students' });
@@ -70,6 +72,26 @@ Application.belongsTo(Invoice, { foreignKey: 'invoiceId', as: 'invoice' });
 University.hasMany(Course, { foreignKey: 'universityId', as: 'courses', onDelete: 'SET NULL' });
 Course.belongsTo(University, { foreignKey: 'universityId', as: 'university' });
 
+// CommissionSnapshot Associations
+Invoice.hasMany(CommissionSnapshot, { foreignKey: 'invoiceId', as: 'commissionSnapshots', onDelete: 'CASCADE' });
+CommissionSnapshot.belongsTo(Invoice, { foreignKey: 'invoiceId', as: 'invoice' });
+
+Application.hasMany(CommissionSnapshot, { foreignKey: 'applicationId', as: 'commissionSnapshots', onDelete: 'RESTRICT' });
+CommissionSnapshot.belongsTo(Application, { foreignKey: 'applicationId', as: 'application' });
+
+User.hasMany(CommissionSnapshot, { foreignKey: 'lockedBy', as: 'lockedSnapshots' });
+CommissionSnapshot.belongsTo(User, { foreignKey: 'lockedBy', as: 'lockedByUser' });
+
+// Payoff Associations
+Invoice.hasOne(Payoff, { foreignKey: 'invoiceId', as: 'payoff', onDelete: 'RESTRICT' });
+Payoff.belongsTo(Invoice, { foreignKey: 'invoiceId', as: 'invoice' });
+
+User.hasMany(Payoff, { foreignKey: 'agentId', as: 'payoffs' });
+Payoff.belongsTo(User, { foreignKey: 'agentId', as: 'agent' });
+
+User.hasMany(Payoff, { foreignKey: 'settledBy', as: 'settledPayoffs' });
+Payoff.belongsTo(User, { foreignKey: 'settledBy', as: 'settler' });
+
 module.exports = {
   sequelize,
   Sequelize,
@@ -82,6 +104,8 @@ module.exports = {
   PasswordResetToken,
   University,
   Application,
-  Course
+  Course,
+  CommissionSnapshot,
+  Payoff
 };
 

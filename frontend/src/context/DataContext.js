@@ -14,6 +14,7 @@ import {
   invoiceReviewAPI,
   studentVerificationAPI,
   courseAPI,
+  payoffAPI,
   formatApiError
 } from '../utils/api';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ export const DataProvider = ({ children }) => {
   const [students, setStudents] = useState([]);
   const [stats, setStats] = useState(null);
   const [invoices, setInvoices] = useState([]);
+  const [payoffs, setPayoffs] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [universities, setUniversities] = useState([]);
@@ -77,9 +79,21 @@ export const DataProvider = ({ children }) => {
 
   const fetchStudents = useCallback(async (filters = {}) => {
     try {
-      const response = await studentAPI.getAll(filters);
-      setStudents(response.data);
-      return response.data;
+      // Backend paginates (default 20, max 100 per request), so load every page
+      const limit = 100;
+      const first = await studentAPI.getAll({ ...filters, page: 1, limit, envelope: 'true' });
+      let all = first.data?.students || [];
+      const totalPages = first.data?.totalPages || 1;
+      if (totalPages > 1) {
+        const rest = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, i) =>
+            studentAPI.getAll({ ...filters, page: i + 2, limit, envelope: 'true' })
+          )
+        );
+        rest.forEach(r => { all = all.concat(r.data?.students || []); });
+      }
+      setStudents(all);
+      return all;
     } catch (error) {
       console.error('Error fetching students:', error);
       setStudents([]);
@@ -141,6 +155,18 @@ export const DataProvider = ({ children }) => {
       return response.data;
     } catch (error) {
       console.error('Error fetching invoices:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchPayoffs = useCallback(async (params = {}) => {
+    try {
+      const response = await payoffAPI.getAll(params);
+      const data = Array.isArray(response.data) ? response.data : (response.data?.payoffs || []);
+      setPayoffs(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching payoffs:', error);
       return [];
     }
   }, []);
@@ -237,6 +263,7 @@ export const DataProvider = ({ children }) => {
         fetchStudents(), 
         fetchStats(), 
         fetchInvoices(), 
+        fetchPayoffs(),
         fetchTickets(),
         fetchNotifications(),
         fetchUniversities(),
@@ -249,7 +276,7 @@ export const DataProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats, fetchInvoices, fetchTickets, fetchNotifications, fetchUniversities, fetchCourses, fetchApplications]);
+  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats, fetchInvoices, fetchPayoffs, fetchTickets, fetchNotifications, fetchUniversities, fetchCourses, fetchApplications]);
 
   // Clear all data - called on logout
   const clearData = useCallback(() => {
@@ -258,6 +285,7 @@ export const DataProvider = ({ children }) => {
     setStudents([]);
     setStats(null);
     setInvoices([]);
+    setPayoffs([]);
     setTickets([]);
     setNotifications([]);
     setUniversities([]);
@@ -632,6 +660,31 @@ export const DataProvider = ({ children }) => {
       toast.success('Invoice deleted successfully');
     } catch (error) {
       toast.error('Failed to delete invoice', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Payoff operations (FA-2 & FA-3)
+  const settlePayoff = async (id, data) => {
+    try {
+      const response = await payoffAPI.settle(id, data);
+      await Promise.all([fetchPayoffs(), fetchInvoices()]);
+      toast.success('Payoff settlement confirmed');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to settle payoff', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const cancelPayoff = async (id, data) => {
+    try {
+      const response = await payoffAPI.cancel(id, data);
+      await Promise.all([fetchPayoffs(), fetchInvoices()]);
+      toast.success('Payoff cancelled');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to cancel payoff', { description: formatApiError(error) });
       throw error;
     }
   };
@@ -1106,6 +1159,11 @@ export const DataProvider = ({ children }) => {
     updateInvoiceStatus,
     deleteInvoice,
     fetchInvoices,
+    // Payoff operations (FA-2 & FA-3)
+    payoffs,
+    fetchPayoffs,
+    settlePayoff,
+    cancelPayoff,
     // Finance review operations
     fetchReviewQueue,
     startInvoiceReview,

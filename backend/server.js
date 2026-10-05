@@ -7,7 +7,7 @@ const { connectDB, sequelize } = require('./config/db');
 const { initStorage } = require('./utils/storage');
 
 // Import models to ensure associations are registered
-const { User, Event, Student, University, Course } = require('./models');
+const { User, Event, Student, University, Course, CommissionSnapshot, Payoff } = require('./models');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -22,6 +22,7 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const universityRoutes = require('./routes/universityRoutes');
 const invoiceReviewRoutes = require('./routes/invoiceReviewRoutes');
 const courseRoutes = require('./routes/courseRoutes');
+const payoffRoutes = require('./routes/payoffRoutes');
 
 const app = express();
 
@@ -61,6 +62,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/universities', universityRoutes);
 app.use('/api/invoice-reviews', invoiceReviewRoutes);
 app.use('/api/courses', courseRoutes);
+app.use('/api/payoffs', payoffRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -89,7 +91,6 @@ app.use((err, req, res, next) => {
 
 // 404 handler
 app.use((req, res) => {
-  console.log('404 - Route not found:', req.method, req.url);
   res.status(404).json({
     success: false,
     detail: 'Route not found'

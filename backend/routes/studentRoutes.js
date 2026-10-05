@@ -55,15 +55,8 @@ const upload = multer({
 router.use(protect);
 
 // Student routes
-router.get('/', (req, res, next) => {
-  console.log('GET /students');
-  next();
-}, getStudents);
-
-router.post('/', (req, res, next) => {
-  console.log('POST /students');
-  next();
-}, createStudent);
+router.get('/', getStudents);
+router.post('/', createStudent);
 
 // ─── Phase H: Verification queue (MUST be before /:id to avoid capture) ──────
 // GET /api/students/verification/queue  — admin only, enforced in service
@@ -73,25 +66,10 @@ router.get('/verification/queue', getVerificationQueue);
 router.get('/:studentId/applications', getStudentApplications);
 router.get('/:id/applications', getStudentApplications);
 
-router.get('/:id', (req, res, next) => {
-  console.log('GET /students/:id', req.params.id);
-  next();
-}, getStudent);
-
-router.put('/:id', (req, res, next) => {
-  console.log('PUT /students/:id', req.params.id);
-  next();
-}, updateStudent);
-
-router.patch('/:id/status', (req, res, next) => {
-  console.log('PATCH /students/:id/status', req.params.id);
-  next();
-}, updateStudentStatus);
-
-router.delete('/:id', (req, res, next) => {
-  console.log('DELETE /students/:id', req.params.id);
-  next();
-}, deleteStudent);
+router.get('/:id', getStudent);
+router.put('/:id', updateStudent);
+router.patch('/:id/status', updateStudentStatus);
+router.delete('/:id', deleteStudent);
 
 // Document routes (must come after student routes to avoid conflicts)
 router.post('/:id/documents', upload.single('file'), uploadDocument);

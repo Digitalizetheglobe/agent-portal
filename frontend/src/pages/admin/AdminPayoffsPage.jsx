@@ -4,7 +4,7 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
-import { Dialog, DialogContent } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import {
   CreditCard,
@@ -19,129 +19,149 @@ import {
   User,
   History,
   Receipt,
-  Download
+  Download,
+  AlertCircle,
+  Ban
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Input } from '../../components/ui/input';
+import { Textarea } from '../../components/ui/textarea';
+import { Label } from '../../components/ui/label';
 import PayoffSettlementModal from '../../components/modals/PayoffSettlementModal';
-import { invoiceReviewAPI } from '../../utils/api';
+import { payoffAPI, invoiceReviewAPI, formatApiError } from '../../utils/api';
+import { FinancialStatusBadge } from '../../components/common/FinancialStatusBadge';
+import { formatCurrency, formatFinancialDate } from '../../utils/financialFormatters';
+import { toast } from 'sonner';
 
 const AdminPayoffsPage = () => {
-  const { invoices, fetchInvoices, loading } = useData();
+  const { payoffs, fetchPayoffs, cancelPayoff, loading } = useData();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPayoff, setSelectedPayoff] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
+  
+  // Settle modal state
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
-  const [settlementInvoice, setSettlementInvoice] = useState(null);
+  const [payoffToSettle, setPayoffToSettle] = useState(null);
+
+  // Cancel modal state
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [payoffToCancel, setPayoffToCancel] = useState(null);
+  const [cancelNotes, setCancelNotes] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+
   const [reviewHistory, setReviewHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
-    if (fetchInvoices) {
-      fetchInvoices();
+    if (fetchPayoffs) {
+      fetchPayoffs();
     }
-  }, [fetchInvoices]);
+  }, [fetchPayoffs]);
 
-  const handleOpenSettlement = (invoice) => {
-    setSettlementInvoice(invoice);
+  const handleOpenSettlement = (payoff) => {
+    setPayoffToSettle(payoff);
     setSettlementModalOpen(true);
   };
 
-  const handleOpenView = async (invoice) => {
-    setSelectedPayoff(invoice);
+  const handleOpenCancel = (payoff) => {
+    setPayoffToCancel(payoff);
+    setCancelNotes('');
+    setCancelModalOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!payoffToCancel?.id) return;
+    setCancelling(true);
+    try {
+      if (cancelPayoff) {
+        await cancelPayoff(payoffToCancel.id, { notes: cancelNotes.trim() || undefined });
+      } else {
+        await payoffAPI.cancel(payoffToCancel.id, { notes: cancelNotes.trim() || undefined });
+        if (fetchPayoffs) await fetchPayoffs();
+      }
+      toast.success('Payoff cancelled successfully');
+      setCancelModalOpen(false);
+      setPayoffToCancel(null);
+      if (selectedPayoff?.id === payoffToCancel.id) {
+        setIsViewOpen(false);
+      }
+    } catch (err) {
+      console.error('Cancel payoff error:', err);
+      toast.error('Failed to cancel payoff', { description: formatApiError(err) });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleOpenView = async (payoff) => {
+    setSelectedPayoff(payoff);
     setIsViewOpen(true);
     setReviewHistory([]);
-    if (invoice.id) {
+    const invoiceId = payoff.invoiceId?.id || payoff.invoiceId;
+    if (invoiceId && typeof invoiceId === 'string') {
+      setLoadingHistory(true);
       try {
-        const res = await invoiceReviewAPI.getHistory(invoice.id);
+        const res = await invoiceReviewAPI.getHistory(invoiceId);
         const data = Array.isArray(res.data) ? res.data : (res.data?.history || []);
         setReviewHistory(data);
       } catch (err) {
         console.error('Failed to load review history:', err);
+      } finally {
+        setLoadingHistory(false);
       }
     }
   };
 
   const filteredPayoffs = useMemo(() => {
-    return invoices.filter(inv =>
-      inv.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.agentId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.agentId?.agencyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.remarks?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [invoices, searchTerm]);
+    return (payoffs || []).filter(p => {
+      const term = searchTerm.toLowerCase();
+      const pNum = p.payoffNumber?.toLowerCase() || '';
+      const invNum = (p.invoiceId?.invoiceNumber || p.invoiceNumber || '')?.toLowerCase();
+      const agentName = (p.agentId?.name || '')?.toLowerCase();
+      const agencyName = (p.agentId?.agencyName || '')?.toLowerCase();
+      const ref = (p.settlementReference || '')?.toLowerCase();
+      return pNum.includes(term) || invNum.includes(term) || agentName.includes(term) || agencyName.includes(term) || ref.includes(term);
+    });
+  }, [payoffs, searchTerm]);
 
   const stats = useMemo(() => {
-    const total = invoices.length;
-    const paid = invoices.filter(i => i.status === 'Paid');
-    const ready = invoices.filter(i => i.financeReviewStatus === 'Approved' && i.status !== 'Paid');
-    const inReview = invoices.filter(i => (i.financeReviewStatus === 'PendingReview' || i.financeReviewStatus === 'UnderReview') && i.status !== 'Paid');
+    const list = payoffs || [];
+    const pending = list.filter(p => p.status === 'PENDING');
+    const settled = list.filter(p => p.status === 'SETTLED');
+    const cancelled = list.filter(p => p.status === 'CANCELLED');
 
-    const totalVolume = invoices.reduce((sum, i) => sum + (i.amount || 0), 0);
-    const paidVolume = paid.reduce((sum, i) => sum + (i.amount || 0), 0);
-    const readyVolume = ready.reduce((sum, i) => sum + (i.amount || 0), 0);
-    const inReviewVolume = inReview.reduce((sum, i) => sum + (i.amount || 0), 0);
+    const totalVolume = list.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
+    const pendingVolume = pending.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
+    const settledVolume = settled.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
 
     return {
-      total,
+      total: list.length,
       totalVolume,
-      readyCount: ready.length,
-      readyVolume,
-      paidCount: paid.length,
-      paidVolume,
-      inReviewCount: inReview.length,
-      inReviewVolume
+      pendingCount: pending.length,
+      pendingVolume,
+      settledCount: settled.length,
+      settledVolume,
+      cancelledCount: cancelled.length
     };
-  }, [invoices]);
+  }, [payoffs]);
 
-  const getPayoffBadge = (invoice) => {
-    if (invoice.status === 'Paid') {
-      return (
-        <Badge className="bg-[#EAF3DE] text-[#27500A] border-[#C0DD97] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-          <CheckCircle2 className="w-3 h-3 mr-1" /> Settled / Paid
-        </Badge>
-      );
-    }
-    if (invoice.financeReviewStatus === 'Approved') {
-      return (
-        <Badge className="bg-[#E6F1FB] text-[#042C53] border-blue-200 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-          <CheckCircle2 className="w-3 h-3 mr-1" /> Ready for Payout
-        </Badge>
-      );
-    }
-    if (invoice.financeReviewStatus === 'UnderReview') {
-      return (
-        <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-          <Clock className="w-3 h-3 mr-1" /> In Review
-        </Badge>
-      );
-    }
-    if (invoice.financeReviewStatus === 'Rejected' || invoice.status === 'Rejected') {
-      return (
-        <Badge className="bg-[#FCEBEB] text-[#791F1F] border-[#F7C1C1] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-          <XCircle className="w-3 h-3 mr-1" /> Rejected
-        </Badge>
-      );
-    }
-    return (
-      <Badge className="bg-[#FAEEDA] text-[#633806] border-[#FAC775] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-        <Clock className="w-3 h-3 mr-1" /> Pending Review
-      </Badge>
-    );
-  };
+  const getPayoffBadge = (status) => (
+    <FinancialStatusBadge status={status || 'PENDING'} size="md" />
+  );
 
   const PayoffTable = ({ list }) => (
     <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm">
       <Table>
         <TableHeader>
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Payoff Ref #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payee Agent / Agency</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Applications</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Commission Rate</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payoff Amount</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Payoff #</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payee Agency / Agent</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Gross Commission</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Net Amount</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Status</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement Date</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement Details</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -151,60 +171,75 @@ const AdminPayoffsPage = () => {
               <TableCell colSpan={8} className="text-center py-20 text-[#6B7280]">
                 <div className="flex flex-col items-center gap-3">
                   <CreditCard className="w-10 h-10 opacity-20" />
-                  <p className="text-sm font-medium">No payoffs found matching this filter.</p>
+                  <p className="text-sm font-medium">No payoffs found in this view.</p>
                 </div>
               </TableCell>
             </TableRow>
           ) : (
-            list.map((inv) => {
-              const appCount = inv.applications?.length || inv.studentIds?.length || 0;
-              const isReadyForPayout = inv.financeReviewStatus === 'Approved' && inv.status !== 'Paid';
+            list.map((payoff) => {
+              const invoice = payoff.invoiceId || {};
+              const agent = payoff.agentId || invoice.agentId || {};
+              const isPending = payoff.status === 'PENDING';
+
               return (
-                <TableRow key={inv.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0">
+                <TableRow key={payoff.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0">
                   <TableCell className="px-6 py-4 font-bold text-[#111827]">
-                    <span className="font-mono text-xs">{inv.invoiceNumber}</span>
+                    <span className="font-mono text-xs">{payoff.payoffNumber}</span>
+                  </TableCell>
+                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563]">
+                    {invoice.invoiceNumber || 'N/A'}
                   </TableCell>
                   <TableCell className="px-6 py-4">
                     <div className="flex flex-col items-center">
-                      <span className="font-semibold text-[#111827] text-center truncate">{inv.agentId?.agencyName || inv.agentId?.name || 'Agency'}</span>
-                      <span className="text-[11px] text-[#6B7280] text-center truncate">{inv.agentId?.email}</span>
+                      <span className="font-semibold text-[#111827] text-center truncate">{agent.agencyName || agent.name || 'Agency'}</span>
+                      <span className="text-[11px] text-[#6B7280] text-center truncate">{agent.email}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center">
-                    {appCount} {appCount === 1 ? 'Application' : 'Applications'}
+                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center font-['Outfit'] tabular-nums">
+                    {formatCurrency(payoff.grossCommission, payoff.currency)}
                   </TableCell>
-                  <TableCell className="px-6 py-4 font-semibold text-[#111827] text-center">
-                    {inv.commissionRate ? `${inv.commissionRate}%` : 'Pending'}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 font-bold text-[#042C53] text-center font-['Outfit'] text-base">
-                    ${Number(inv.amount || 0).toLocaleString()}
+                  <TableCell className="px-6 py-4 font-bold text-[#042C53] text-center font-['Outfit'] text-base tabular-nums">
+                    {formatCurrency(payoff.netAmount || payoff.grossCommission, payoff.currency)}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
-                    {getPayoffBadge(inv)}
+                    {getPayoffBadge(payoff.status)}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center">
-                    {inv.paidAt
-                      ? format(new Date(inv.paidAt), 'MMM dd, yyyy')
-                      : inv.raisedAt
-                      ? format(new Date(inv.raisedAt), 'MMM dd, yyyy')
-                      : 'Pending'}
+                    {payoff.status === 'SETTLED' ? (
+                      <div>
+                        <span className="font-mono text-[11px] text-gray-800 font-bold block">{payoff.settlementReference}</span>
+                        <span className="text-[10px] text-gray-500 font-['Outfit'] tabular-nums">{formatFinancialDate(payoff.settledAt)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 italic">Not Settled</span>
+                    )}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      {isReadyForPayout && (
-                        <Button
-                          size="sm"
-                          className="h-8 text-[11px] font-bold text-white bg-[#27500A] hover:bg-[#1E3D07]"
-                          onClick={() => handleOpenSettlement(inv)}
-                        >
-                          <CreditCard className="w-3.5 h-3.5 mr-1" /> Settle Payout
-                        </Button>
+                    <div className="flex items-center justify-center gap-1.5">
+                      {isPending && (
+                        <>
+                          <Button
+                            size="sm"
+                            className="btn-financial-action text-white bg-[#27500A] hover:bg-[#1E3D07]"
+                            onClick={() => handleOpenSettlement(payoff)}
+                          >
+                            <CreditCard className="w-3.5 h-3.5 mr-1" /> Settle
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="btn-financial-action text-red-700 border-red-200 hover:bg-red-50"
+                            onClick={() => handleOpenCancel(payoff)}
+                          >
+                            <Ban className="w-3.5 h-3.5 mr-1" /> Cancel
+                          </Button>
+                        </>
                       )}
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 text-[11px] font-semibold text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB]"
-                        onClick={() => handleOpenView(inv)}
+                        className="btn-financial-action text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB]"
+                        onClick={() => handleOpenView(payoff)}
                       >
                         <Receipt className="w-3.5 h-3.5 mr-1" /> Inspect
                       </Button>
@@ -225,10 +260,10 @@ const AdminPayoffsPage = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
-            Payoff & Commission Settlement Queue
+            Payoff & Offline Settlement Queue
           </h1>
           <p className="text-sm font-medium text-[#6B7280] mt-0.5">
-            Manage agency commission disbursement, review approved payoffs, and record bank settlements.
+            Authoritative financial settlement records for approved agent invoices. Record offline bank transfers.
           </p>
         </div>
       </div>
@@ -236,10 +271,10 @@ const AdminPayoffsPage = () => {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Ready for Payoff', val: `$${(stats.readyVolume / 1000).toFixed(1)}k`, sub: `${stats.readyCount} approved claims`, color: '#27500A' },
-          { label: 'Settled Commission', val: `$${(stats.paidVolume / 1000).toFixed(1)}k`, sub: `${stats.paidCount} successfully paid`, color: '#0C447C' },
-          { label: 'Pending Review', val: `$${(stats.inReviewVolume / 1000).toFixed(1)}k`, sub: `${stats.inReviewCount} under verification`, color: '#633806' },
-          { label: 'Total Volume', val: `$${(stats.totalVolume / 1000).toFixed(1)}k`, sub: `${stats.total} total commission claims`, color: '#111827' }
+          { label: 'Pending Settlement', val: `$${(stats.pendingVolume / 1000).toFixed(1)}k`, sub: `${stats.pendingCount} pending payoffs`, color: '#633806' },
+          { label: 'Settled Commission', val: `$${(stats.settledVolume / 1000).toFixed(1)}k`, sub: `${stats.settledCount} confirmed wire transfers`, color: '#27500A' },
+          { label: 'Cancelled Payoffs', val: stats.cancelledCount, sub: 'Voided liabilities', color: '#791F1F' },
+          { label: 'Total Volume', val: `$${(stats.totalVolume / 1000).toFixed(1)}k`, sub: `${stats.total} total payoffs`, color: '#111827' }
         ].map((kpi, i) => (
           <Card key={i} className="border-[#E5E7EB] bg-white shadow-none">
             <CardContent className="p-4">
@@ -255,7 +290,7 @@ const AdminPayoffsPage = () => {
       <div className="relative w-full md:w-96">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
         <Input
-          placeholder="Search by payoff ref, agency, or remarks..."
+          placeholder="Search by payoff #, invoice #, agency, or UTR..."
           className="pl-9 h-10 border-[#E5E7EB] text-sm focus-visible:ring-[#042C53]/10 bg-white"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -263,15 +298,15 @@ const AdminPayoffsPage = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="ready" className="w-full">
+      <Tabs defaultValue="pending" className="w-full">
         <TabsList className="bg-transparent h-auto p-0 gap-6 border-b border-[#E5E7EB] w-full justify-start rounded-none">
           <TabsTrigger
-            value="ready"
+            value="pending"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#27500A] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#27500A] transition-all capitalize flex items-center gap-1.5"
           >
-            Ready for Payoff ({filteredPayoffs.filter(i => i.financeReviewStatus === 'Approved' && i.status !== 'Paid').length})
-            {stats.readyCount > 0 && (
-              <Badge className="bg-[#EAF3DE] text-[#27500A] border-[#C0DD97] text-[10px] px-1.5 py-0 font-bold">
+            Pending Settlement ({filteredPayoffs.filter(p => p.status === 'PENDING').length})
+            {stats.pendingCount > 0 && (
+              <Badge className="bg-[#FAEEDA] text-[#633806] border-[#FAC775] text-[10px] px-1.5 py-0 font-bold">
                 Action Required
               </Badge>
             )}
@@ -280,7 +315,13 @@ const AdminPayoffsPage = () => {
             value="settled"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
           >
-            Settled / Paid ({filteredPayoffs.filter(i => i.status === 'Paid').length})
+            Settled Offline ({filteredPayoffs.filter(p => p.status === 'SETTLED').length})
+          </TabsTrigger>
+          <TabsTrigger
+            value="cancelled"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
+          >
+            Cancelled ({filteredPayoffs.filter(p => p.status === 'CANCELLED').length})
           </TabsTrigger>
           <TabsTrigger
             value="all"
@@ -290,12 +331,16 @@ const AdminPayoffsPage = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="ready" className="mt-6">
-          <PayoffTable list={filteredPayoffs.filter(i => i.financeReviewStatus === 'Approved' && i.status !== 'Paid')} />
+        <TabsContent value="pending" className="mt-6">
+          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'PENDING')} />
         </TabsContent>
 
         <TabsContent value="settled" className="mt-6">
-          <PayoffTable list={filteredPayoffs.filter(i => i.status === 'Paid')} />
+          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'SETTLED')} />
+        </TabsContent>
+
+        <TabsContent value="cancelled" className="mt-6">
+          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'CANCELLED')} />
         </TabsContent>
 
         <TabsContent value="all" className="mt-6">
@@ -307,9 +352,60 @@ const AdminPayoffsPage = () => {
       <PayoffSettlementModal
         open={settlementModalOpen}
         onOpenChange={setSettlementModalOpen}
-        invoice={settlementInvoice}
-        onSuccess={fetchInvoices}
+        payoff={payoffToSettle}
+        onSuccess={fetchPayoffs}
       />
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog open={cancelModalOpen} onOpenChange={setCancelModalOpen}>
+        <DialogContent className="max-w-md p-6 bg-white rounded-2xl border-none shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-red-700">
+              <Ban className="w-5 h-5" />
+              <DialogTitle className="text-lg font-bold">Cancel Payoff Liability</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-gray-600 mt-1">
+              Are you sure you want to void payoff <span className="font-mono font-bold text-gray-900">{payoffToCancel?.payoffNumber}</span>? This action is terminal and cannot be undone once confirmed.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-3">
+            <Label htmlFor="cancelNotes" className="text-xs font-semibold text-gray-700">
+              Cancellation Reason / Internal Memo
+            </Label>
+            <Textarea
+              id="cancelNotes"
+              rows={2}
+              placeholder="e.g. Agency agreement revised, duplicate claim voided."
+              value={cancelNotes}
+              onChange={(e) => setCancelNotes(e.target.value)}
+              className="text-xs bg-gray-50 resize-none"
+            />
+          </div>
+
+          <DialogFooter className="flex justify-between items-center sm:justify-between pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCancelModalOpen(false)}
+              disabled={cancelling}
+              className="text-xs"
+            >
+              Back
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConfirmCancel}
+              disabled={cancelling}
+              className="text-xs bg-red-700 hover:bg-red-800 text-white font-semibold"
+            >
+              {cancelling ? 'Cancelling...' : 'Confirm Cancellation'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Payoff Inspection Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
@@ -320,19 +416,19 @@ const AdminPayoffsPage = () => {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <CreditCard className="w-6 h-6 text-blue-200" />
-                    <h2 className="text-2xl font-bold font-['Outfit']">COMMISSION SETTLEMENT</h2>
+                    <h2 className="text-2xl font-bold font-['Outfit']">PAYOFF RECORD</h2>
                   </div>
                   <p className="text-blue-100 text-xs font-medium">
-                    Payoff Reference: <span className="font-mono font-bold text-white">{selectedPayoff.invoiceNumber}</span> &bull; Agency: {selectedPayoff.agentId?.agencyName || selectedPayoff.agentId?.name}
+                    Payoff #: <span className="font-mono font-bold text-white">{selectedPayoff.payoffNumber}</span> &bull; Invoice: {selectedPayoff.invoiceId?.invoiceNumber || 'N/A'}
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-blue-200 font-semibold uppercase tracking-wider block">Disbursement Amount</span>
+                  <span className="text-xs text-blue-200 font-semibold uppercase tracking-wider block">Net Settlement Amount</span>
                   <span className="text-3xl font-bold font-['Outfit'] block mt-0.5">
-                    ${Number(selectedPayoff.amount || 0).toLocaleString()}
+                    ${Number(selectedPayoff.netAmount || 0).toLocaleString()}
                   </span>
                   <span className="text-[11px] text-blue-200 block">
-                    Commission Rate: {selectedPayoff.commissionRate ? `${selectedPayoff.commissionRate}%` : 'Pending Review'}
+                    Gross: ${Number(selectedPayoff.grossCommission || 0).toLocaleString()} &bull; Deductions: ${Number(selectedPayoff.deductions || 0).toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -340,42 +436,75 @@ const AdminPayoffsPage = () => {
               <div className="p-8 space-y-6 flex-1 max-h-[70vh] overflow-y-auto">
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Settlement Status</span>
-                    <div className="mt-1">{getPayoffBadge(selectedPayoff)}</div>
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Payoff Status</span>
+                    <div className="mt-1">{getPayoffBadge(selectedPayoff.status)}</div>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Settlement Execution Date</span>
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Payee Agent / Agency</span>
                     <span className="text-xs font-bold text-gray-900 mt-1 block">
-                      {selectedPayoff.paidAt ? format(new Date(selectedPayoff.paidAt), 'MMMM dd, yyyy') : 'Pending Bank Settlement'}
+                      {selectedPayoff.agentId?.agencyName || selectedPayoff.agentId?.name || 'Agent'} ({selectedPayoff.agentId?.email})
                     </span>
                   </div>
                 </div>
 
-                {selectedPayoff.remarks && (
-                  <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-200 space-y-1">
-                    <span className="text-xs font-bold text-[#042C53] flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-[#042C53]" /> Settlement Transaction Reference & Remarks
+                {/* Offline Settlement Information */}
+                {selectedPayoff.status === 'SETTLED' && (
+                  <div className="p-4 bg-emerald-50/70 rounded-xl border border-emerald-200 space-y-2">
+                    <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Confirmed Offline Settlement Details
                     </span>
-                    <p className="text-xs text-gray-700 whitespace-pre-wrap">{selectedPayoff.remarks}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-emerald-900 pt-1">
+                      <div>
+                        <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Settlement Ref (UTR)</span>
+                        <span className="font-mono font-bold">{selectedPayoff.settlementReference}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Transfer Date</span>
+                        <span>{selectedPayoff.settledAt ? format(new Date(selectedPayoff.settledAt), 'MMMM dd, yyyy') : 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Batch Reference</span>
+                        <span className="font-mono">{selectedPayoff.batchReference || 'N/A'}</span>
+                      </div>
+                    </div>
+                    {selectedPayoff.settlementNotes && (
+                      <p className="text-xs text-emerald-800 pt-1 border-t border-emerald-200/60 mt-2 italic">
+                        Notes: {selectedPayoff.settlementNotes}
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {/* Applications Breakdown */}
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-gray-900 block">Enrolled Student Applications</span>
-                  <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
-                    <Table>
-                      <TableHeader className="bg-[#F9FAFB]">
-                        <TableRow>
-                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Application #</TableHead>
-                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Applicant Name</TableHead>
-                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">University & Course</TableHead>
-                          <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3 text-right">Tuition Fee</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedPayoff.applications && selectedPayoff.applications.length > 0 ? (
-                          selectedPayoff.applications.map((app, idx) => (
+                {selectedPayoff.status === 'CANCELLED' && (
+                  <div className="p-4 bg-red-50/70 rounded-xl border border-red-200 space-y-1">
+                    <span className="text-xs font-bold text-red-900 flex items-center gap-1.5">
+                      <Ban className="w-4 h-4 text-red-600" /> Voided Payoff Record
+                    </span>
+                    <p className="text-xs text-red-800">
+                      This payoff liability has been cancelled by an administrator. Terminal state cannot be settled.
+                    </p>
+                    {selectedPayoff.settlementNotes && (
+                      <p className="text-xs text-red-700 italic mt-1">{selectedPayoff.settlementNotes}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Linked Invoice Applications Breakdown */}
+                {selectedPayoff.invoiceId?.applications && selectedPayoff.invoiceId.applications.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-gray-900 block">Enrolled Student Applications Linked to Invoice</span>
+                    <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
+                      <Table>
+                        <TableHeader className="bg-[#F9FAFB]">
+                          <TableRow>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Application #</TableHead>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Applicant Name</TableHead>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">University & Course</TableHead>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3 text-right">Tuition Fee</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedPayoff.invoiceId.applications.map((app, idx) => (
                             <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0">
                               <TableCell className="px-6 py-4 text-xs font-bold text-[#111827]">
                                 {app.applicationNumber}
@@ -392,24 +521,18 @@ const AdminPayoffsPage = () => {
                                 {app.tuitionFee ? `$${Number(app.tuitionFee).toLocaleString()}` : 'Unknown'}
                               </TableCell>
                             </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-center py-6 text-xs text-gray-500">
-                              Applications linked to this settlement.
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Review Audit Timeline */}
+                {/* Audit Timeline */}
                 {reviewHistory.length > 0 && (
                   <div className="space-y-2 pt-2">
                     <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                      <History className="w-3.5 h-3.5 text-gray-500" /> Settlement & Verification Timeline
+                      <History className="w-3.5 h-3.5 text-gray-500" /> Invoice Review Timeline
                     </span>
                     <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2 text-xs">
                       {reviewHistory.map((item, idx) => (
@@ -433,17 +556,29 @@ const AdminPayoffsPage = () => {
                   Authoritative Settlement Record &bull; QStudy Portal
                 </div>
                 <div className="flex gap-2">
-                  {selectedPayoff.financeReviewStatus === 'Approved' && selectedPayoff.status !== 'Paid' && (
-                    <Button
-                      size="sm"
-                      className="h-9 px-4 text-xs font-bold text-white bg-[#27500A] hover:bg-[#1E3D07]"
-                      onClick={() => {
-                        setIsViewOpen(false);
-                        handleOpenSettlement(selectedPayoff);
-                      }}
-                    >
-                      <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Settle Payout
-                    </Button>
+                  {selectedPayoff.status === 'PENDING' && (
+                    <>
+                      <Button
+                        size="sm"
+                        className="h-9 px-4 text-xs font-bold text-white bg-[#27500A] hover:bg-[#1E3D07]"
+                        onClick={() => {
+                          setIsViewOpen(false);
+                          handleOpenSettlement(selectedPayoff);
+                        }}
+                      >
+                        <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Settle Payoff
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 px-4 text-xs font-bold text-red-700 border-red-200 hover:bg-red-50"
+                        onClick={() => {
+                          handleOpenCancel(selectedPayoff);
+                        }}
+                      >
+                        <Ban className="w-3.5 h-3.5 mr-1.5" /> Cancel Payoff
+                      </Button>
+                    </>
                   )}
                   <Button
                     size="sm"
