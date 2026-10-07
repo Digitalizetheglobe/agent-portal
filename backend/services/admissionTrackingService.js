@@ -31,12 +31,21 @@ const ALLOWED_TRANSITIONS = {
   Withdrawn: []
 };
 
+// Deposit lifecycle: Required -> Paid -> Verified | NotVerified
+const DEPOSIT_STATUSES = ['Required', 'Paid', 'Verified', 'NotVerified'];
+const DEPOSIT_TRANSITIONS = {
+  Required: ['Paid'],
+  Paid: ['Required', 'Verified', 'NotVerified'],
+  NotVerified: ['Required', 'Paid', 'Verified'],
+  Verified: ['Paid', 'NotVerified']
+};
+
 // Standard inclusions for application queries
 const standardIncludes = [
   {
     model: Student,
     as: 'student',
-    attributes: ['id', 'name', 'email', 'phone', 'country', 'education', 'status']
+    attributes: ['id', 'name', 'email', 'phone', 'country', 'education', 'status', 'verificationStatus']
   },
   {
     model: User,
@@ -87,7 +96,7 @@ class AdmissionTrackingService {
   /**
    * Authoritatively derive invoice eligibility based on the 4 institutional pillars:
    * 1. Verified Admission (admissionDate exists)
-   * 2. Verified Deposit (depositPaid is true)
+   * 2. Verified Deposit (depositStatus is 'Verified')
    * 3. Verified Student (linked student has verificationStatus === 'Verified')
    * 4. Institutional Matriculation (status === 'Enrolled' && enrollmentDate exists)
    */
@@ -98,13 +107,26 @@ class AdmissionTrackingService {
     }
 
     const isAdmissionVerified = Boolean(application.admissionDate);
-    const isDepositVerified = Boolean(application.depositPaid);
+    const isDepositVerified = application.depositStatus === 'Verified';
     const isStudentVerified = student ? student.verificationStatus === 'Verified' : false;
     const isEnrollmentVerified = application.status === 'Enrolled' && Boolean(application.enrollmentDate);
 
     const eligible = isAdmissionVerified && isDepositVerified && isStudentVerified && isEnrollmentVerified;
     application.isInvoiceEligible = eligible;
     return eligible;
+  }
+
+  /**
+   * Enrollment is blocked until the tuition deposit has been verified.
+   */
+  assertDepositVerifiedForEnrollment(application) {
+    if (application.depositStatus !== 'Verified') {
+      const err = new Error(
+        `Cannot enroll: the tuition deposit must be verified first (current deposit status: '${application.depositStatus || 'Required'}').`
+      );
+      err.statusCode = 400;
+      throw err;
+    }
   }
 
   /**
@@ -129,6 +151,10 @@ class AdmissionTrackingService {
 
     const application = await this._findAndAuthorize(id, currentUser);
     const currentStatus = application.status;
+
+    if (newStatus === 'Enrolled') {
+      this.assertDepositVerifiedForEnrollment(application);
+    }
 
     // Validate transition
     const allowedNext = ALLOWED_TRANSITIONS[currentStatus] || [];
@@ -469,6 +495,8 @@ class AdmissionTrackingService {
       throw err;
     }
 
+    this.assertDepositVerifiedForEnrollment(application);
+
     if (enrollmentDate) {
       const date = new Date(enrollmentDate);
       if (isNaN(date.getTime())) {
@@ -510,9 +538,11 @@ class AdmissionTrackingService {
   }
 
   /**
-   * Update deposit information
+   * Update deposit information and lifecycle status.
+   * Required -> Paid -> Verified | NotVerified. Only admins can move it, and only 'Verified'
+   * unlocks enrollment and commission eligibility.
    */
-  async updateDeposit(id, { depositPaid, depositAmount }, currentUser) {
+  async updateDeposit(id, { depositStatus, depositPaid, depositAmount, notes }, currentUser) {
     if (currentUser.role !== 'admin') {
       const err = new Error('Access denied. Deposit verification is restricted to admin.');
       err.statusCode = 403;
@@ -520,29 +550,86 @@ class AdmissionTrackingService {
     }
 
     const application = await this._findAndAuthorize(id, currentUser);
+    const fail = (message) => {
+      const err = new Error(message);
+      err.statusCode = 400;
+      throw err;
+    };
 
-    if (depositAmount !== undefined && depositAmount !== null && depositAmount !== '') {
+    if (application.status === 'Rejected' || application.status === 'Withdrawn') {
+      fail(`Cannot update the deposit of an application with status '${application.status}'`);
+    }
+
+    const hasAmount = depositAmount !== undefined && depositAmount !== null && depositAmount !== '';
+    if (hasAmount) {
       const parsed = parseFloat(depositAmount);
       if (isNaN(parsed) || parsed < 0) {
-        const err = new Error('Deposit amount must be a valid number greater than or equal to 0');
-        err.statusCode = 400;
-        throw err;
+        fail('Deposit amount must be a valid number greater than or equal to 0');
+      }
+    }
+
+    // Legacy callers send only depositPaid: true -> Paid, false -> Required
+    let targetStatus = depositStatus;
+    if (!targetStatus && depositPaid !== undefined) {
+      targetStatus = depositPaid ? 'Paid' : 'Required';
+    }
+
+    const previousStatus = application.depositStatus || 'Required';
+    const nextAmount = hasAmount
+      ? parseFloat(depositAmount)
+      : (application.depositAmount !== null ? parseFloat(application.depositAmount) : null);
+    const trimmedNotes = notes && notes.trim() ? notes.trim() : null;
+
+    if (targetStatus !== undefined) {
+      if (!DEPOSIT_STATUSES.includes(targetStatus)) {
+        fail(`Invalid deposit status. Allowed values: ${DEPOSIT_STATUSES.join(', ')}`);
+      }
+
+      if (targetStatus !== previousStatus) {
+        const allowedNext = DEPOSIT_TRANSITIONS[previousStatus] || [];
+        if (!allowedNext.includes(targetStatus)) {
+          fail(`Invalid deposit transition from '${previousStatus}' to '${targetStatus}'. Allowed: ${allowedNext.join(', ') || 'none'}`);
+        }
+
+        // A verified deposit backs an enrollment and possibly an invoice, so it cannot be withdrawn then
+        if (previousStatus === 'Verified' && (application.status === 'Enrolled' || application.isInvoiced)) {
+          fail('Cannot change a verified deposit after the student is enrolled or the application is invoiced');
+        }
+      }
+
+      if (targetStatus === 'Verified' && !(nextAmount > 0)) {
+        fail('A deposit amount greater than 0 must be recorded before the deposit can be verified');
+      }
+      if (targetStatus === 'NotVerified' && !trimmedNotes) {
+        fail('A reason is required when marking a deposit as Not Verified');
       }
     }
 
     const t = await sequelize.transaction();
     try {
-      if (depositPaid !== undefined) {
-        application.depositPaid = Boolean(depositPaid);
-      }
-      if (depositAmount !== undefined && depositAmount !== null && depositAmount !== '') {
+      if (hasAmount) {
         application.depositAmount = parseFloat(depositAmount);
+      }
+
+      if (targetStatus !== undefined) {
+        application.depositStatus = targetStatus;
+        application.depositPaid = targetStatus !== 'Required';
+        if (targetStatus === 'Verified') {
+          application.depositVerifiedAt = new Date();
+          application.depositVerifiedBy = currentUser.id;
+        } else {
+          application.depositVerifiedAt = null;
+          application.depositVerifiedBy = null;
+        }
+        application.depositNotes = trimmedNotes;
       }
 
       const history = Array.isArray(application.history) ? [...application.history] : [];
       history.push({
         action: 'DEPOSIT_UPDATED',
-        notes: `Deposit updated: paid=${application.depositPaid}, amount=${application.depositAmount}`,
+        from: previousStatus,
+        to: application.depositStatus,
+        notes: `Deposit ${previousStatus} -> ${application.depositStatus}, amount=${application.depositAmount}${trimmedNotes ? `. ${trimmedNotes}` : ''}`,
         changedBy: currentUser.id,
         changedAt: new Date().toISOString()
       });
@@ -593,8 +680,12 @@ class AdmissionTrackingService {
           enrollmentProofUrl: application.enrollmentProofUrl
         },
         deposit: {
+          depositStatus: application.depositStatus,
           depositPaid: application.depositPaid,
-          depositAmount: application.depositAmount
+          depositAmount: application.depositAmount,
+          depositVerifiedAt: application.depositVerifiedAt,
+          depositVerifiedBy: application.depositVerifiedBy,
+          depositNotes: application.depositNotes
         },
         invoice: {
           isInvoiceEligible: application.isInvoiceEligible,

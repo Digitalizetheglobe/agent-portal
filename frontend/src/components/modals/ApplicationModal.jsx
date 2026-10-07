@@ -45,12 +45,22 @@ const initialFormState = {
   agentId: '',
   universityId: '',
   sourceEventId: '',
+  courseId: '',
   courseName: '',
   courseLevel: 'Undergraduate',
   intakeTerm: '',
   tuitionFee: '',
   currency: 'USD',
   remarks: ''
+};
+
+// Mirrors backend parseCourseTuitionFee: a single unambiguous amount, else null.
+const parseCourseFee = (fee) => {
+  if (!fee || typeof fee !== 'string') return null;
+  const matches = fee.match(/\d+(?:,\d{3})*(?:\.\d{1,2})?/g);
+  if (!matches || matches.length !== 1) return null;
+  const value = parseFloat(matches[0].replace(/,/g, ''));
+  return value > 0 && isFinite(value) ? value : null;
 };
 
 const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess }) => {
@@ -101,6 +111,22 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
     return universities.filter(u => u.status === 'active' || !u.status);
   }, [universities]);
 
+  // Active catalog courses offered by the selected university (or open to all)
+  const availableCourses = useMemo(() => {
+    if (!formData.universityId || !Array.isArray(courses)) return [];
+    return courses.filter(c => {
+      if (c.status && c.status !== 'active') return false;
+      const ids = (c.universityIds || []).map(String);
+      return ids.length === 0 || ids.includes(String(formData.universityId));
+    });
+  }, [courses, formData.universityId]);
+
+  const selectedCourse = useMemo(
+    () => availableCourses.find(c => String(c.id || c._id) === String(formData.courseId)),
+    [availableCourses, formData.courseId]
+  );
+  const catalogTuition = selectedCourse ? parseCourseFee(selectedCourse.tuitionFee) : null;
+
   // When opening or application prop changes
   useEffect(() => {
     if (application) {
@@ -109,6 +135,7 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
         agentId: application.agentId ? String(application.agentId) : (application.agent?.id ? String(application.agent.id) : ''),
         universityId: application.universityId ? String(application.universityId) : (application.university?.id ? String(application.university.id) : ''),
         sourceEventId: application.sourceEventId ? String(application.sourceEventId) : '',
+        courseId: application.courseId ? String(application.courseId) : '',
         courseName: application.courseName || '',
         courseLevel: application.courseLevel || 'Undergraduate',
         intakeTerm: application.intakeTerm || '',
@@ -127,7 +154,15 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
   }, [application, open, user, isAdmin]);
 
   const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const next = { ...prev, [field]: value };
+      // Course must belong to the chosen university, so reset it when the university changes
+      if (field === 'universityId' && value !== prev.universityId) {
+        next.courseId = '';
+        next.courseName = '';
+      }
+      return next;
+    });
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: null }));
     }
@@ -138,9 +173,6 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
       if (selectedStudent) {
         setFormData(prev => {
           const updates = { ...prev, studentId: value };
-          if (!prev.courseName && selectedStudent.courseInterested) {
-            updates.courseName = selectedStudent.courseInterested;
-          }
           if (!prev.universityId && (selectedStudent.universityId || selectedStudent.customFields?.universityId)) {
             updates.universityId = selectedStudent.universityId || selectedStudent.customFields?.universityId;
           }
@@ -161,8 +193,8 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
     if (!formData.universityId) {
       newErrors.universityId = 'University is required';
     }
-    if (!formData.courseName.trim()) {
-      newErrors.courseName = 'Course name is required';
+    if (!formData.courseId && !(isEditing && !application?.courseId && formData.courseName.trim())) {
+      newErrors.courseId = 'Select a course from the catalog';
     }
     if (formData.tuitionFee && (isNaN(Number(formData.tuitionFee)) || Number(formData.tuitionFee) < 0)) {
       newErrors.tuitionFee = 'Tuition fee must be a valid positive number';
@@ -179,10 +211,9 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
     try {
       const payload = {
         universityId: formData.universityId,
-        courseName: formData.courseName.trim(),
-        courseLevel: formData.courseLevel,
+        courseId: formData.courseId || undefined,
         intakeTerm: formData.intakeTerm.trim() || null,
-        tuitionFee: formData.tuitionFee ? parseFloat(formData.tuitionFee) : null,
+        tuitionFee: catalogTuition ?? (formData.tuitionFee ? parseFloat(formData.tuitionFee) : null),
         currency: formData.currency || 'USD',
         sourceEventId: formData.sourceEventId || null,
         remarks: formData.remarks.trim() || null
@@ -343,40 +374,48 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
             {errors.universityId && <p className="text-[11px] text-red-500 font-medium">{errors.universityId}</p>}
           </div>
 
-          {/* Course Name & Level */}
+          {/* Course (from university catalog) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="app-course-name" className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+              <Label htmlFor="app-course" className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-[#042C53]" />
-                Course Name <span className="text-red-500">*</span>
+                Course / Program <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="app-course-name"
-                placeholder="e.g. B.Sc Computer Science"
-                value={formData.courseName}
-                onChange={(e) => handleChange('courseName', e.target.value)}
-                className={`bg-white text-xs ${errors.courseName ? 'border-red-500' : 'border-gray-200'}`}
-              />
-              {errors.courseName && <p className="text-[11px] text-red-500 font-medium">{errors.courseName}</p>}
+              <Select
+                value={formData.courseId}
+                onValueChange={(val) => handleChange('courseId', val)}
+                disabled={!formData.universityId}
+              >
+                <SelectTrigger id="app-course" className={`bg-white text-xs ${errors.courseId ? 'border-red-500' : 'border-gray-200'}`}>
+                  <SelectValue placeholder={formData.universityId ? 'Select a course...' : 'Select a university first'} />
+                </SelectTrigger>
+                <SelectContent className="max-h-56">
+                  {availableCourses.length === 0 ? (
+                    <div className="py-3 text-center text-xs text-gray-400">No active courses for this university</div>
+                  ) : (
+                    availableCourses.map(c => (
+                      <SelectItem key={c.id || c._id} value={String(c.id || c._id)}>
+                        <span className="font-medium">{c.name}</span>
+                        {c.level && <span className="text-gray-500 text-[11px] ml-1.5">({c.level})</span>}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {errors.courseId && <p className="text-[11px] text-red-500 font-medium">{errors.courseId}</p>}
+              {isEditing && !application?.courseId && formData.courseName && !formData.courseId && (
+                <p className="text-[11px] text-amber-600">Legacy course: "{formData.courseName}". Pick a catalog course to update it.</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-gray-700">
-                Course Level <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={formData.courseLevel}
-                onValueChange={(val) => handleChange('courseLevel', val)}
-              >
-                <SelectTrigger className="bg-white text-xs border-gray-200">
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-                <SelectContent>
-                  {COURSE_LEVELS.map(lvl => (
-                    <SelectItem key={lvl} value={lvl}>{lvl}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs font-semibold text-gray-700">Course Level</Label>
+              <Input
+                disabled
+                value={selectedCourse?.level || formData.courseLevel || ''}
+                placeholder="Set by the selected course"
+                className="bg-gray-100 text-xs text-gray-700 font-medium cursor-not-allowed"
+              />
             </div>
           </div>
 
@@ -432,10 +471,14 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
                 step="any"
                 min="0"
                 placeholder="e.g. 15000"
-                value={formData.tuitionFee}
+                value={catalogTuition ?? formData.tuitionFee}
                 onChange={(e) => handleChange('tuitionFee', e.target.value)}
-                className={`bg-white text-xs ${errors.tuitionFee ? 'border-red-500' : 'border-gray-200'}`}
+                disabled={catalogTuition !== null}
+                className={`bg-white text-xs ${errors.tuitionFee ? 'border-red-500' : 'border-gray-200'} ${catalogTuition !== null ? 'bg-gray-100 cursor-not-allowed' : ''}`}
               />
+              {catalogTuition !== null && (
+                <p className="text-[11px] text-gray-500">Set from the course catalog.</p>
+              )}
               {errors.tuitionFee && <p className="text-[11px] text-red-500 font-medium">{errors.tuitionFee}</p>}
             </div>
 

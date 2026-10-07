@@ -106,6 +106,7 @@ const AgentPayoffsPage = () => {
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Payoff Ref #</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Gross Commission</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Deductions</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Net Amount</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement Status</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement Details</TableHead>
@@ -115,7 +116,7 @@ const AgentPayoffsPage = () => {
         <TableBody>
           {list.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-20 text-[#6B7280]">
+              <TableCell colSpan={8} className="text-center py-20 text-[#6B7280]">
                 <div className="flex flex-col items-center gap-3">
                   <CreditCard className="w-10 h-10 opacity-20" />
                   <p className="text-sm font-medium">No payoff records found in this view.</p>
@@ -136,6 +137,9 @@ const AgentPayoffsPage = () => {
                   </TableCell>
                   <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center font-['Outfit'] tabular-nums">
                     {formatCurrency(payoff.grossCommission, payoff.currency)}
+                  </TableCell>
+                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center font-['Outfit'] tabular-nums">
+                    {formatCurrency(payoff.deductions || 0, payoff.currency)}
                   </TableCell>
                   <TableCell className="px-6 py-4 font-bold text-[#042C53] text-center font-['Outfit'] text-base tabular-nums">
                     {formatCurrency(payoff.netAmount || payoff.grossCommission, payoff.currency)}

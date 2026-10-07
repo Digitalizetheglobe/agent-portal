@@ -320,6 +320,7 @@ const AdminStudentVerificationPage = () => {
                     const agentInfo = typeof student.agentId === 'object' ? student.agentId : null;
                     const docCount = Array.isArray(student.documents) ? student.documents.length : 0;
                     const isActing = actionLoading === student.id;
+                    const notReady = student.readyForVerification === false;
                     const canInitiate = (
                       student.verificationStatus === STUDENT_VERIFICATION_STATUS.PENDING ||
                       student.verificationStatus === STUDENT_VERIFICATION_STATUS.REJECTED
@@ -390,8 +391,9 @@ const AdminStudentVerificationPage = () => {
                             {canInitiate && (
                               <Button
                                 size="sm"
-                                disabled={isActing}
-                                className="h-7 px-2.5 text-[10px] font-bold bg-[#042C53] hover:bg-[#0C447C] text-white"
+                                disabled={isActing || notReady}
+                                title={notReady ? 'Verification starts after the student is enrolled with a verified deposit' : undefined}
+                                className="h-7 px-2.5 text-[10px] font-bold bg-[#042C53] hover:bg-[#0C447C] text-white disabled:opacity-50"
                                 onClick={() => handleInitiate(student.id, student.name)}
                               >
                                 {isActing ? <Loader2 className="w-3 h-3 animate-spin" /> : (

@@ -1,483 +1,523 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users,
-  Calendar,
   GraduationCap,
-  TrendingUp,
-  ArrowRight,
-  DollarSign,
-  BarChart3,
-  Ticket,
+  ClipboardList,
   FileText,
-  Filter,
-  ChevronDown,
+  AlertTriangle,
+  Wallet,
+  CheckCircle2,
+  Clock,
   ArrowUpRight,
-  CalendarDays,
-  CalendarCheck,
-  CalendarClock
+  ArrowRight,
+  Building2,
+  ShieldCheck,
+  IndianRupee,
+  TrendingUp,
+  BadgeCheck,
+  Activity,
+  UserCheck,
+  XCircle
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Badge } from '../../components/ui/badge';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts';
+import { formatCurrency } from '../../utils/financialFormatters';
 
 const AdminDashboard = () => {
-  const { agents, events, students, invoices, tickets, getStats } = useData();
-  const [dateRange, setDateRange] = useState('1 month');
-  const [customDates, setCustomDates] = useState({ start: '', end: '' });
+  const {
+    agents,
+    students,
+    applications,
+    invoices,
+    payoffs,
+    reviewQueue,
+    verificationQueue,
+    fetchAgents,
+    fetchStudents,
+    fetchApplications,
+    fetchInvoices,
+    fetchPayoffs,
+    fetchVerificationQueue
+  } = useData();
 
-  // 1. Filtering Logic
-  const getFilteredData = (data, dateField = 'createdAt') => {
-    const now = new Date();
-    let startDate = new Date();
+  useEffect(() => {
+    fetchAgents?.();
+    fetchStudents?.();
+    fetchApplications?.();
+    fetchInvoices?.();
+    fetchPayoffs?.();
+    fetchVerificationQueue?.();
+  }, [fetchAgents, fetchStudents, fetchApplications, fetchInvoices, fetchPayoffs, fetchVerificationQueue]);
 
-    if (dateRange === '1 week') startDate.setDate(now.getDate() - 7);
-    else if (dateRange === '1 month') startDate.setMonth(now.getMonth() - 1);
-    else if (dateRange === '6 month') startDate.setMonth(now.getMonth() - 6);
-    else if (dateRange === '1 year') startDate.setFullYear(now.getFullYear() - 1);
-    else if (dateRange === 'custom' && customDates.start && customDates.end) {
-      return data.filter(item => {
-        const itemDate = new Date(item[dateField] || item.submittedAt);
-        return itemDate >= new Date(customDates.start) && itemDate <= new Date(customDates.end);
-      });
-    } else {
-      // Default to 1 month if something is weird
-      startDate.setMonth(now.getMonth() - 1);
-    }
+  // Helper for payoff amounts (backend uses netAmount, grossCommission, or amount)
+  const getPayoffAmount = (p) => Number(p.netAmount ?? p.grossCommission ?? p.amount ?? 0);
 
-    return data.filter(item => new Date(item[dateField] || item.submittedAt) >= startDate);
-  };
+  // ═══ OPERATIONS KPIs ═══
+  const totalAgents = agents.length;
+  const activeAgents = agents.filter(a => (a.status || '').toLowerCase() === 'active').length;
+  const pendingAgents = agents.filter(a => (a.status || '').toLowerCase() !== 'active').length;
 
-  const filteredStudents = getFilteredData(students, 'submittedAt');
-  const filteredInvoices = getFilteredData(invoices, 'createdAt');
-  const filteredTickets = getFilteredData(tickets, 'createdAt');
+  const totalStudents = students.length;
 
-  // 2. Re-calculate metrics based on filtered data
-  const convertedStudents = filteredStudents.filter(s => s.status === 'Converted');
-  const revenueValue = convertedStudents.length * 22500;
-  const revenueDisplay = revenueValue >= 100000
-    ? `₹${(revenueValue / 100000).toFixed(1)}L`
-    : `₹${revenueValue.toLocaleString()}`;
+  const activeApplications = applications.filter(app =>
+    !['completed', 'rejected', 'withdrawn', 'cancelled'].includes(app.status?.toLowerCase())
+  ).length;
 
-  const totalCapacity = events.length * 50;
-  const totalOccupied = filteredStudents.length;
-  const avgFillRate = totalCapacity > 0 ? Math.round((totalOccupied / totalCapacity) * 100) : 0;
+  const admissions = applications.filter(app =>
+    ['admitted', 'enrolled', 'completed'].includes(app.status?.toLowerCase())
+  ).length;
 
-  const statCards = [
-    {
-      title: 'Total agents',
-      value: agents.length,
-      subValue: `${agents.filter(a => a.status === 'active').length} active · ${agents.filter(a => a.status !== 'active').length} pending`,
-      icon: Users,
-      color: '#534AB7',
-      bgColor: '#EEEDFE',
-      trend: 'up'
-    },
+  // ═══ FINANCE KPIs ═══
+  const invoicesUnderReview = invoices.filter(inv => {
+    const rev = (inv.financeReviewStatus || '').toLowerCase();
+    const st = (inv.status || '').toLowerCase();
+    return ['pendingreview', 'underreview', 'resubmitted'].includes(rev) ||
+           ['submitted', 'under_review', 'pending'].includes(st);
+  }).length;
 
-    {
-      title: 'Total Events',
-      value: events.length.toLocaleString(),
-      subValue: `${events.filter(e => new Date(e.date) >= new Date()).length} upcoming sessions`,
-      icon: CalendarDays,
-      color: '#B25E09',
-      bgColor: '#FFF7ED',
-      trend: 'up'
-    },
-    {
-      title: 'Events Completed',
-      value: events.filter(e => new Date(e.date) < new Date()).length.toLocaleString(),
-      subValue: 'Past event sessions',
-      icon: CalendarCheck,
-      color: '#3C3489',
-      bgColor: '#EEEDFE',
-      trend: 'up'
-    },
-    {
-      title: 'Events Live/Upcoming',
-      value: events.filter(e => new Date(e.date) >= new Date()).length.toLocaleString(),
-      subValue: 'Active & scheduled',
-      icon: CalendarClock,
-      color: '#0C447C',
-      bgColor: '#E6F1FB',
-      trend: 'up'
-    }
+  const correctionRequired = invoices.filter(inv => {
+    const rev = (inv.financeReviewStatus || '').toLowerCase();
+    const st = (inv.status || '').toLowerCase();
+    return rev === 'correctionrequired' || st === 'correction_required';
+  }).length;
 
-  ];
+  const approvedInvoices = invoices.filter(inv => {
+    const rev = (inv.financeReviewStatus || '').toLowerCase();
+    const st = (inv.status || '').toLowerCase();
+    return rev === 'approved' || st === 'approved' || st === 'paid';
+  }).length;
 
-  // Adaptive Chart Logic: Show days for 1 week, months for others
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const chartData = [];
-  if (dateRange === '1 week') {
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dayLabel = dayNames[d.getDay()];
-      const dayStudents = filteredStudents.filter(s => {
-        const sd = new Date(s.submittedAt);
-        return sd.getDate() === d.getDate() && sd.getMonth() === d.getMonth() && sd.getFullYear() === d.getFullYear();
-      });
-      chartData.push({
-        name: dayLabel,
-        registrations: dayStudents.length,
-        conversions: dayStudents.filter(s => s.status === 'Converted').length
-      });
-    }
-  } else {
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      const m = monthNames[d.getMonth()];
-      const year = d.getFullYear();
-      const monthStudents = filteredStudents.filter(s => {
-        const sd = new Date(s.submittedAt);
-        return sd.getMonth() === d.getMonth() && sd.getFullYear() === year;
-      });
-      chartData.push({
-        name: m,
-        registrations: monthStudents.length,
-        conversions: monthStudents.filter(s => s.status === 'Converted').length
-      });
-    }
+  const pendingPayoffs = payoffs.filter(p => {
+    const st = (p.status || '').toUpperCase();
+    return st === 'PENDING' || st === 'APPROVED';
+  });
+  const pendingPayoffsAmount = pendingPayoffs.reduce(
+    (sum, p) => sum + getPayoffAmount(p), 0
+  );
+
+  // ═══ SETTLEMENT KPIs ═══
+  const pendingSettlementCount = payoffs.filter(p => (p.status || '').toUpperCase() === 'PENDING').length;
+
+  const settledPayoffs = payoffs.filter(p => {
+    const st = (p.status || '').toUpperCase();
+    return st === 'SETTLED' || st === 'COMPLETED';
+  });
+  const settledAmount = settledPayoffs.reduce(
+    (sum, p) => sum + getPayoffAmount(p), 0
+  );
+
+  // Settled this month
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const settledThisMonth = settledPayoffs
+    .filter(p => {
+      const dateVal = p.settledAt || p.updatedAt || p.createdAt;
+      return dateVal ? new Date(dateVal) >= thisMonthStart : false;
+    })
+    .reduce((sum, p) => sum + getPayoffAmount(p), 0);
+
+  // ═══ VERIFICATION ═══
+  const pendingVerifications = verificationQueue?.filter(s => {
+    const st = (s.verificationStatus || '').toLowerCase();
+    return st === 'pending' || st === 'initiated';
+  }).length || 0;
+
+  // ═══ ACTION QUEUE ═══
+  const actionQueue = [];
+
+  if (correctionRequired > 0) {
+    actionQueue.push({
+      icon: FileText,
+      iconBg: '#FCEBEB',
+      iconColor: '#791F1F',
+      count: correctionRequired,
+      label: `Invoice${correctionRequired > 1 ? 's' : ''} awaiting correction from agents`,
+      link: '/admin/invoices',
+      urgency: 'high'
+    });
   }
 
-  const statusBreakdown = {};
-  filteredStudents.forEach(s => {
-    statusBreakdown[s.status] = (statusBreakdown[s.status] || 0) + 1;
+  if (invoicesUnderReview > 0) {
+    actionQueue.push({
+      icon: ClipboardList,
+      iconBg: '#E6F1FB',
+      iconColor: '#0C447C',
+      count: invoicesUnderReview,
+      label: `Invoice${invoicesUnderReview > 1 ? 's' : ''} waiting for your review`,
+      link: '/admin/invoices',
+      urgency: 'medium'
+    });
+  }
+
+  if (pendingPayoffs.length > 0) {
+    actionQueue.push({
+      icon: Wallet,
+      iconBg: '#FFF7ED',
+      iconColor: '#B45309',
+      count: pendingPayoffs.length,
+      label: `Payoff${pendingPayoffs.length > 1 ? 's' : ''} pending settlement`,
+      link: '/admin/payoffs',
+      urgency: 'medium'
+    });
+  }
+
+  if (pendingVerifications > 0) {
+    actionQueue.push({
+      icon: UserCheck,
+      iconBg: '#EEEDFE',
+      iconColor: '#534AB7',
+      count: pendingVerifications,
+      label: `Student verification${pendingVerifications > 1 ? 's' : ''} pending review`,
+      link: '/admin/verification',
+      urgency: 'low'
+    });
+  }
+
+  if (pendingAgents > 0) {
+    actionQueue.push({
+      icon: Users,
+      iconBg: '#FEF3C7',
+      iconColor: '#92400E',
+      count: pendingAgents,
+      label: `Agent registration${pendingAgents > 1 ? 's' : ''} pending approval`,
+      link: '/admin/agents',
+      urgency: 'low'
+    });
+  }
+
+  // ═══ RECENT ACTIVITY ═══
+  const recentActivity = [];
+
+  // Merge recent invoices, applications, payoffs into a timeline
+  const recentInvoices = [...invoices]
+    .sort((a, b) => new Date(b.createdAt || b.raisedAt) - new Date(a.createdAt || a.raisedAt))
+    .slice(0, 3);
+
+  const recentApps = [...applications]
+    .sort((a, b) => new Date(b.createdAt || b.submittedAt) - new Date(a.createdAt || a.submittedAt))
+    .slice(0, 3);
+
+  const recentPayoffsList = [...payoffs]
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
+    .slice(0, 3);
+
+  recentInvoices.forEach(inv => {
+    const st = inv.financeReviewStatus || inv.status || 'Submitted';
+    recentActivity.push({
+      agent: inv.agentId?.agencyName || inv.agentId?.name || inv.agentName || 'Agent',
+      action: `Invoice ${inv.invoiceNumber || 'Claim'} — ${st}`,
+      time: inv.raisedAt || inv.createdAt,
+      icon: FileText,
+      iconBg: '#E6F1FB',
+      iconColor: '#0C447C'
+    });
   });
 
-  const STATUS_COLORS = ['#85B7EB', '#7F77DD', '#5DCAA5', '#97C459', '#EF9F27'];
-  const statusData = Object.keys(statusBreakdown).map((status, index) => ({
-    name: status,
-    value: statusBreakdown[status],
-    color: STATUS_COLORS[index % STATUS_COLORS.length]
-  }));
+  recentApps.forEach(app => {
+    recentActivity.push({
+      agent: app.agentName || app.agent?.name || 'Agent',
+      action: `Application for ${app.studentName || app.student?.name || 'student'} — ${formatStatus(app.status)}`,
+      time: app.createdAt || app.submittedAt,
+      icon: ClipboardList,
+      iconBg: '#EEEDFE',
+      iconColor: '#534AB7'
+    });
+  });
 
-  const agentPerformance = agents.map(agent => {
-    const agentStudents = filteredStudents.filter(s => s.agentId === agent.id || s.agentName === agent.name);
-    const registrations = agentStudents.length;
-    const converted = agentStudents.filter(s => s.status === 'Converted').length;
-    const rate = registrations > 0 ? ((converted / registrations) * 100).toFixed(1) : '0.0';
+  recentPayoffsList.forEach(p => {
+    const amount = getPayoffAmount(p);
+    const st = (p.status || '').toUpperCase();
+    recentActivity.push({
+      agent: p.agentId?.agencyName || p.agentId?.name || p.agentName || 'Agent',
+      action: `Payoff ${p.payoffNumber || ''} ${st === 'SETTLED' ? 'settled' : 'created'} — ${formatCurrency(amount)}`,
+      time: p.settledAt || p.updatedAt || p.createdAt,
+      icon: Wallet,
+      iconBg: '#ECFDF5',
+      iconColor: '#047857'
+    });
+  });
 
-    return {
-      ...agent,
-      registrations,
-      converted,
-      rate
-    };
-  }).sort((a, b) => b.registrations - a.registrations).slice(0, 5);
+  // Sort by time descending
+  recentActivity.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-  // 4. Relative time formatter for support tickets
-  const formatTime = (date) => {
+  // ── Helpers ──
+  function formatStatus(status) {
+    if (!status) return 'Pending';
+    return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function formatTimeAgo(date) {
     if (!date) return 'Recently';
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-    if (isNaN(seconds)) return 'Recently';
+    if (isNaN(seconds) || seconds < 0) return 'Just now';
+    if (seconds < 60) return 'Just now';
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    return 'Yesterday';
-  };
+    if (seconds < 172800) return 'Yesterday';
+    return `${Math.floor(seconds / 86400)}d ago`;
+  }
 
   return (
     <div className="bg-[#FDFDFF] min-h-screen font-sans" data-testid="admin-dashboard">
-      <div className="p-7">
-        {/* Topbar */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-2">
+      <div className="p-5 md:p-7">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-2">
           <div>
-            <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Admin Command Centre</h1>
+            <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
+              Operations Overview
+            </h1>
             <p className="text-sm font-medium text-slate-500 mt-1">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · System Stats
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · Admin Portal
             </p>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {dateRange === 'custom' && (
-              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm animate-in fade-in slide-in-from-right-4">
-                <input
-                  type="date"
-                  className="text-xs font-medium text-slate-600 outline-none border-none bg-transparent"
-                  value={customDates.start}
-                  onChange={(e) => setCustomDates({ ...customDates, start: e.target.value })}
-                />
-                <span className="text-slate-300">|</span>
-                <input
-                  type="date"
-                  className="text-xs font-medium text-slate-600 outline-none border-none bg-transparent"
-                  value={customDates.end}
-                  onChange={(e) => setCustomDates({ ...customDates, end: e.target.value })}
-                />
-              </div>
-            )}
-            <div className="relative group">
-              <select
-                className="appearance-none bg-white border border-slate-200 rounded-lg px-4 pr-10 py-2.5 text-xs font-bold text-slate-700 shadow-sm cursor-pointer hover:border-[#042C53] transition-all outline-none uppercase tracking-wider"
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-              >
-                <option value="1 week">1 Week</option>
-                <option value="1 month">1 Month</option>
-                <option value="6 month">6 Month</option>
-                <option value="1 year">1 Year</option>
-                <option value="custom">Custom Range</option>
-              </select>
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-[#042C53]">
-                <ChevronDown className="w-4 h-4" />
-              </div>
-            </div>
-          </div>
         </div>
 
-        <div className="h-[0.5px] bg-slate-200 my-6" />
+        <div className="h-[0.5px] bg-slate-200 my-5" />
 
-        {/* KPI Grid */}
+        {/* ═══ OPERATIONS KPIs ═══ */}
+        <div className="mb-2">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operations</span>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {statCards.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <div key={index} className="bg-white border border-slate-200 rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{stat.title}</span>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: stat.bgColor }}>
-                    <Icon className="w-4 h-4" style={{ color: stat.color }} />
-                  </div>
-                </div>
-                <div className="text-3xl font-medium text-slate-900 font-['Outfit']">{stat.value}</div>
-                <div className={`text-[11px] mt-2 font-medium flex items-center gap-1.5 ${stat.trend === 'up' ? 'text-[#3B6D11]' : stat.trend === 'dn' ? 'text-[#A32D2D]' : 'text-slate-500'}`}>
-                  <div className={`w-1.5 h-1.5 rounded-full ${stat.trend === 'up' ? 'bg-[#639922]' : stat.trend === 'dn' ? 'bg-[#E24B4A]' : 'bg-slate-300'}`} />
-                  {stat.subValue}
-                </div>
-              </div>
-            );
-          })}
+          <KpiCard
+            title="Total Agents"
+            value={totalAgents}
+            subtitle={`${activeAgents} active · ${pendingAgents} pending`}
+            icon={Users}
+            color="#534AB7"
+            bgColor="#EEEDFE"
+            link="/admin/agents"
+          />
+          <KpiCard
+            title="Total Students"
+            value={totalStudents.toLocaleString()}
+            subtitle={`${students.filter(s => s.status === 'Converted').length} converted`}
+            icon={GraduationCap}
+            color="#185FA5"
+            bgColor="#E6F1FB"
+            link="/admin/students"
+          />
+          <KpiCard
+            title="Active Applications"
+            value={activeApplications}
+            subtitle={`${applications.length} total submitted`}
+            icon={ClipboardList}
+            color="#B45309"
+            bgColor="#FFF7ED"
+            link="/admin/applications"
+          />
+          <KpiCard
+            title="Admissions"
+            value={admissions}
+            subtitle={applications.length > 0 ? `${((admissions / applications.length) * 100).toFixed(0)}% admission rate` : 'No data yet'}
+            icon={BadgeCheck}
+            color="#047857"
+            bgColor="#ECFDF5"
+            link="/admin/applications"
+          />
         </div>
 
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
-          <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 px-7">
-            <div className="flex items-center justify-between mb-5">
-              <span className="text-lg font-medium text-slate-900 font-['Outfit']">Registration Performance</span>
-              <Link to="/admin/students" className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">View All Students <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-            </div>
-            <div className="flex gap-4 mb-4">
-              <span className="flex items-center gap-1.5 text-[12px] text-slate-500 font-medium">
-                <span className="w-2.5 h-2.5 rounded-[2px] bg-[#378ADD]" /> Registrations
-              </span>
-              <span className="flex items-center gap-1.5 text-[12px] text-slate-500 font-medium">
-                <span className="w-2.5 h-2.5 rounded-[2px] bg-[#1D9E75]" /> Conversions
-              </span>
-            </div>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="0" vertical={false} stroke="#F1F5F9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888780' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888780' }} />
-                  <Tooltip
-                    cursor={{ fill: '#F8FAFC' }}
-                    contentStyle={{ borderRadius: '8px', border: '0.5px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontSize: '11px' }}
-                  />
-                  <Bar dataKey="registrations" fill="#378ADD" radius={[3, 3, 0, 0]} barSize={32} />
-                  <Bar dataKey="conversions" fill="#1D9E75" radius={[3, 3, 0, 0]} barSize={32} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 px-7">
-            <div className="flex items-center justify-between mb-5">
-              <span className="text-lg font-medium text-slate-900 font-['Outfit']">Student Status</span>
-              <Link to="/admin/students" className="flex items-center justify-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-            </div>
-            <div className="flex flex-col items-center gap-6">
-              <div className="w-full h-[140px] relative shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={statusData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={2} dataKey="value" stroke="none">
-                      {statusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '11px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 w-full">
-                {statusData.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <div className="w-2.5 h-2.5 rounded-[2px] shrink-0" style={{ backgroundColor: item.color }} />
-                      <span className="text-[11px] text-slate-500 truncate">{item.name}</span>
-                    </div>
-                    <span className="text-[11px] font-bold text-slate-900">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+        {/* ═══ FINANCE KPIs ═══ */}
+        <div className="mb-2">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Finance</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <KpiCard
+            title="Invoices Under Review"
+            value={invoicesUnderReview}
+            subtitle={`${invoices.length} total invoices`}
+            icon={FileText}
+            color="#0C447C"
+            bgColor="#E6F1FB"
+            link="/admin/invoices"
+            highlight={invoicesUnderReview > 0}
+          />
+          <KpiCard
+            title="Correction Required"
+            value={correctionRequired}
+            subtitle="Awaiting agent fix"
+            icon={AlertTriangle}
+            color={correctionRequired > 0 ? '#B91C1C' : '#6B7280'}
+            bgColor={correctionRequired > 0 ? '#FCEBEB' : '#F3F4F6'}
+            link="/admin/invoices"
+            highlight={correctionRequired > 0}
+          />
+          <KpiCard
+            title="Approved Invoices"
+            value={approvedInvoices}
+            subtitle="Ready for settlement"
+            icon={CheckCircle2}
+            color="#047857"
+            bgColor="#ECFDF5"
+            link="/admin/invoices"
+          />
+          <KpiCard
+            title="Pending Payoffs"
+            value={formatCurrency(pendingPayoffsAmount)}
+            subtitle={`${pendingPayoffs.length} payoff${pendingPayoffs.length !== 1 ? 's' : ''} to settle`}
+            icon={Clock}
+            color="#B45309"
+            bgColor="#FFF7ED"
+            link="/admin/payoffs"
+            highlight={pendingPayoffs.length > 0}
+          />
         </div>
 
-        {/* Top Performing Agents */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 px-7 mb-6">
-          <div className="flex items-center justify-between mb-5">
-            <span className="text-lg font-medium text-slate-900 font-['Outfit']">Top Performing Agents</span>
-            <Link to="/admin/agents" className="flex items-center text-[12px] text-slate-500 hover:text-slate-900 font-medium">View All Agents <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="text-left font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Agent</th>
-                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Registrations</th>
-                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Confirmed</th>
-                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Converted</th>
-                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Rate</th>
-                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Status</th>
-                  <th className="text-center font-medium text-slate-600 py-3 px-3 uppercase tracking-wider">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {agentPerformance.map((agent, idx) => {
-                  const colors = [
-                    { bg: '#E6F1FB', text: '#0C447C' },
-                    { bg: '#E1F5EE', text: '#085041' },
-                    { bg: '#FAEEDA', text: '#633806' },
-                    { bg: '#FCEBEB', text: '#791F1F' },
-                    { bg: '#EEEDFE', text: '#3C3489' }
-                  ];
-                  const c = colors[idx % colors.length];
+        {/* ═══ SETTLEMENT KPIs ═══ */}
+        <div className="mb-2">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Settlement</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <KpiCard
+            title="Pending Settlement"
+            value={pendingSettlementCount}
+            subtitle="Payoffs not yet settled"
+            icon={Clock}
+            color="#B45309"
+            bgColor="#FFF7ED"
+            link="/admin/payoffs"
+          />
+          <KpiCard
+            title="Settled Amount"
+            value={formatCurrency(settledAmount)}
+            subtitle={`${settledPayoffs.length} total settlements`}
+            icon={BadgeCheck}
+            color="#047857"
+            bgColor="#ECFDF5"
+            link="/admin/payoffs"
+          />
+          <KpiCard
+            title="Settled This Month"
+            value={formatCurrency(settledThisMonth)}
+            subtitle={new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            icon={TrendingUp}
+            color="#534AB7"
+            bgColor="#EEEDFE"
+            link="/admin/payoffs"
+          />
+        </div>
+
+        {/* ═══ ACTION QUEUE + RECENT ACTIVITY ═══ */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Action Queue */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                <h3 className="text-base font-semibold text-[#111827] font-['Outfit']">Action Queue</h3>
+                {actionQueue.length > 0 && (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                    {actionQueue.reduce((sum, item) => sum + item.count, 0)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {actionQueue.length > 0 ? (
+              <div className="divide-y divide-slate-50">
+                {actionQueue.map((item, i) => {
+                  const Icon = item.icon;
                   return (
-                    <tr key={agent.id} className="text-slate-900 hover:bg-slate-50/30 transition-colors">
-                      <td className="py-4 px-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-medium shrink-0 shadow-sm" style={{ backgroundColor: c.bg, color: c.text }}>
-                            {agent.name.split(' ').map(n => n[0]).join('')}
-                          </div>
-                          <span className="text-sm font-medium text-slate-900">{agent.name}</span>
+                    <Link
+                      key={i}
+                      to={item.link}
+                      className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50/50 transition-colors group"
+                    >
+                      <div
+                        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: item.iconBg }}
+                      >
+                        <Icon className="w-4 h-4" style={{ color: item.iconColor }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-[#111827] font-['Outfit']">{item.count}</span>
+                          <span className="text-sm text-slate-600 font-medium">{item.label}</span>
                         </div>
-                      </td>
-                      <td className="py-4 px-3 text-sm text-slate-600 text-center">{agent.registrations}</td>
-                      <td className="py-4 px-3 text-sm text-slate-600 text-center">{agent.confirmed}</td>
-                      <td className="py-4 px-3 text-sm text-slate-600 text-center">{agent.converted}</td>
-                      <td className="py-4 px-3">
-                        <span className="text-sm font-medium flex justify-center" style={{ color: parseFloat(agent.rate) > 15 ? '#27500A' : parseFloat(agent.rate) > 10 ? '#BA7517' : '#A32D2D' }}>
-                          {agent.rate}%
-                        </span>
-                      </td>
-                      <td className="py-4 px-3">
-                        <span className={`text-[9px] px-2 py-0.5 rounded-full flex justify-center font-medium uppercase tracking-wider ${agent.status === 'active' ? 'bg-[#EAF3DE] text-[#27500A]' : 'bg-[#FAEEDA] text-[#633806]'}`}>
-                          {agent.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-3 text-center">
-                        <Link to={`/admin/agents/${agent.id}/report`} className="flex items-center justify-center text-slate-400 font-medium text-xs hover:text-slate-900">View <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-                      </td>
-                    </tr>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#042C53] transition-colors shrink-0" />
+                    </Link>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Row 3: Occupancy & Invoices */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 px-7">
-            <div className="flex items-center justify-between mb-5">
-              <span className="text-lg font-medium text-slate-900 font-['Outfit']">Event Seat Occupancy</span>
-              <Link to="/admin/events" className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Analytics <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-            </div>
-            <div className="space-y-4 mb-6">
-              {events.slice(0, 5).map((event, idx) => {
-                const eventStudents = students.filter(s => s.eventId === event.id).length;
-                const capacity = event.capacity || 50;
-                const fillRate = Math.min(100, Math.round((eventStudents / capacity) * 100));
-                const colors = ['#378ADD', '#7F77DD', '#5DCAA5', '#EF9F27', '#E24B4A'];
-                return (
-                  <div key={event.id} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] font-medium">
-                      <span className="text-slate-900 truncate max-w-[220px]">{event.title}</span>
-                      <span className="text-slate-500">{fillRate}%</span>
-                    </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${fillRate}%`, backgroundColor: colors[idx % colors.length] }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <Button size="sm" className="w-full py-2.5 text-[12px] font-medium border border-[#042C53] rounded-lg bg-[#042C53] text-[#B5D4F4] hover:bg-[#0C447C] transition-colors" asChild>
-              <Link to="/admin/events">Manage All Events</Link>
-            </Button>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-xl p-6 px-7">
-            <div className="flex items-center justify-between mb-5">
-              <span className="text-lg font-medium text-slate-900 font-['Outfit']">Invoice Queue</span>
-              <Link to="/admin/invoices" className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Review All <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-            </div>
-            <div className="divide-y divide-slate-100 mb-6">
-              {invoices.length > 0 ? invoices.slice(0, 5).map((inv) => (
-                <div key={inv.id} className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-[10px] font-medium text-slate-400">INV</div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-slate-900 truncate">{inv.invoiceNumber}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{inv.agentName || 'Agent'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 shrink-0">
-                    <span className="text-xs font-medium text-slate-900">₹{inv.amount.toLocaleString()}</span>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${inv.status === 'approved' ? 'bg-[#EAF3DE] text-[#27500A]' : 'bg-[#FAEEDA] text-[#633806]'}`}>
-                      {inv.status === 'approved' ? 'Approved' : 'Review'}
-                    </span>
-                  </div>
-                </div>
-              )) : (
-                <div className="py-10 text-center text-[12px] text-slate-400 font-medium">No invoices pending review.</div>
-              )}
-            </div>
-            <Button size="sm" className="w-full py-2.5 text-[12px] font-medium border border-[#042C53] rounded-lg bg-[#042C53] text-[#B5D4F4] hover:bg-[#0C447C] transition-colors" asChild>
-              <Link to="/admin/invoices">Process Financials</Link>
-            </Button>
-          </div>
-        </div>
-
-        {/* Support Tickets */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 px-7 mb-6">
-          <div className="flex items-center justify-between mb-5">
-            <span className="text-lg font-medium text-slate-900 font-['Outfit']">System Helpdesk</span>
-            <Link to="/admin/support" className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Manage <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {tickets.length > 0 ? tickets.slice(0, 4).map((ticket) => (
-              <div key={ticket.id} className="flex items-start gap-4 py-4">
-                <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${ticket.priority === 'high' ? 'bg-[#E24B4A]' : 'bg-[#EF9F27]'}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-900 leading-snug">{ticket.subject}</div>
-                  <div className="text-[11px] text-slate-500 mt-1 font-medium">{ticket.userName || 'User'} · {ticket.category} · {formatTime(ticket.createdAt)}</div>
-                </div>
-                <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider shrink-0 ${ticket.status === 'open' ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-[#FAEEDA] text-[#633806]'}`}>
-                  {ticket.status}
-                </span>
               </div>
-            )) : (
-              <div className="py-10 text-center text-[12px] text-slate-400 font-medium">No open support tickets.</div>
+            ) : (
+              <div className="p-10 text-center">
+                <CheckCircle2 className="w-8 h-8 text-emerald-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-400 font-medium">All clear — no pending actions</p>
+              </div>
+            )}
+          </div>
+
+          {/* Recent Activity */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h3 className="text-base font-semibold text-[#111827] font-['Outfit']">Recent Activity</h3>
+              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Live Feed</span>
+            </div>
+
+            {recentActivity.length > 0 ? (
+              <div className="divide-y divide-slate-50">
+                {recentActivity.slice(0, 8).map((activity, i) => {
+                  const Icon = activity.icon;
+                  return (
+                    <div key={i} className="flex items-start gap-3.5 px-6 py-3.5">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                        style={{ backgroundColor: activity.iconBg }}
+                      >
+                        <Icon className="w-3.5 h-3.5" style={{ color: activity.iconColor }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-[#111827] font-medium leading-snug">
+                          <span className="font-bold">{activity.agent}</span>
+                          <span className="text-slate-500 ml-1.5">·</span>
+                          <span className="text-slate-600 ml-1.5">{activity.action}</span>
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                          {formatTimeAgo(activity.time)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-10 text-center">
+                <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-400 font-medium">No recent activity</p>
+              </div>
             )}
           </div>
         </div>
       </div>
     </div>
   );
+};
+
+/* ── Reusable KPI Card ── */
+const KpiCard = ({ title, value, subtitle, icon: Icon, color, bgColor, link, highlight }) => {
+  const inner = (
+    <div className={`bg-white border rounded-xl p-5 transition-all duration-200 group ${
+      highlight
+        ? 'border-amber-300 shadow-sm shadow-amber-50 hover:shadow-md hover:shadow-amber-100'
+        : 'border-slate-200 hover:shadow-md hover:border-slate-300'
+    }`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{title}</span>
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform"
+          style={{ backgroundColor: bgColor }}
+        >
+          <Icon className="w-4 h-4" style={{ color }} />
+        </div>
+      </div>
+      <div className="text-2xl font-bold text-slate-900 font-['Outfit']">{value}</div>
+      <div className="text-[11px] mt-1.5 font-medium text-slate-500">{subtitle}</div>
+    </div>
+  );
+
+  return link ? <Link to={link} className="block">{inner}</Link> : inner;
 };
 
 export default AdminDashboard;

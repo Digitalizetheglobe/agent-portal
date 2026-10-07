@@ -57,6 +57,11 @@ const Student = sequelize.define('Student', {
     type: DataTypes.JSONB,
     defaultValue: []
   },
+  // Documents an admin has asked the agent to upload: [{ category, label, requestedBy, requestedAt }]
+  documentRequests: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
   customFields: {
     type: DataTypes.JSONB,
     defaultValue: {}

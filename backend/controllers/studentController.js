@@ -478,12 +478,19 @@ exports.verifyStudentDocument = async (req, res) => {
 // @access  Private (Admin only)
 exports.requestDocument = async (req, res) => {
   try {
-    const { category } = req.body;
-    
+    const { category, label } = req.body;
+
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         detail: 'Only admins can request documents'
+      });
+    }
+
+    if (!category || !String(category).trim()) {
+      return res.status(400).json({
+        success: false,
+        detail: 'Document category is required'
       });
     }
 
@@ -495,14 +502,28 @@ exports.requestDocument = async (req, res) => {
       });
     }
 
-    const event = await Event.findByPk(student.eventId);
+    const event = student.eventId ? await Event.findByPk(student.eventId) : null;
     const course = student.courseInterested || student.customFields?.courseInterested || 'N/A';
+    const categoryKey = String(category).trim();
+    const displayName = (label && String(label).trim()) || categoryKey;
+
+    // Remember the request so the admin can see what is outstanding and the agent sees it too
+    const requests = (Array.isArray(student.documentRequests) ? student.documentRequests : [])
+      .filter(r => (r.category || '').toLowerCase() !== categoryKey.toLowerCase());
+    requests.push({
+      category: categoryKey,
+      label: displayName,
+      requestedBy: req.user.id,
+      requestedAt: new Date().toISOString()
+    });
+    student.documentRequests = requests;
+    await student.save();
 
     // Create notification for agent
     await createNotification({
       recipient: student.agentId,
       title: 'Action Required: Missing Document',
-      message: `Admin has requested the "${category}" document for student "${student.name || 'N/A'}" registered for "${event?.title || 'Unknown Event'}" (Course: ${course}).`,
+      message: `Admin has requested the "${displayName}" document for student "${student.name || 'N/A'}"${event ? ` registered for "${event.title}"` : ''} (Course: ${course}).`,
       type: 'warning',
       relatedId: student.id,
       relatedModel: 'Student'
@@ -510,7 +531,8 @@ exports.requestDocument = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Document request notification sent to agent'
+      message: 'Document request notification sent to agent',
+      documentRequests: student.documentRequests
     });
   } catch (error) {
     console.error('Request document error:', error);

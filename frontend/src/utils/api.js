@@ -56,8 +56,12 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Auth endpoints must never trigger a refresh: a wrong password on /auth/login
+    // (or a failed /auth/refresh itself) would otherwise queue behind its own refresh and hang
+    const isAuthRequest = /\/auth\/(login|refresh)/.test(originalRequest?.url || '');
+
     // If error is 401 and we haven't tried refreshing yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRequest) {
       if (isRefreshing) {
         // If already refreshing, add this request to the queue
         return new Promise((resolve, reject) => {
@@ -211,7 +215,7 @@ export const studentAPI = {
     });
   },
   verifyDocument: (studentId, docId, data) => api.patch(`/students/${studentId}/documents/${docId}/verify`, data),
-  requestDocument: (studentId, category) => api.post(`/students/${studentId}/documents/request`, { category }),
+  requestDocument: (studentId, category, label) => api.post(`/students/${studentId}/documents/request`, { category, label }),
   downloadDocument: (studentId, docId, params = {}) => api.get(`/students/${studentId}/documents/${docId}`, {
     params,
     responseType: 'blob'

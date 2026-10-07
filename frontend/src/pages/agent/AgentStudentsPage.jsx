@@ -18,6 +18,11 @@ import { Card, CardContent } from '../../components/ui/card';
 import { cn } from '../../lib/utils';
 import StudentRegistrationModal from '../../components/modals/StudentRegistrationModal';
 
+const DOC_STATUS_LABELS = {
+  CorrectionRequired: 'More Information Required',
+  UnderReview: 'Under Review'
+};
+
 const STAGES = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
 const STAGE_PILLS = {
   'Registered': 'bg-[#E6F1FB] text-[#0C447C]',
@@ -35,8 +40,8 @@ const STAGE_COLORS = {
 };
 
 const DEFAULT_DOC_CATEGORIES = [
-  { label: 'Passport', value: 'Passport', mandatory: true },
-  { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
+  { label: 'Passport', value: 'Passport', mandatory: false },
+  { label: 'Academic Transcripts', value: 'Transcript', mandatory: false },
   { label: 'English Proficiency', value: 'LanguageTest', mandatory: false }
 ];
 
@@ -766,7 +771,7 @@ const AgentStudentsPage = () => {
                                 isUnderReview ? 'bg-[#E6F1FB] text-[#0C447C]' :
                                 'bg-gray-100 text-gray-700'
                               }`}>
-                                {doc.status || 'Submitted'}
+                                {DOC_STATUS_LABELS[doc.status] || doc.status || 'Submitted'}
                               </span>
                               <Button
                                 variant="ghost"
@@ -790,6 +795,11 @@ const AgentStudentsPage = () => {
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
+                              {(selectedStudent.documentRequests || []).some(r => (r.category || '').toLowerCase() === (docType.value || '').toLowerCase()) && (
+                                <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-amber-50 text-amber-800 border border-amber-200">
+                                  Requested by admin
+                                </span>
+                              )}
                               <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${isMandatory ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-gray-100 text-gray-400'}`}>
                                 {isMandatory ? 'Missing' : 'Optional'}
                               </span>
@@ -812,7 +822,7 @@ const AgentStudentsPage = () => {
                             isCorrection ? 'bg-amber-50/80 border-amber-200 text-amber-900' : 'bg-red-50/80 border-red-200 text-red-900'
                           }`}>
                             <span className="font-bold text-[10px] uppercase block mb-0.5">
-                              {isCorrection ? 'Correction Required From Admin:' : 'Rejection Reason:'}
+                              {isCorrection ? 'More Information Requested By Admin:' : 'Rejection Reason:'}
                             </span>
                             {doc.remarks}
                           </div>

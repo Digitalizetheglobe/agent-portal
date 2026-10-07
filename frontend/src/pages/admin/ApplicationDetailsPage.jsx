@@ -108,6 +108,13 @@ const ADMISSION_MILESTONES = [
   { id: 'enrollment', label: 'Enrolled', desc: 'Official Matriculation' }
 ];
 
+const DEPOSIT_LABELS = {
+  Required: 'Deposit Required',
+  Paid: 'Paid, Awaiting Verification',
+  Verified: 'Deposit Verified',
+  NotVerified: 'Not Verified'
+};
+
 const ApplicationDetailsPage = () => {
   const { id: paramId, applicationId } = useParams();
   const id = paramId || applicationId;
@@ -219,7 +226,7 @@ const ApplicationDetailsPage = () => {
     } else if (target === 'AdmissionConfirmed') {
       setAdmissionModalOpen(true);
     } else if (target === 'Enrolled') {
-      setEnrollmentModalOpen(true);
+      openEnrollment();
     } else {
       // Generic transition (Draft->Submitted, Submitted->UnderReview, Rejected, Withdrawn)
       setTargetStatus(target);
@@ -301,8 +308,10 @@ const ApplicationDetailsPage = () => {
         enrollmentProofUrl: trackingData?.enrollment?.enrollmentProofUrl || application?.enrollmentProofUrl
       },
       deposit: {
+        depositStatus: trackingData?.deposit?.depositStatus || application?.depositStatus || 'Required',
         depositPaid: trackingData?.deposit?.depositPaid !== undefined ? trackingData.deposit.depositPaid : application?.depositPaid,
-        depositAmount: trackingData?.deposit?.depositAmount !== undefined ? trackingData.deposit.depositAmount : application?.depositAmount
+        depositAmount: trackingData?.deposit?.depositAmount !== undefined ? trackingData.deposit.depositAmount : application?.depositAmount,
+        depositNotes: trackingData?.deposit?.depositNotes !== undefined ? trackingData.deposit.depositNotes : application?.depositNotes
       },
       invoice: {
         isInvoiceEligible: trackingData?.invoice?.isInvoiceEligible !== undefined ? trackingData.invoice.isInvoiceEligible : application?.isInvoiceEligible,
@@ -311,6 +320,27 @@ const ApplicationDetailsPage = () => {
       }
     };
   }, [trackingData, application]);
+
+  // The checks that together make an application commission eligible (mirrors the backend rule)
+  const eligibilityChecks = [
+    { label: 'Admission confirmed', passed: Boolean(tracking.admission.admissionDate), pending: 'Waiting for admission' },
+    { label: 'Tuition deposit verified', passed: tracking.deposit.depositStatus === 'Verified', pending: DEPOSIT_LABELS[tracking.deposit.depositStatus] || 'Required' },
+    { label: 'Student enrolled', passed: application?.status === 'Enrolled' && Boolean(tracking.enrollment.enrollmentDate), pending: 'Not enrolled yet' },
+    { label: 'Student documents verified', passed: application?.student?.verificationStatus === 'Verified', pending: application?.student?.verificationStatus || 'Pending' }
+  ];
+
+  // Enrollment is blocked until the tuition deposit is verified
+  const depositVerified = tracking.deposit.depositStatus === 'Verified';
+  const openEnrollment = () => {
+    if (!depositVerified) {
+      toast.error('Verify the tuition deposit before enrolling the student', {
+        description: 'Enrollment is blocked until the deposit status is Verified.'
+      });
+      setDepositModalOpen(true);
+      return;
+    }
+    setEnrollmentModalOpen(true);
+  };
 
   // Progress Stepper Status Calculation
   const milestoneStatuses = useMemo(() => {
@@ -459,7 +489,7 @@ const ApplicationDetailsPage = () => {
             className="h-9 px-3 border-[#E5E7EB] bg-white hover:bg-gray-50 text-xs font-semibold text-[#111827]"
           >
             <CreditCard className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-            {tracking.deposit.depositPaid ? 'Deposit: Paid' : 'Update Deposit'}
+            {`Deposit: ${DEPOSIT_LABELS[tracking.deposit.depositStatus] || 'Required'}`}
           </Button>
 
           {/* Edit (allowed for draft or admin) */}
@@ -896,11 +926,15 @@ const ApplicationDetailsPage = () => {
                     {isAdmin() && application.status === 'AdmissionConfirmed' && (
                       <Button
                         size="sm"
-                        onClick={() => setEnrollmentModalOpen(true)}
-                        className="text-xs h-7 px-2.5 bg-green-700 hover:bg-green-800 text-white font-semibold rounded-lg"
+                        onClick={openEnrollment}
+                        title={depositVerified ? undefined : 'Verify the tuition deposit first'}
+                        className={`text-xs h-7 px-2.5 text-white font-semibold rounded-lg ${depositVerified ? 'bg-green-700 hover:bg-green-800' : 'bg-gray-400 hover:bg-gray-500'}`}
                       >
                         Mark as Enrolled
                       </Button>
+                    )}
+                    {isAdmin() && application.status === 'AdmissionConfirmed' && !depositVerified && (
+                      <span className="text-[10px] text-amber-700 font-medium">Verify the deposit first</span>
                     )}
                   </div>
                 </div>
@@ -945,12 +979,16 @@ const ApplicationDetailsPage = () => {
                   <div className="flex items-center gap-2">
                     <Badge
                       className={`text-[10px] font-bold ${
-                        tracking.deposit.depositPaid
+                        tracking.deposit.depositStatus === 'Verified'
                           ? 'bg-[#EAF3DE] text-[#27500A] border-[#C0DD97]'
-                          : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'
+                          : tracking.deposit.depositStatus === 'Paid'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : tracking.deposit.depositStatus === 'NotVerified'
+                              ? 'bg-red-50 text-red-800 border-red-200'
+                              : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'
                       }`}
                     >
-                      {tracking.deposit.depositPaid ? 'Deposit Paid' : 'Not Recorded / Pending'}
+                      {DEPOSIT_LABELS[tracking.deposit.depositStatus] || 'Required'}
                     </Badge>
                     {isAdmin() && (
                       <Button
@@ -969,8 +1007,11 @@ const ApplicationDetailsPage = () => {
                   <div>
                     <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Deposit Status</span>
                     <span className="font-semibold text-[#111827] mt-0.5 block">
-                      {tracking.deposit.depositPaid ? 'Yes, Paid in Full' : 'Pending / Not Recorded'}
+                      {DEPOSIT_LABELS[tracking.deposit.depositStatus] || 'Required'}
                     </span>
+                    {tracking.deposit.depositNotes && (
+                      <span className="text-[11px] text-[#6B7280] mt-0.5 block">{tracking.deposit.depositNotes}</span>
+                    )}
                   </div>
                   <div>
                     <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Deposit Amount</span>
@@ -980,6 +1021,29 @@ const ApplicationDetailsPage = () => {
                         : 'Not recorded'}
                     </span>
                   </div>
+                </div>
+              </div>
+
+              {/* 6. Commission Eligibility Checklist */}
+              <div className="p-4 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-[#111827]">6. Commission Eligibility</p>
+                    <p className="text-[11px] text-[#6B7280]">Every check must pass before this application can be invoiced. Eligible does not mean paid.</p>
+                  </div>
+                  <Badge className={`text-[10px] font-bold ${tracking.invoice.isInvoiceEligible ? 'bg-[#EAF3DE] text-[#27500A] border-[#C0DD97]' : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'}`}>
+                    {tracking.invoice.isInvoiced ? 'Invoiced' : tracking.invoice.isInvoiceEligible ? 'Commission Eligible' : 'Not Eligible Yet'}
+                  </Badge>
+                </div>
+                <div className="space-y-1.5 pt-2 border-t border-[#E5E7EB]/60">
+                  {eligibilityChecks.map((check) => (
+                    <div key={check.label} className="flex items-center justify-between text-xs">
+                      <span className="text-[#374151] font-medium">{check.label}</span>
+                      <span className={`font-semibold ${check.passed ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {check.passed ? 'Done' : check.pending}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </CardContent>

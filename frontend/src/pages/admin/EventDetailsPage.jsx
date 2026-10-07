@@ -96,7 +96,7 @@ const EventDetailsPage = () => {
   }, [event]);
 
   if (!event) {
-    return <Navigate to={isAdmin() ? '/admin/events' : '/agent/dashboard'} replace />;
+    return <Navigate to={isAdmin() ? '/admin/events' : '/agent/events-management'} replace />;
   }
 
   const assignedAgents = event.assignedAgents.map(id =>
@@ -227,14 +227,14 @@ const EventDetailsPage = () => {
   return (
     <div className="space-y-8 p-4 md:p-8 bg-[#F9FAFB] min-h-screen" data-testid="event-details-page">
       {/* Back Button */}
-      {/* <div>
-        <Button variant="ghost" asChild className="mb-6 hover:bg-gray-100 text-[#042C53] font-bold text-xs uppercase tracking-widest">
-          <Link to={isAdmin() ? '/admin/events' : '/agent/dashboard'}>
+      <div>
+        <Button variant="ghost" asChild className="hover:bg-gray-100 text-[#042C53] font-bold text-xs uppercase tracking-widest">
+          <Link to={isAdmin() ? '/admin/events' : '/agent/events-management'}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to {isAdmin() ? 'Registry' : 'Dashboard'}
+            Back to Events
           </Link>
         </Button>
-      </div> */}
+      </div>
 
       {/* Event Header */}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">

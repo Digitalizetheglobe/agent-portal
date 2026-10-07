@@ -70,6 +70,11 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  // Admin-configured commission percentage (0-100). Agents cannot change it.
+  commissionRate: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: true
+  },
   isVerified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
@@ -121,6 +126,9 @@ User.prototype.toJSON = function() {
   values.id = values.id ? values.id.toString() : values.id;
   values._id = values.id;
   delete values.password;
+  if (values.commissionRate !== null && values.commissionRate !== undefined) {
+    values.commissionRate = parseFloat(values.commissionRate);
+  }
   return values;
 };
 

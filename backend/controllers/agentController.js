@@ -8,6 +8,16 @@ const { createNotification } = require('./notificationController');
 // @desc    Get all agents
 // @route   GET /api/agents
 // @access  Private
+// Parse an admin-supplied commission rate. Returns { value } (null = clear) or { error }.
+const parseCommissionRate = (raw) => {
+  if (raw === null || raw === '') return { value: null };
+  const rate = parseFloat(raw);
+  if (isNaN(rate) || !isFinite(rate) || rate <= 0 || rate > 100) {
+    return { error: 'Commission rate must be a percentage greater than 0 and at most 100' };
+  }
+  return { value: Math.round(rate * 100) / 100 };
+};
+
 exports.getAgents = async (req, res) => {
   try {
     const agents = await User.findAll({
@@ -63,7 +73,14 @@ exports.getAgent = async (req, res) => {
 // @access  Private (Admin only)
 exports.createAgent = async (req, res) => {
   try {
-    const { name, email, userId, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress } = req.body;
+    const { name, email, userId, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress, commissionRate } = req.body;
+
+    let parsedCommissionRate = null;
+    if (commissionRate !== undefined) {
+      const parsed = parseCommissionRate(commissionRate);
+      if (parsed.error) return res.status(400).json({ success: false, detail: parsed.error });
+      parsedCommissionRate = parsed.value;
+    }
 
     // Check if email or userId already exists
     const existingUser = await User.findOne({
@@ -97,6 +114,7 @@ exports.createAgent = async (req, res) => {
       agencyName,
       businessRegistrationNumber,
       fullAddress,
+      commissionRate: parsedCommissionRate,
       verificationDocuments: []
     });
 
@@ -175,7 +193,7 @@ exports.createAdmin = async (req, res) => {
 // @access  Private (Admin only)
 exports.updateAgent = async (req, res) => {
   try {
-    const { name, email, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress } = req.body;
+    const { name, email, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress, commissionRate } = req.body;
 
     const agent = await User.findOne({
       where: { id: req.params.id, role: 'agent' }
@@ -211,6 +229,11 @@ exports.updateAgent = async (req, res) => {
     if (agencyName !== undefined) agent.agencyName = agencyName;
     if (businessRegistrationNumber !== undefined) agent.businessRegistrationNumber = businessRegistrationNumber;
     if (fullAddress !== undefined) agent.fullAddress = fullAddress;
+    if (commissionRate !== undefined) {
+      const parsed = parseCommissionRate(commissionRate);
+      if (parsed.error) return res.status(400).json({ success: false, detail: parsed.error });
+      agent.commissionRate = parsed.value;
+    }
 
     await agent.save();
 

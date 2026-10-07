@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -70,7 +70,8 @@ const AgentsPage = () => {
     invoices,
     verifyAgent,
     viewAgentDocument,
-    updateAgent
+    updateAgent,
+    fetchAgents
   } = useData();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,6 +150,21 @@ const AgentsPage = () => {
 
   const pendingVerificationAgents = useMemo(() => {
     return processedAgents.filter(agent => !agent.isVerified && agent.verificationStatus !== 'rejected');
+  }, [processedAgents]);
+
+  // The agent list is loaded once at login, so refresh it when this page opens and when the
+  // admin returns to the tab. Otherwise documents an agent uploaded later never appear.
+  useEffect(() => {
+    fetchAgents();
+    const onFocus = () => fetchAgents();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchAgents]);
+
+  // Keep an open drawer / edit modal in sync with the refreshed list
+  useEffect(() => {
+    setAgentInDrawer(prev => (prev ? processedAgents.find(a => a.id === prev.id) || prev : prev));
+    setSelectedAgent(prev => (prev ? processedAgents.find(a => a.id === prev.id) || prev : prev));
   }, [processedAgents]);
 
   // Event handlers
@@ -424,13 +440,14 @@ const AgentsPage = () => {
                   <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Converted</TableHead>
                   <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Conv. Rate</TableHead>
                   <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Events</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Commission</TableHead>
                   <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3  text-center w-[8%]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAgents.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-20">
+                    <TableCell colSpan={9} className="text-center py-20">
                       <div className="flex flex-col items-center gap-3">
                         <Users className="w-10 h-10 text-gray-200" />
                         <p className="text-sm text-[#6B7280] font-medium">No agents found matching your criteria.</p>
@@ -470,6 +487,9 @@ const AgentsPage = () => {
                         <TableCell className="py-3 text-center text-[13px] text-[#111827]">{agent.converted}</TableCell>
                         <TableCell className={cn("py-3 text-center text-[13px] font-medium", rateColor)}>{agent.convRate}</TableCell>
                         <TableCell className="py-3 text-center text-[13px] text-[#6B7280]">{agent.assignedEvents} events</TableCell>
+                        <TableCell className="py-3 text-center text-[13px] font-medium text-[#111827]">
+                          {agent.commissionRate ? `${agent.commissionRate}%` : <span className="text-[#9CA3AF] font-normal">Not set</span>}
+                        </TableCell>
                         <TableCell className="py-3 pr-6 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
@@ -570,6 +590,10 @@ const AgentsPage = () => {
                       <div className="space-y-0.5">
                         <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Conv. Rate</p>
                         <p className={cn("text-sm font-bold", rateColor)}>{agent.convRate}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Commission</p>
+                        <p className="text-sm font-semibold text-[#111827]">{agent.commissionRate ? `${agent.commissionRate}%` : 'Not set'}</p>
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Converted</p>

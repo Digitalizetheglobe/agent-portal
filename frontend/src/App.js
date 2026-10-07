@@ -15,7 +15,6 @@ import StudentDetailsPage from "./pages/admin/StudentDetailsPage";
 import StudentEditPage from "./pages/admin/StudentEditPage";
 import EventDetailsPage from "./pages/admin/EventDetailsPage";
 import AgentDashboard from "./pages/agent/AgentDashboard";
-import AgentEventsPage from "./pages/agent/AgentEventsPage";
 import AgentEventsManagementPage from "./pages/agent/AgentEventsManagementPage";
 import InvoicesPage from "./pages/agent/InvoicesPage";
 import AgentPayoffsPage from "./pages/agent/AgentPayoffsPage";
@@ -64,10 +63,8 @@ function App() {
                   <Route path="students/:studentId/edit" element={<StudentEditPage />} />
                   <Route path="applications" element={<ApplicationsPage />} />
                   <Route path="applications/:applicationId" element={<ApplicationDetailsPage />} />
-                  <Route path="applications/:id" element={<ApplicationDetailsPage />} />
                   <Route path="universities" element={<UniversitiesPage />} />
                   <Route path="universities/:universityId" element={<UniversityDetailsPage />} />
-                  <Route path="universities/:id" element={<UniversityDetailsPage />} />
                   <Route path="courses" element={<CoursesPage />} />
                   <Route path="invoices" element={<AdminInvoicesPage />} />
                   <Route path="payoffs" element={<AdminPayoffsPage />} />
@@ -81,17 +78,15 @@ function App() {
                 <Route path="/agent" element={<DashboardLayout requiredRole="agent" />}>
                   <Route index element={<Navigate to="/agent/dashboard" replace />} />
                   <Route path="dashboard" element={<AgentDashboard />} />
-                  <Route path="events" element={<AgentEventsPage />} />
+                  <Route path="events" element={<Navigate to="/agent/events-management" replace />} />
                   <Route path="events-management" element={<AgentEventsManagementPage />} />
                   <Route path="events/:eventId" element={<EventDetailsPage />} />
                   <Route path="students" element={<AgentStudentsPage />} />
                   <Route path="students/:studentId" element={<StudentDetailsPage />} />
                   <Route path="applications" element={<AgentApplicationsPage />} />
                   <Route path="applications/:applicationId" element={<ApplicationDetailsPage />} />
-                  <Route path="applications/:id" element={<ApplicationDetailsPage />} />
                   <Route path="universities" element={<AgentUniversitiesPage />} />
                   <Route path="universities/:universityId" element={<UniversityDetailsPage />} />
-                  <Route path="universities/:id" element={<UniversityDetailsPage />} />
                   <Route path="invoices" element={<InvoicesPage />} />
                   <Route path="payoffs" element={<AgentPayoffsPage />} />
                   <Route path="support" element={<SupportPage />} />

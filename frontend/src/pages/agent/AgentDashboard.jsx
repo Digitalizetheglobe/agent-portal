@@ -1,538 +1,501 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Calendar,
   Users,
-  GraduationCap,
-  TrendingUp,
-  ArrowRight,
   FileText,
-  UserCheck,
-  Clock,
+  AlertTriangle,
+  Wallet,
   CheckCircle2,
-  Ticket,
-  ChevronDown,
-  ArrowUpRight
+  ArrowUpRight,
+  ArrowRight,
+  Clock,
+  ClipboardList,
+  Building2,
+  XCircle,
+  AlertCircle,
+  GraduationCap,
+  BadgeCheck,
+  IndianRupee,
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import ComplianceStatus from '../../components/agent/ComplianceStatus';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts';
+import { formatCurrency } from '../../utils/financialFormatters';
 
 const AgentDashboard = () => {
   const { user } = useAuth();
-  const { getEventsForAgent, getStudentsByAgent, agents, getStats, invoices, students, tickets, createTicket } = useData();
-  const stats = getStats();
+  const {
+    getStudentsByAgent,
+    invoices,
+    applications,
+    payoffs,
+    reviewQueue,
+    fetchInvoices,
+    fetchPayoffs,
+    fetchApplications,
+    fetchStudents
+  } = useData();
 
-  const [dateRange, setDateRange] = useState('1 month');
-  const [customDates, setCustomDates] = useState({ start: '', end: '' });
+  useEffect(() => {
+    if (fetchInvoices) fetchInvoices();
+    if (fetchPayoffs) fetchPayoffs();
+    if (fetchApplications) fetchApplications();
+  }, [fetchInvoices, fetchPayoffs, fetchApplications]);
 
-  const assignedEvents = getEventsForAgent(user?.id);
-  const rawMyStudents = getStudentsByAgent(user?.id);
-  const rawMyInvoices = invoices.filter(inv => inv.agentId === user?.id);
-  const rawMyTickets = tickets.filter(t => t.agentId === user?.id || t.userId === user?.id);
+  // Helper for payoff amounts (backend uses netAmount, grossCommission, or amount)
+  const getPayoffAmount = (p) => Number(p.netAmount ?? p.grossCommission ?? p.amount ?? 0);
 
-  // 1. Filtering Logic
-  const getFilteredData = (data, dateField = 'createdAt') => {
-    const now = new Date();
-    let startDate = new Date();
+  // ── Scoped data for this agent ──
+  const userId = user?.id || user?._id;
+  const myStudents = getStudentsByAgent(userId) || [];
 
-    if (dateRange === '1 week') startDate.setDate(now.getDate() - 7);
-    else if (dateRange === '1 month') startDate.setMonth(now.getMonth() - 1);
-    else if (dateRange === '6 month') startDate.setMonth(now.getMonth() - 6);
-    else if (dateRange === '1 year') startDate.setFullYear(now.getFullYear() - 1);
-    else if (dateRange === 'custom' && customDates.start && customDates.end) {
-      return data.filter(item => {
-        const itemDate = new Date(item[dateField] || item.submittedAt);
-        return itemDate >= new Date(customDates.start) && itemDate <= new Date(customDates.end);
-      });
-    } else {
-      startDate.setMonth(now.getMonth() - 1);
-    }
+  // If user is logged in as agent, backend data is already scoped to them
+  const myInvoices = (invoices || []).filter(inv => {
+    if (user?.role === 'agent') return true;
+    const invAgentId = inv.agentId?.id || inv.agentId?._id || inv.agentId;
+    return String(invAgentId) === String(userId);
+  });
 
-    return data.filter(item => new Date(item[dateField] || item.submittedAt) >= startDate);
-  };
+  const myApplications = (applications || []).filter(app => {
+    if (user?.role === 'agent') return true;
+    const appAgentId = app.agentId?.id || app.agentId?._id || app.agentId;
+    return String(appAgentId) === String(userId);
+  });
 
-  const myStudents = getFilteredData(rawMyStudents, 'submittedAt');
-  const myInvoices = getFilteredData(rawMyInvoices, 'createdAt');
-  const myTickets = getFilteredData(rawMyTickets, 'createdAt');
+  const myPayoffs = (payoffs || []).filter(p => {
+    if (user?.role === 'agent') return true;
+    const pAgentId = p.agentId?.id || p.agentId?._id || p.agentId;
+    return String(pAgentId) === String(userId);
+  });
 
-  const upcomingEvents = assignedEvents.filter(e => new Date(e.date) >= new Date());
-  const convertedCount = myStudents.filter(s => s.status === 'Converted').length;
+  // ── KPI Calculations ──
+  const totalStudents = myStudents.length;
+  const activeApplications = myApplications.filter(app =>
+    !['completed', 'rejected', 'withdrawn', 'cancelled'].includes(app.status?.toLowerCase())
+  ).length;
 
-  const statCards = [
+  // Action required: invoices needing correction + applications needing attention + documents requested
+  const invoicesNeedingCorrection = myInvoices.filter(inv => {
+    const rev = (inv.financeReviewStatus || '').toLowerCase();
+    const st = (inv.status || '').toLowerCase();
+    return rev === 'correctionrequired' || st === 'correction_required' || st === 'rejected';
+  });
+
+  const applicationsNeedingAction = myApplications.filter(app => {
+    const st = (app.status || '').toLowerCase();
+    return st === 'documents_required' || st === 'action_required' || st === 'correction_needed';
+  });
+
+  const documentsRequested = myStudents.filter(s =>
+    s.documentRequests?.some(dr => dr.status === 'pending')
+  );
+  const actionRequiredCount = invoicesNeedingCorrection.length + applicationsNeedingAction.length + documentsRequested.length;
+
+  const pendingPayoffsList = myPayoffs.filter(p => {
+    const st = (p.status || '').toUpperCase();
+    return st === 'PENDING' || st === 'APPROVED';
+  });
+  const pendingPayout = pendingPayoffsList.reduce((sum, p) => sum + getPayoffAmount(p), 0);
+
+  const settledPayoffsList = myPayoffs.filter(p => {
+    const st = (p.status || '').toUpperCase();
+    return st === 'SETTLED' || st === 'COMPLETED';
+  });
+  const totalSettled = settledPayoffsList.reduce((sum, p) => sum + getPayoffAmount(p), 0);
+
+  // ── KPI Card definitions ──
+  const kpiCards = [
     {
-      title: 'Active Events',
-      value: upcomingEvents.length,
-      trend: `${assignedEvents.length} total assignments`,
-      icon: Calendar,
-      color: 'text-[#534AB7]',
-      bgColor: 'bg-[#EEEDFE]',
-    },
-    {
-      title: 'My Students',
-      value: myStudents.length,
-      trend: `+${myStudents.length} in range`,
+      title: 'Total Students',
+      value: totalStudents,
+      subtitle: `${myStudents.filter(s => s.status === 'Converted').length} converted`,
       icon: GraduationCap,
-      color: 'text-[#185FA5]',
-      bgColor: 'bg-[#E6F1FB]',
+      color: '#185FA5',
+      bgColor: '#E6F1FB',
+      link: '/agent/students'
     },
     {
-      title: 'Converted Students',
-      value: convertedCount,
-      trend: `${myStudents.length > 0 ? ((convertedCount / myStudents.length) * 100).toFixed(0) : 0}% conversion rate`,
-      icon: UserCheck,
-      color: 'text-[#10B981]',
-      bgColor: 'bg-[#ECFDF5]',
+      title: 'Active Applications',
+      value: activeApplications,
+      subtitle: `${myApplications.length} total submitted`,
+      icon: ClipboardList,
+      color: '#534AB7',
+      bgColor: '#EEEDFE',
+      link: '/agent/applications'
     },
     {
-      title: 'Support Tickets',
-      value: rawMyTickets.filter(t => t.status === 'open' || t.status === 'pending').length,
-      trend: 'Awaiting response',
-      icon: Ticket,
-      color: 'text-[#92400E]',
-      bgColor: 'bg-[#FEF3C7]',
+      title: 'Action Required',
+      value: actionRequiredCount,
+      subtitle: actionRequiredCount > 0 ? 'Items need your attention' : 'All clear',
+      icon: AlertTriangle,
+      color: actionRequiredCount > 0 ? '#B45309' : '#10B981',
+      bgColor: actionRequiredCount > 0 ? '#FEF3C7' : '#ECFDF5',
+      highlight: actionRequiredCount > 0,
+      link: null
+    },
+    {
+      title: 'Pending Payout',
+      value: formatCurrency(pendingPayout),
+      subtitle: `${pendingPayoffsList.length} payoff${pendingPayoffsList.length !== 1 ? 's' : ''} pending`,
+      icon: Clock,
+      color: '#B45309',
+      bgColor: '#FFF7ED',
+      link: '/agent/payoffs'
+    },
+    {
+      title: 'Total Settled',
+      value: formatCurrency(totalSettled),
+      subtitle: `${settledPayoffsList.length} settlement${settledPayoffsList.length !== 1 ? 's' : ''} received`,
+      icon: BadgeCheck,
+      color: '#047857',
+      bgColor: '#ECFDF5',
+      link: '/agent/payoffs'
     }
   ];
 
-  const STATUS_COLORS = ['#85B7EB', '#7F77DD', '#5DCAA5', '#97C459', '#EF9F27'];
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  // ── Action items aggregation ──
+  const actionItems = [];
 
-  // Adaptive Chart Logic: Show days for 1 week, months for others
-  const chartData = [];
-  if (dateRange === '1 week') {
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dayLabel = dayNames[d.getDay()];
-      const dayStudents = myStudents.filter(s => {
-        const sd = new Date(s.submittedAt);
-        return sd.getDate() === d.getDate() && sd.getMonth() === d.getMonth() && sd.getFullYear() === d.getFullYear();
-      });
-      chartData.push({
-        name: dayLabel,
-        registrations: dayStudents.length,
-        conversions: dayStudents.filter(s => s.status === 'Converted').length
-      });
-    }
-  } else {
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      const m = monthNames[d.getMonth()];
-      const year = d.getFullYear();
-      const monthStudents = myStudents.filter(s => {
-        const sd = new Date(s.submittedAt);
-        return sd.getMonth() === d.getMonth() && sd.getFullYear() === year;
-      });
-      chartData.push({
-        name: m,
-        registrations: monthStudents.length,
-        conversions: monthStudents.filter(s => s.status === 'Converted').length
-      });
-    }
+  if (invoicesNeedingCorrection.length > 0) {
+    actionItems.push({
+      type: 'invoice',
+      icon: FileText,
+      iconBg: '#FCEBEB',
+      iconColor: '#791F1F',
+      title: `${invoicesNeedingCorrection.length} Invoice${invoicesNeedingCorrection.length > 1 ? 's' : ''} require${invoicesNeedingCorrection.length === 1 ? 's' : ''} correction`,
+      description: invoicesNeedingCorrection.length === 1
+        ? `${invoicesNeedingCorrection[0].invoiceNumber} — Finance has requested changes`
+        : `Multiple invoices need your attention before approval`,
+      link: '/agent/invoices',
+      linkText: 'Fix Now',
+      urgency: 'high'
+    });
   }
 
-  const myStatusBreakdown = {};
-  myStudents.forEach(s => {
-    myStatusBreakdown[s.status] = (myStatusBreakdown[s.status] || 0) + 1;
-  });
+  if (applicationsNeedingAction.length > 0) {
+    actionItems.push({
+      type: 'application',
+      icon: ClipboardList,
+      iconBg: '#FEF3C7',
+      iconColor: '#92400E',
+      title: `${applicationsNeedingAction.length} Application${applicationsNeedingAction.length > 1 ? 's' : ''} need${applicationsNeedingAction.length === 1 ? 's' : ''} your attention`,
+      description: 'Documents or information required to proceed',
+      link: '/agent/applications',
+      linkText: 'Review',
+      urgency: 'medium'
+    });
+  }
 
-  const statusData = Object.keys(myStatusBreakdown).map((status, index) => ({
-    name: status,
-    value: myStatusBreakdown[status],
-    color: STATUS_COLORS[index % STATUS_COLORS.length]
-  }));
+  if (documentsRequested.length > 0) {
+    actionItems.push({
+      type: 'document',
+      icon: AlertCircle,
+      iconBg: '#FFF7ED',
+      iconColor: '#B45309',
+      title: `${documentsRequested.length} Student${documentsRequested.length > 1 ? 's' : ''} — documents requested`,
+      description: 'Admin has requested additional documents for verification',
+      link: '/agent/students',
+      linkText: 'Upload',
+      urgency: 'medium'
+    });
+  }
 
-  const getStudentDisplayName = (student) => {
-    if (student.name) return student.name;
-    if (student.customFields) {
-      const nameKey = Object.keys(student.customFields).find(key =>
-        key.toLowerCase().includes('name') ||
-        key.toLowerCase().includes('full')
-      );
-      if (nameKey) return student.customFields[nameKey];
-      const firstVal = Object.values(student.customFields)[0];
-      if (firstVal && typeof firstVal === 'string') return firstVal;
-    }
-    return 'Student';
+  // ── Recent Applications (latest 5) ──
+  const recentApplications = [...myApplications]
+    .sort((a, b) => new Date(b.createdAt || b.submittedAt) - new Date(a.createdAt || a.submittedAt))
+    .slice(0, 5);
+
+  // ── Recent Invoices (latest 5) ──
+  const recentInvoices = [...myInvoices]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 5);
+
+  // ── Helpers ──
+  const getApplicationStatusStyle = (status) => {
+    const s = status?.toLowerCase() || '';
+    if (s.includes('admit') || s === 'completed' || s === 'enrolled') return 'bg-[#DCFCE7] text-[#166534]';
+    if (s.includes('review') || s === 'processing' || s === 'submitted') return 'bg-[#E6F1FB] text-[#0C447C]';
+    if (s.includes('reject') || s === 'cancelled') return 'bg-[#FCEBEB] text-[#791F1F]';
+    if (s.includes('deposit') || s.includes('offer') || s === 'conditional_offer') return 'bg-[#FFF7ED] text-[#B45309]';
+    if (s.includes('correction') || s.includes('action') || s.includes('document')) return 'bg-[#FEF3C7] text-[#92400E]';
+    return 'bg-[#F3F4F6] text-[#374151]';
   };
 
-  const formatTime = (date) => {
-    if (!date) return 'Recently';
-    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-    if (isNaN(seconds)) return 'Recently';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    return 'Yesterday';
+  const getInvoiceStatusStyle = (status, reviewStatus) => {
+    const s = (reviewStatus || status || '').toLowerCase();
+    if (s.includes('approved') || s.includes('paid')) return 'bg-[#DCFCE7] text-[#166534]';
+    if (s.includes('review') || s.includes('submitted') || s.includes('pending')) return 'bg-[#E6F1FB] text-[#0C447C]';
+    if (s.includes('correction') || s.includes('reject')) return 'bg-[#FCEBEB] text-[#791F1F]';
+    return 'bg-[#F3F4F6] text-[#374151]';
   };
 
-  const handleRequestMoreEvents = async () => {
-    try {
-      await createTicket({
-        subject: 'Request for More Events',
-        description: 'I would like to request more event assignments for my agency to onboard more students.',
-        category: 'Other',
-        priority: 'Medium'
-      });
-    } catch (error) {
-      console.error('Failed to file request:', error);
-    }
+  const formatStatus = (status) => {
+    if (!status) return 'Pending';
+    return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   };
 
   return (
-    <div className="space-y-8 p-4 md:p-8 bg-[#F9FAFB] min-h-screen" data-testid="agent-dashboard">
-      {/* Topbar / Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+    <div className="space-y-6 p-4 md:p-8 bg-[#F9FAFB] min-h-screen" data-testid="agent-dashboard">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
-            Agent Command Centre
+            {getGreeting()}, {user?.name?.split(' ')[0] || 'Partner'}
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm font-medium">
-            Welcome back, {user?.name || 'Partner'} · {user?.isVerified ? 'QStudy Verified Agent' : 'Agent'}
+          <p className="text-sm text-slate-500 mt-1 font-medium">
+            Here's what's happening with your students and applications
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-4">
-          {dateRange === 'custom' && (
-            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
-              <input
-                type="date"
-                className="text-xs font-semibold text-[#111827] outline-none border-none bg-transparent"
-                value={customDates.start}
-                onChange={(e) => setCustomDates({ ...customDates, start: e.target.value })}
-              />
-              <span className="text-gray-300">|</span>
-              <input
-                type="date"
-                className="text-xs font-semibold text-[#111827] outline-none border-none bg-transparent"
-                value={customDates.end}
-                onChange={(e) => setCustomDates({ ...customDates, end: e.target.value })}
-              />
-            </div>
-          )}
-          <div className="relative group">
-            <select
-              className="appearance-none bg-white border border-gray-200 rounded-lg px-4 pr-10 py-2.5 text-xs font-bold text-[#111827] shadow-sm cursor-pointer hover:border-[#042C53] transition-all outline-none uppercase tracking-wider"
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-            >
-              <option value="1 week">1 Week</option>
-              <option value="1 month">1 Month</option>
-              <option value="6 month">6 Month</option>
-              <option value="1 year">1 Year</option>
-              <option value="custom">Custom Range</option>
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-[#042C53]">
-              <ChevronDown className="w-4 h-4" />
-            </div>
-          </div>
-          {/* <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-            <div className="w-10 h-10 rounded-full bg-[#10B981] flex items-center justify-center text-white font-bold text-sm shadow-sm">
-              {user?.name?.split(' ').map(n => n[0]).join('') || 'AG'}
-            </div>
-            <div className="hidden sm:block">
-              <p className="text-sm font-semibold text-[#111827]">{user?.name || 'Agent Name'}</p>
-              <p className="text-[10px] text-muted-foreground font-medium">Regional Partner</p>
-            </div>
-          </div> */}
         </div>
       </div>
 
-      <div className="w-full h-px bg-gray-200 my-6" />
+      <div className="w-full h-px bg-gray-200" />
 
-      {/* Compliance Warning Section */}
+      {/* Compliance Warning */}
       <ComplianceStatus />
 
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={index} className="border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 group">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {stat.title}
-                  </p>
-                  <div className={`p-2.5 rounded-xl ${stat.bgColor} ${stat.color} group-hover:scale-110 transition-transform`}>
-                    <Icon className="w-5 h-5" strokeWidth={2} />
-                  </div>
+      {/* KPI Cards — 5 cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {kpiCards.map((kpi, index) => {
+          const Icon = kpi.icon;
+          const inner = (
+            <div
+              key={index}
+              className={`bg-white border rounded-xl p-5 transition-all duration-200 group ${
+                kpi.highlight
+                  ? 'border-amber-300 shadow-sm shadow-amber-100 hover:shadow-md hover:shadow-amber-100'
+                  : 'border-slate-200 hover:shadow-md hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{kpi.title}</span>
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform"
+                  style={{ backgroundColor: kpi.bgColor }}
+                >
+                  <Icon className="w-4 h-4" style={{ color: kpi.color }} />
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-3xl font-bold text-[#111827] font-['Outfit']">
-                    {stat.value}
-                  </h3>
-                  <p className="text-[11px] font-medium flex items-center gap-1 text-muted-foreground">
-                    {stat.trend}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="text-2xl font-bold text-[#111827] font-['Outfit']">
+                {kpi.value}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium mt-1">{kpi.subtitle}</p>
+            </div>
+          );
+
+          return kpi.link ? (
+            <Link key={index} to={kpi.link} className="block">{inner}</Link>
+          ) : (
+            <div key={index}>{inner}</div>
           );
         })}
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <Card className="lg:col-span-8 border border-gray-200 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-['Outfit'] text-[#111827]">My Performance</CardTitle>
-                <CardDescription>Monthly registration trends</CardDescription>
-              </div>
-              <Link to='/agent/students' className="flex items-center text-[12px] text-slate-500 cursor-pointer hover:text-slate-900 font-medium">Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4 mb-6">
-              <span className="flex items-center gap-1.5 text-[12px] text-slate-500">
-                <span className="w-2.5 h-2.5 rounded-[2px] bg-[#378ADD]" /> Registrations
-              </span>
-              <span className="flex items-center gap-1.5 text-[12px] text-slate-500">
-                <span className="w-2.5 h-2.5 rounded-[2px] bg-[#1D9E75]" /> conversions
-              </span>
-            </div>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="0" vertical={false} stroke="#F1F5F9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888780' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888780' }} />
-                  <Tooltip
-                    cursor={{ fill: '#F8FAFC' }}
-                    contentStyle={{ borderRadius: '8px', border: '0.5px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontSize: '11px' }}
-                  />
-                  <Bar dataKey="registrations" fill="#378ADD" radius={[3, 3, 0, 0]} barSize={32} />
-                  <Bar dataKey="conversions" fill="#1D9E75" radius={[3, 3, 0, 0]} barSize={32} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-4 border border-gray-200 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-['Outfit'] text-[#111827]">Student Status</CardTitle>
-                <CardDescription>Status distribution</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center gap-6">
-              <div className="w-full h-[150px] relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={statusData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={2} dataKey="value" stroke="none">
-                      {statusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '11px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 w-full">
-                {statusData.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-[2px] shrink-0" style={{ backgroundColor: item.color }} />
-                      <span className="text-[11px] text-slate-500 truncate max-w-[80px]">{item.name}</span>
-                    </div>
-                    <span className="text-[11px] font-bold text-slate-900">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Registrations */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-lg font-['Outfit'] text-[#111827]">Recent Registrations</CardTitle>
-              <CardDescription>Students you've onboarded recently</CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-              <Link to="/agent/students">View all <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-gray-100">
-              {myStudents.length > 0 ? myStudents.slice(-3).reverse().map((student) => (
-                <div key={student.id} className="flex items-center justify-between p-4 px-6 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="w-9 h-9 rounded-full bg-[#E6F1FB] flex items-center justify-center text-[#0C447C] font-bold text-xs">
-                      {getStudentDisplayName(student).split(' ').map(n => n ? n[0] : '').join('') || 'S'}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-[#111827]">{getStudentDisplayName(student)}</p>
-                      <p className="text-[11px] text-muted-foreground font-medium">Registered on {new Date(student.submittedAt).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                  <Badge variant="outline" className={`text-[10px] px-3 py-0.5 border-none font-bold uppercase tracking-wider ${student.status === 'Converted' ? 'bg-[#DCFCE7] text-[#166534]' : 'bg-[#E6F1FB] text-[#0C447C]'
-                    }`}>
-                    {student.status || 'Registered'}
-                  </Badge>
-                </div>
-              )) : (
-                <div className="p-8 text-center text-muted-foreground text-sm font-medium">
-                  No students registered yet.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Assigned Events Panel */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-lg font-['Outfit'] text-[#111827]">Assigned Events</CardTitle>
-              <CardDescription>Upcoming recruitment campaigns</CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-              <Link to="/agent/events-management">Full calendar <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="p-4 px-6">
-            <div className="space-y-4">
-              {upcomingEvents.length > 0 ? upcomingEvents.slice(0, 3).map((event) => (
-                <Link
-                  key={event.id}
-                  to={`/agent/events/${event.id}`}
-                  className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 bg-white hover:border-[#042C53] hover:shadow-sm transition-all group"
+      {/* ═══ ACTION REQUIRED Section ═══ */}
+      {actionItems.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <h2 className="text-sm font-bold text-[#111827] uppercase tracking-wider">Action Required</h2>
+            <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+              {actionRequiredCount}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {actionItems.map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={i}
+                  className={`bg-white border rounded-xl p-4 flex items-center gap-4 transition-all hover:shadow-sm ${
+                    item.urgency === 'high' ? 'border-red-200' : 'border-amber-200'
+                  }`}
                 >
-                  <div className="w-11 h-11 rounded-lg bg-[#EEEDFE] flex items-center justify-center text-[#534AB7] group-hover:scale-110 transition-transform">
-                    <Calendar className="w-5 h-5" />
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: item.iconBg }}
+                  >
+                    <Icon className="w-5 h-5" style={{ color: item.iconColor }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-[#111827] truncate">{event.title}</p>
-                    <p className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {new Date(event.date).toLocaleDateString()} · {event.location || 'Virtual'}
-                    </p>
+                    <p className="text-sm font-bold text-[#111827]">{item.title}</p>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">{item.description}</p>
                   </div>
-                  <Button variant="ghost" size="sm" className="text-[#042C53] p-0 h-auto">
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </Link>
-              )) : (
-                <div className="p-8 text-center text-muted-foreground text-sm font-medium">
-                  No upcoming events assigned.
+                  <Link
+                    to={item.link}
+                    className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-[#042C53] text-white text-xs font-bold rounded-lg hover:bg-[#0C447C] transition-colors"
+                  >
+                    {item.linkText} <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
-              )}
-            </div>
-            <button
-              onClick={handleRequestMoreEvents}
-              className="w-full mt-6 p-4 bg-[#F9FAFB] rounded-xl border border-dashed border-gray-300 text-center hover:bg-gray-50 hover:border-[#042C53] transition-all group focus:outline-none focus:ring-2 focus:ring-[#042C53]/10"
-            >
-              <p className="text-[11px] font-semibold text-[#042C53] group-hover:text-[#0C447C] flex items-center justify-center gap-2">
-                <Ticket className="w-3.5 h-3.5" /> Need more events? Click here to file a request
-              </p>
-            </button>
-          </CardContent>
-        </Card>
-      </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-      {/* Recent Invoices Section */}
-      <Card className="border border-gray-200 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between pb-4">
+      {/* If no action required, show all-clear state */}
+      {actionItems.length === 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+          </div>
           <div>
-            <CardTitle className="text-lg font-['Outfit'] text-[#111827]">Recent Invoices</CardTitle>
-            <CardDescription>Status of your commission payments</CardDescription>
+            <p className="text-sm font-bold text-emerald-900">You're all caught up!</p>
+            <p className="text-[11px] text-emerald-700 font-medium mt-0.5">
+              No pending actions — all your invoices, applications, and documents are in order.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ RECENT APPLICATIONS ═══ */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h3 className="text-base font-semibold text-[#111827] font-['Outfit']">Recent Applications</h3>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">Track your student application progress</p>
           </div>
           <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-            <Link to="/agent/invoices">Raise new invoice +</Link>
+            <Link to="/agent/applications">View All <ArrowUpRight className="w-3.5 h-3.5 ml-1" /></Link>
           </Button>
-        </CardHeader>
-        <CardContent className="p-0">
+        </div>
+
+        {recentApplications.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-[#F9FAFB] border-y border-gray-100">
+              <thead className="bg-[#FAFAFA] border-b border-slate-100">
                 <tr>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Invoice ID</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Event</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Amount</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Date</th>
+                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Student</th>
+                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">University</th>
+                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Course</th>
+                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="text-right py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {myInvoices.length > 0 ? myInvoices.slice(0, 5).map((inv) => (
-                  <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-6 text-sm font-bold text-[#111827]">{inv.invoiceNumber}</td>
-                    <td className="py-4 px-6 text-sm text-muted-foreground">Event ID: {inv.eventId.slice(-6)}</td>
-                    <td className="py-4 px-6 text-sm font-bold text-[#111827]">₹{inv.amount.toLocaleString()}</td>
-                    <td className="py-4 px-6">
-                      <Badge variant="outline" className={`text-[9px] px-2 py-0.5 border-none font-bold uppercase tracking-wider ${inv.status === 'paid' ? 'bg-[#DCFCE7] text-[#166534]' : 'bg-[#FEF3C7] text-[#92400E]'
-                        }`}>
-                        {inv.status === 'paid' ? (
-                          <span className="flex items-center gap-1"><CheckCircle2 className="w-2.5 h-2.5" /> Paid</span>
-                        ) : inv.status}
-                      </Badge>
+              <tbody className="divide-y divide-slate-50">
+                {recentApplications.map((app) => (
+                  <tr key={app.id || app._id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-3.5 px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-full bg-[#E6F1FB] flex items-center justify-center text-[#0C447C] text-[10px] font-bold">
+                          {(app.studentName || app.student?.name || 'S').charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm font-medium text-[#111827]">
+                          {app.studentName || app.student?.name || 'Student'}
+                        </span>
+                      </div>
                     </td>
-                    <td className="py-4 px-6 text-[11px] text-muted-foreground font-medium">{new Date(inv.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-muted-foreground text-sm font-medium">
-                      No invoices raised yet.
+                    <td className="py-3.5 px-6 text-sm text-slate-600">
+                      {app.universityName || app.university?.name || '—'}
+                    </td>
+                    <td className="py-3.5 px-6 text-sm text-slate-500 max-w-[160px] truncate">
+                      {app.courseName || app.course?.name || '—'}
+                    </td>
+                    <td className="py-3.5 px-6">
+                      <span className={`text-[9px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider inline-block ${getApplicationStatusStyle(app.status)}`}>
+                        {formatStatus(app.status)}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-6 text-right">
+                      <Link
+                        to={`/agent/applications`}
+                        className="text-[11px] text-slate-500 hover:text-[#042C53] font-medium inline-flex items-center gap-1"
+                      >
+                        View <ExternalLink className="w-3 h-3" />
+                      </Link>
                     </td>
                   </tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
-      {/* Support Tickets Section */}
-      <Card className="border border-gray-200 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between pb-4">
+        ) : (
+          <div className="p-10 text-center">
+            <ClipboardList className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm text-slate-400 font-medium">No applications yet</p>
+            <p className="text-[11px] text-slate-400 mt-1">Applications you create for students will appear here</p>
+          </div>
+        )}
+      </div>
+
+      {/* ═══ RECENT INVOICES ═══ */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
-            <CardTitle className="text-lg font-['Outfit'] text-[#111827]">Support & Communications</CardTitle>
-            <CardDescription>Recent helpdesk tickets and updates</CardDescription>
+            <h3 className="text-base font-semibold text-[#111827] font-['Outfit']">Recent Invoices</h3>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">Track your commission invoice status</p>
           </div>
           <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-            <Link to="/agent/support">Helpdesk <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" /></Link>
+            <Link to="/agent/invoices">Raise Invoice + <ArrowUpRight className="w-3.5 h-3.5 ml-1" /></Link>
           </Button>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="divide-y divide-gray-100">
-            {myTickets.length > 0 ? myTickets.slice(0, 4).map((ticket) => (
-              <div key={ticket.id} className="flex items-start gap-4 p-4 px-6 hover:bg-gray-50 transition-colors">
-                <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${ticket.priority === 'high' ? 'bg-[#E24B4A]' : 'bg-[#EF9F27]'}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-[#111827] leading-snug">{ticket.subject}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1 font-medium">{ticket.category} · {formatTime(ticket.createdAt)}</p>
-                </div>
-                <Badge variant="outline" className={`text-[9px] px-2 py-0.5 border-none font-bold uppercase tracking-wider ${ticket.status === 'open' ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-[#FEF3C7] text-[#92400E]'}`}>
-                  {ticket.status}
-                </Badge>
-              </div>
-            )) : (
-              <div className="p-10 text-center text-slate-400 italic text-sm font-medium">No active support tickets.</div>
-            )}
+        </div>
+
+        {recentInvoices.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#FAFAFA] border-b border-slate-100">
+                <tr>
+                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Invoice ID</th>
+                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Amount</th>
+                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Submitted</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {recentInvoices.map((inv) => {
+                  const displayStatus = inv.financeReviewStatus || inv.status || 'Pending';
+                  const isApproved = ['approved', 'paid'].includes(displayStatus.toLowerCase());
+                  const isRejectedOrCorrection = ['correctionrequired', 'correction_required', 'rejected'].includes(displayStatus.toLowerCase());
+
+                  return (
+                    <tr key={inv.id || inv._id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3.5 px-6 text-sm font-bold text-[#111827] font-mono">{inv.invoiceNumber}</td>
+                      <td className="py-3.5 px-6 text-sm font-medium text-[#111827] font-['Outfit']">
+                        {inv.amount > 0 ? formatCurrency(inv.amount, inv.currency) : 'Pending Review'}
+                      </td>
+                      <td className="py-3.5 px-6">
+                        <span className={`text-[9px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider inline-flex items-center gap-1 ${getInvoiceStatusStyle(inv.status, inv.financeReviewStatus)}`}>
+                          {isApproved ? (
+                            <><CheckCircle2 className="w-2.5 h-2.5" /> {formatStatus(displayStatus)}</>
+                          ) : isRejectedOrCorrection ? (
+                            <><XCircle className="w-2.5 h-2.5" /> {formatStatus(displayStatus)}</>
+                          ) : (
+                            formatStatus(displayStatus)
+                          )}
+                        </span>
+                      </td>
+                    <td className="py-3.5 px-6 text-[11px] text-slate-500 font-medium">
+                      {inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('en-IN', {
+                        day: 'numeric', month: 'short', year: 'numeric'
+                      }) : '—'}
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </CardContent>
-      </Card>
+        ) : (
+          <div className="p-10 text-center">
+            <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm text-slate-400 font-medium">No invoices raised yet</p>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Create an invoice from the <Link to="/agent/invoices" className="text-[#042C53] hover:underline">Invoices</Link> page
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -54,6 +54,8 @@ export const INVOICE_STATUS_LABELS = {
 export const FINANCE_REVIEW_STATUS = {
   PENDING_REVIEW: 'PendingReview',
   UNDER_REVIEW: 'UnderReview',
+  CORRECTION_REQUIRED: 'CorrectionRequired',
+  RESUBMITTED: 'Resubmitted',
   APPROVED: 'Approved',
   REJECTED: 'Rejected'
 };
@@ -63,6 +65,8 @@ export const FINANCE_REVIEW_STATUS_LIST = Object.values(FINANCE_REVIEW_STATUS);
 export const FINANCE_REVIEW_STATUS_LABELS = {
   [FINANCE_REVIEW_STATUS.PENDING_REVIEW]: 'Pending Review',
   [FINANCE_REVIEW_STATUS.UNDER_REVIEW]: 'Under Review',
+  [FINANCE_REVIEW_STATUS.CORRECTION_REQUIRED]: 'Correction Required',
+  [FINANCE_REVIEW_STATUS.RESUBMITTED]: 'Resubmitted',
   [FINANCE_REVIEW_STATUS.APPROVED]: 'Approved',
   [FINANCE_REVIEW_STATUS.REJECTED]: 'Rejected'
 };

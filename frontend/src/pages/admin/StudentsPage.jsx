@@ -10,12 +10,18 @@ import {
 import { useData } from '../../context/DataContext';
 import { toast } from 'sonner';
 import StudentRegistrationModal from '../../components/modals/StudentRegistrationModal';
+import DocumentReviewDialog from '../../components/modals/DocumentReviewDialog';
 import { cn } from '@/lib/utils';
 import { studentVerificationAPI, formatApiError } from '../../utils/api';
 import {
   STUDENT_VERIFICATION_STATUS,
   STUDENT_VERIFICATION_STATUS_LABELS
 } from '../../constants/status';
+
+const DOC_STATUS_LABELS = {
+  CorrectionRequired: 'More Information Required',
+  UnderReview: 'Under Review'
+};
 
 const STAGES = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
 const STAGE_PILLS = {
@@ -27,8 +33,8 @@ const STAGE_PILLS = {
 };
 
 const DEFAULT_DOC_CATEGORIES = [
-  { label: 'Passport', value: 'Passport', mandatory: true },
-  { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
+  { label: 'Passport', value: 'Passport', mandatory: false },
+  { label: 'Academic Transcripts', value: 'Transcript', mandatory: false },
   { label: 'IELTS Score Card', value: 'LanguageTest', mandatory: false }
 ];
 
@@ -349,31 +355,26 @@ const StudentsPage = () => {
     }
   };
 
-  const handleVerifyDocument = async (studentId, docId, status) => {
-    let remarks = '';
-    const sLower = (status || '').toLowerCase();
-    if (sLower.includes('correction')) {
-      remarks = prompt('Enter correction reason / instructions for agent:');
-      if (remarks === null) return;
-      if (!remarks.trim()) {
-        toast.error('Remarks are required when requesting correction');
-        return;
-      }
-    } else if (sLower === 'rejected') {
-      remarks = prompt('Enter reason for document rejection:');
-      if (remarks === null) return;
-      if (!remarks.trim()) {
-        toast.error('Remarks are required when rejecting a document');
-        return;
-      }
-    }
+  // Review actions that need remarks (More Information Required / Rejected) open a dialog first
+  const [reviewDialog, setReviewDialog] = useState({ open: false, studentId: null, docId: null, status: null, label: '' });
 
+  const submitDocumentReview = async (studentId, docId, status, remarks = '') => {
     try {
       await verifyStudentDocument(studentId, docId, { status, remarks });
-      toast.success(`Document marked as ${status}`);
+      toast.success(`Document marked as ${status === 'CorrectionRequired' ? 'More Information Required' : status}`);
     } catch (error) {
       toast.error(`Failed to update document status`);
     }
+  };
+
+  const handleVerifyDocument = (studentId, docId, status) => {
+    if (status === 'CorrectionRequired' || status === 'Rejected') {
+      const student = students.find(s => (s.id || s._id) === studentId);
+      const doc = (student?.documents || []).find(d => (d.id || d._id) === docId);
+      setReviewDialog({ open: true, studentId, docId, status, label: doc?.category || 'Document' });
+      return;
+    }
+    return submitDocumentReview(studentId, docId, status);
   };
 
   const selectedStudent = useMemo(() => {
@@ -855,9 +856,10 @@ const StudentsPage = () => {
                         <td className="px-4 py-3.5 text-right space-x-2">
                           {vStatus === 'Pending' && (
                             <button
-                              disabled={queueActionLoading}
+                              disabled={queueActionLoading || qs.readyForVerification === false}
+                              title={qs.readyForVerification === false ? 'Verification starts after the student is enrolled with a verified deposit' : undefined}
                               onClick={() => handleQuickInitiate(qs.id || qs._id)}
-                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-[#042C53] text-white hover:bg-[#0C447C] transition-all shadow-sm"
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-[#042C53] text-white hover:bg-[#0C447C] transition-all shadow-sm disabled:opacity-50"
                             >
                               Start Verification
                             </button>
@@ -872,9 +874,10 @@ const StudentsPage = () => {
                           )}
                           {vStatus === 'Rejected' && (
                             <button
-                              disabled={queueActionLoading}
+                              disabled={queueActionLoading || qs.readyForVerification === false}
+                              title={qs.readyForVerification === false ? 'Verification starts after the student is enrolled with a verified deposit' : undefined}
                               onClick={() => handleQuickInitiate(qs.id || qs._id)}
-                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition-all shadow-sm"
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition-all shadow-sm disabled:opacity-50"
                             >
                               Re-initiate
                             </button>
@@ -1047,7 +1050,7 @@ const StudentsPage = () => {
                           (doc.status || '').toLowerCase() === 'underreview' ? 'bg-[#E6F1FB] text-[#0C447C]' :
                           'bg-[#FAEEDA] text-[#633806]'
                         }`}>
-                          {doc.status || 'Submitted'}
+                          {DOC_STATUS_LABELS[doc.status] || doc.status || 'Submitted'}
                         </span>
                         {(doc.status || '').toLowerCase() !== 'approved' && (
                           <div className="flex gap-1">
@@ -1067,7 +1070,7 @@ const StudentsPage = () => {
                               className="px-2 py-1 text-[9px] font-bold rounded-lg bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] hover:bg-[#FEF3C7]"
                               onClick={() => handleVerifyDocument(selectedStudent.id || selectedStudent._id, doc.id || doc._id, 'CorrectionRequired')}
                             >
-                              Correction
+                              More Info
                             </button>
                             <button
                               className="px-2 py-1 text-[9px] font-bold rounded-lg bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] hover:bg-[#FADADA]"
@@ -1093,7 +1096,7 @@ const StudentsPage = () => {
                         </span>
                         <button
                           className="inline-flex items-center px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#D1D5DB] hover:bg-gray-50 transition-all"
-                          onClick={() => requestStudentDocument(selectedStudent.id || selectedStudent._id, docType.label)}
+                          onClick={() => requestStudentDocument(selectedStudent.id || selectedStudent._id, docType.value, docType.label)}
                         >
                           Request <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                         </button>
@@ -1133,6 +1136,14 @@ const StudentsPage = () => {
           </div>
         </div>
       )}
+
+      <DocumentReviewDialog
+        open={reviewDialog.open}
+        onOpenChange={(o) => setReviewDialog(prev => ({ ...prev, open: o }))}
+        mode={reviewDialog.status}
+        documentLabel={reviewDialog.label}
+        onConfirm={(remarks) => submitDocumentReview(reviewDialog.studentId, reviewDialog.docId, reviewDialog.status, remarks)}
+      />
 
       {/* Student Registration Modal */}
       <StudentRegistrationModal

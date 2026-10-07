@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import {
   agentAPI,
@@ -46,11 +46,14 @@ export const DataProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const { isAuthenticated, user } = useAuth();
+  const userRole = user?.role;
+  const userRef = useRef(user);
+  userRef.current = user;
 
   // Fetch all data
   const fetchAgents = useCallback(async () => {
-    if (user?.role !== 'admin') {
-      const selfAgent = user ? [user] : [];
+    if (userRole !== 'admin') {
+      const selfAgent = userRef.current ? [userRef.current] : [];
       setAgents(selfAgent);
       return selfAgent;
     }
@@ -63,7 +66,7 @@ export const DataProvider = ({ children }) => {
       setAgents([]);
       return [];
     }
-  }, [user]);
+  }, [userRole]);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -163,8 +166,14 @@ export const DataProvider = ({ children }) => {
     try {
       const response = await payoffAPI.getAll(params);
       const data = Array.isArray(response.data) ? response.data : (response.data?.payoffs || []);
-      setPayoffs(data);
-      return data;
+      // The API nests agent/invoice under those keys; the UI reads populated agentId/invoiceId
+      const normalized = data.map(p => ({
+        ...p,
+        agentId: p.agent || p.agentId,
+        invoiceId: p.invoice || p.invoiceId
+      }));
+      setPayoffs(normalized);
+      return normalized;
     } catch (error) {
       console.error('Error fetching payoffs:', error);
       return [];
@@ -604,12 +613,16 @@ export const DataProvider = ({ children }) => {
     }
   };
 
-  const requestStudentDocument = async (studentId, category) => {
+  const requestStudentDocument = async (studentId, category, label) => {
     try {
-      await studentAPI.requestDocument(studentId, category);
+      const response = await studentAPI.requestDocument(studentId, category, label);
+      const documentRequests = response.data?.documentRequests || [];
+      setStudents(prev => prev.map(s => (s.id === studentId || s._id === studentId) ? { ...s, documentRequests } : s));
       toast.success('Request sent to agent');
+      return documentRequests;
     } catch (error) {
-      toast.error('Failed to send request');
+      toast.error('Failed to send request', { description: formatApiError(error) });
+      return null;
     }
   };
 
@@ -1112,6 +1125,7 @@ export const DataProvider = ({ children }) => {
     getEventById,
     getEventsForAgent,
     // Student operations
+    fetchAgents,
     fetchStudents,
     addStudent,
     getStudentsByEvent,

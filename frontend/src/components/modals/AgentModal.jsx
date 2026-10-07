@@ -54,6 +54,10 @@ const agentSchema = z.object({
   agencyName: z.string().optional(),
   businessRegistrationNumber: z.string().optional(),
   fullAddress: z.string().optional(),
+  commissionRate: z.string().optional().refine(
+    (v) => !v || (Number(v) > 0 && Number(v) <= 100),
+    'Commission rate must be greater than 0 and at most 100'
+  ),
   region: z.string().optional()
 });
 
@@ -97,6 +101,7 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
         agencyName: agent.agencyName || '',
         businessRegistrationNumber: agent.businessRegistrationNumber || '',
         fullAddress: agent.fullAddress || '',
+        commissionRate: agent.commissionRate != null ? String(agent.commissionRate) : '',
         region: agent.region || ''
       });
     } else if (open && !agent) {
@@ -110,6 +115,7 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
         agencyName: '',
         businessRegistrationNumber: '',
         fullAddress: '',
+        commissionRate: '',
         region: ''
       });
     }
@@ -118,7 +124,8 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
   const onSubmit = async (data) => {
     // Check for duplicate userId (excluding current agent if editing)
     const existingAgent = agents.find(a =>
-      a.userId.toLowerCase() === data.userId.toLowerCase() &&
+      (a.userId || '').toLowerCase() === (data.userId || '').toLowerCase() &&
+      !!data.userId &&
       (!agent || a.id !== agent.id)
     );
 
@@ -131,7 +138,8 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
 
     // Check for duplicate email (excluding current agent if editing)
     const existingEmail = agents.find(a =>
-      a.email.toLowerCase() === data.email.toLowerCase() &&
+      (a.email || '').toLowerCase() === (data.email || '').toLowerCase() &&
+      !!data.email &&
       (!agent || a.id !== agent.id)
     );
 
@@ -333,6 +341,25 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
                       placeholder="123 Education Lane, NY"
                       disabled={viewMode}
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="commissionRate">Commission Rate (%)</Label>
+                    <Input
+                      id="commissionRate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      {...register('commissionRate')}
+                      placeholder="e.g. 10"
+                      disabled={viewMode}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Default rate applied to this agent's invoices. Only admins can set it.
+                    </p>
+                    {errors.commissionRate && (
+                      <p className="text-xs text-destructive">{errors.commissionRate.message}</p>
+                    )}
                   </div>
                 </div>
 

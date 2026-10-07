@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Ban
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
@@ -50,6 +51,7 @@ const AdminPayoffsPage = () => {
   const [cancelNotes, setCancelNotes] = useState('');
   const [cancelling, setCancelling] = useState(false);
 
+  const [payoffDetail, setPayoffDetail] = useState(null);
   const [reviewHistory, setReviewHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -98,6 +100,10 @@ const AdminPayoffsPage = () => {
     setSelectedPayoff(payoff);
     setIsViewOpen(true);
     setReviewHistory([]);
+    setPayoffDetail(null);
+    payoffAPI.getById(payoff.id)
+      .then(res => setPayoffDetail(res.data))
+      .catch(err => console.error('Failed to load payoff detail:', err));
     const invoiceId = payoff.invoiceId?.id || payoff.invoiceId;
     if (invoiceId && typeof invoiceId === 'string') {
       setLoadingHistory(true);
@@ -155,14 +161,14 @@ const AdminPayoffsPage = () => {
       <Table>
         <TableHeader>
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Payoff #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payee Agency / Agent</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Gross Commission</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Net Amount</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Status</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement Details</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Actions</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider whitespace-nowrap">Payoff #</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider whitespace-nowrap">Invoice #</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider whitespace-nowrap">Payee / Agent</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider whitespace-nowrap">Gross Commission</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider whitespace-nowrap">Net Amount</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider whitespace-nowrap">Status</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider whitespace-nowrap">Settlement Details</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider whitespace-nowrap">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -184,14 +190,14 @@ const AdminPayoffsPage = () => {
               return (
                 <TableRow key={payoff.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0">
                   <TableCell className="px-6 py-4 font-bold text-[#111827]">
-                    <span className="font-mono text-xs">{payoff.payoffNumber}</span>
+                    <span className="font-mono text-xs whitespace-nowrap">{payoff.payoffNumber}</span>
                   </TableCell>
                   <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563]">
-                    {invoice.invoiceNumber || 'N/A'}
+                    <span className="whitespace-nowrap">{invoice.invoiceNumber || 'N/A'}</span>
                   </TableCell>
                   <TableCell className="px-6 py-4">
                     <div className="flex flex-col items-center">
-                      <span className="font-semibold text-[#111827] text-center truncate">{agent.agencyName || agent.name || 'Agency'}</span>
+                      <span className="font-semibold text-[#111827] text-center truncate">{agent.agencyName || agent.name || 'Unknown agent'}</span>
                       <span className="text-[11px] text-[#6B7280] text-center truncate">{agent.email}</span>
                     </div>
                   </TableCell>
@@ -407,157 +413,190 @@ const AdminPayoffsPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Payoff Inspection Dialog */}
+      {/* Payoff Details Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
-          {selectedPayoff && (
-            <div className="relative min-h-[560px] flex flex-col">
-              <div className="bg-[#042C53] p-8 text-white flex justify-between items-start">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="w-6 h-6 text-blue-200" />
-                    <h2 className="text-2xl font-bold font-['Outfit']">PAYOFF RECORD</h2>
-                  </div>
-                  <p className="text-blue-100 text-xs font-medium">
-                    Payoff #: <span className="font-mono font-bold text-white">{selectedPayoff.payoffNumber}</span> &bull; Invoice: {selectedPayoff.invoiceId?.invoiceNumber || 'N/A'}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-blue-200 font-semibold uppercase tracking-wider block">Net Settlement Amount</span>
-                  <span className="text-3xl font-bold font-['Outfit'] block mt-0.5">
-                    ${Number(selectedPayoff.netAmount || 0).toLocaleString()}
-                  </span>
-                  <span className="text-[11px] text-blue-200 block">
-                    Gross: ${Number(selectedPayoff.grossCommission || 0).toLocaleString()} &bull; Deductions: ${Number(selectedPayoff.deductions || 0).toLocaleString()}
-                  </span>
-                </div>
+        <DialogContent className="max-w-3xl p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
+          {selectedPayoff && (() => {
+            const p = payoffDetail || selectedPayoff;
+            const agent = p.agent || p.agentId || {};
+            const invoice = p.invoice || p.invoiceId || {};
+            const snapshots = invoice.commissionSnapshots || [];
+            const gross = Number(p.grossCommission || 0);
+            const deductions = Number(p.deductions || 0);
+            const net = Number(p.netAmount ?? gross - deductions);
+            const money = (v) => formatCurrency(v, p.currency);
+            const payee = agent.agencyName || agent.name || 'the agent';
+            const Row = ({ label, children }) => (
+              <div className="flex items-start justify-between gap-4 py-2.5 border-b border-gray-100 last:border-0">
+                <span className="text-xs text-gray-500">{label}</span>
+                <span className="text-xs font-semibold text-gray-900 text-right break-words">{children}</span>
               </div>
+            );
+            const summary = {
+              PENDING: `Finance approved the invoice, so ${payee} is owed ${money(net)}. Pay them by bank transfer, then click "Mark as Paid" and enter the bank reference.`,
+              SETTLED: `This payoff has been paid. ${money(net)} was transferred to ${payee}.`,
+              CANCELLED: 'This payoff was cancelled. No money is owed and it can no longer be paid.'
+            }[p.status] || '';
+            const tone = {
+              PENDING: 'bg-amber-50 border-amber-200 text-amber-900',
+              SETTLED: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+              CANCELLED: 'bg-red-50 border-red-200 text-red-900'
+            }[p.status] || 'bg-gray-50 border-gray-200 text-gray-800';
 
-              <div className="p-8 space-y-6 flex-1 max-h-[70vh] overflow-y-auto">
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+            return (
+              <div className="flex flex-col max-h-[90vh]">
+                {/* Header */}
+                <div className="bg-[#042C53] px-6 py-5 text-white flex items-center justify-between gap-4">
                   <div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Payoff Status</span>
-                    <div className="mt-1">{getPayoffBadge(selectedPayoff.status)}</div>
+                    <DialogTitle className="text-lg font-bold font-['Outfit'] text-white">Payoff Details</DialogTitle>
+                    <DialogDescription className="text-xs text-blue-200 mt-1">
+                      <span className="font-mono">{p.payoffNumber}</span> &middot; Invoice {invoice.invoiceNumber || 'N/A'}
+                    </DialogDescription>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Payee Agent / Agency</span>
-                    <span className="text-xs font-bold text-gray-900 mt-1 block">
-                      {selectedPayoff.agentId?.agencyName || selectedPayoff.agentId?.name || 'Agent'} ({selectedPayoff.agentId?.email})
-                    </span>
-                  </div>
+                  {getPayoffBadge(p.status)}
                 </div>
 
-                {/* Offline Settlement Information */}
-                {selectedPayoff.status === 'SETTLED' && (
-                  <div className="p-4 bg-emerald-50/70 rounded-xl border border-emerald-200 space-y-2">
-                    <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Confirmed Offline Settlement Details
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-emerald-900 pt-1">
-                      <div>
-                        <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Settlement Ref (UTR)</span>
-                        <span className="font-mono font-bold">{selectedPayoff.settlementReference}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Transfer Date</span>
-                        <span>{selectedPayoff.settledAt ? format(new Date(selectedPayoff.settledAt), 'MMMM dd, yyyy') : 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Batch Reference</span>
-                        <span className="font-mono">{selectedPayoff.batchReference || 'N/A'}</span>
+                <div className="px-6 py-5 space-y-5 overflow-y-auto">
+                  {/* Plain-language summary */}
+                  <div className={`p-4 rounded-xl border text-sm leading-relaxed ${tone}`}>{summary}</div>
+
+                  {/* Money */}
+                  <div>
+                    <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Amount</h3>
+                    <div className="rounded-xl border border-gray-200 px-4">
+                      <Row label="Commission earned">{money(gross)}</Row>
+                      <Row label="Deductions">{deductions > 0 ? `- ${money(deductions)}` : 'None'}</Row>
+                      <div className="flex items-center justify-between py-3">
+                        <span className="text-sm font-bold text-gray-900">Amount to pay</span>
+                        <span className="text-xl font-bold text-[#042C53] font-['Outfit'] tabular-nums">{money(net)}</span>
                       </div>
                     </div>
-                    {selectedPayoff.settlementNotes && (
-                      <p className="text-xs text-emerald-800 pt-1 border-t border-emerald-200/60 mt-2 italic">
-                        Notes: {selectedPayoff.settlementNotes}
-                      </p>
-                    )}
                   </div>
-                )}
 
-                {selectedPayoff.status === 'CANCELLED' && (
-                  <div className="p-4 bg-red-50/70 rounded-xl border border-red-200 space-y-1">
-                    <span className="text-xs font-bold text-red-900 flex items-center gap-1.5">
-                      <Ban className="w-4 h-4 text-red-600" /> Voided Payoff Record
-                    </span>
-                    <p className="text-xs text-red-800">
-                      This payoff liability has been cancelled by an administrator. Terminal state cannot be settled.
-                    </p>
-                    {selectedPayoff.settlementNotes && (
-                      <p className="text-xs text-red-700 italic mt-1">{selectedPayoff.settlementNotes}</p>
-                    )}
+                  {/* Who */}
+                  <div>
+                    <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Pay to</h3>
+                    <div className="rounded-xl border border-gray-200 px-4">
+                      <Row label="Agency">{agent.agencyName || 'N/A'}</Row>
+                      <Row label="Agent">{agent.name || 'N/A'}</Row>
+                      <Row label="Email">{agent.email || 'N/A'}</Row>
+                      {agent.phone && <Row label="Phone">{agent.phone}</Row>}
+                    </div>
                   </div>
-                )}
 
-                {/* Linked Invoice Applications Breakdown */}
-                {selectedPayoff.invoiceId?.applications && selectedPayoff.invoiceId.applications.length > 0 && (
-                  <div className="space-y-2">
-                    <span className="text-xs font-bold text-gray-900 block">Enrolled Student Applications Linked to Invoice</span>
-                    <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
-                      <Table>
-                        <TableHeader className="bg-[#F9FAFB]">
-                          <TableRow>
-                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Application #</TableHead>
-                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">Applicant Name</TableHead>
-                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3">University & Course</TableHead>
-                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-6 py-3 text-right">Tuition Fee</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {selectedPayoff.invoiceId.applications.map((app, idx) => (
-                            <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0">
-                              <TableCell className="px-6 py-4 text-xs font-bold text-[#111827]">
-                                {app.applicationNumber}
-                              </TableCell>
-                              <TableCell className="px-6 py-4 text-xs text-[#4B5563]">
-                                <span className="font-semibold text-gray-900 block">{app.student?.name || 'Applicant'}</span>
-                                <span className="text-[11px] text-gray-500">{app.student?.email}</span>
-                              </TableCell>
-                              <TableCell className="px-6 py-4 text-xs text-[#4B5563]">
-                                <span className="font-medium text-gray-900 block">{app.university?.name || 'University'}</span>
-                                <span className="text-[11px] text-gray-500">{app.courseName}</span>
-                              </TableCell>
-                              <TableCell className="px-6 py-4 text-right text-xs font-bold text-gray-900">
-                                {app.tuitionFee ? `$${Number(app.tuitionFee).toLocaleString()}` : 'Unknown'}
-                              </TableCell>
+                  {/* Payment record */}
+                  {p.status === 'SETTLED' && (
+                    <div>
+                      <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Payment record</h3>
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 px-4">
+                        <Row label="Bank reference (UTR)"><span className="font-mono">{p.settlementReference || 'N/A'}</span></Row>
+                        <Row label="Date paid">{p.settledAt ? format(new Date(p.settledAt), 'dd MMM yyyy') : 'N/A'}</Row>
+                        {p.batchReference && <Row label="Batch reference"><span className="font-mono">{p.batchReference}</span></Row>}
+                        {p.settler?.name && <Row label="Recorded by">{p.settler.name}</Row>}
+                        {p.settlementNotes && <Row label="Notes">{p.settlementNotes}</Row>}
+                      </div>
+                    </div>
+                  )}
+                  {p.status === 'CANCELLED' && p.settlementNotes && (
+                    <div>
+                      <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Reason for cancelling</h3>
+                      <p className="rounded-xl border border-red-200 bg-red-50/40 px-4 py-3 text-xs text-gray-800">{p.settlementNotes}</p>
+                    </div>
+                  )}
+
+                  {/* What the commission is for */}
+                  {snapshots.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">What this commission is for</h3>
+                      <div className="rounded-xl border border-gray-200 overflow-x-auto">
+                        <Table>
+                          <TableHeader className="bg-[#F9FAFB]">
+                            <TableRow>
+                              <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 whitespace-nowrap">Student</TableHead>
+                              <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 whitespace-nowrap">University / Course</TableHead>
+                              <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 text-right whitespace-nowrap">Tuition</TableHead>
+                              <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 text-right whitespace-nowrap">Rate</TableHead>
+                              <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 text-right whitespace-nowrap">Commission</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {snapshots.map((s) => (
+                              <TableRow key={s.id} className="border-b border-[#F3F4F6] last:border-0">
+                                <TableCell className="px-4 py-3 text-xs">
+                                  {s.application?.student?.id ? (
+                                    <Link to={`/admin/students/${s.application.student.id}`} className="font-semibold text-[#042C53] hover:underline block">
+                                      {s.application.student.name || 'Student'}
+                                    </Link>
+                                  ) : (
+                                    <span className="font-semibold text-gray-900 block">{s.application?.student?.name || 'Student'}</span>
+                                  )}
+                                  {s.application?.id ? (
+                                    <Link to={`/admin/applications/${s.application.id}`} className="text-[11px] text-blue-600 hover:underline">
+                                      {s.application.applicationNumber}
+                                    </Link>
+                                  ) : (
+                                    <span className="text-[11px] text-gray-500">{s.application?.applicationNumber}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 text-xs">
+                                  {s.application?.university?.id ? (
+                                    <Link to={`/admin/universities/${s.application.university.id}`} className="font-medium text-[#042C53] hover:underline block">
+                                      {s.application.university.name || 'University'}
+                                    </Link>
+                                  ) : (
+                                    <span className="font-medium text-gray-900 block">{s.application?.university?.name || 'University'}</span>
+                                  )}
+                                  <span className="text-[11px] text-gray-500">{s.application?.courseName}</span>
+                                </TableCell>
+                                <TableCell className="px-4 py-3 text-right text-xs tabular-nums">{money(s.commissionableTuition)}</TableCell>
+                                <TableCell className="px-4 py-3 text-right text-xs tabular-nums">{Number(s.commissionRate)}%</TableCell>
+                                <TableCell className="px-4 py-3 text-right text-xs font-bold text-gray-900 tabular-nums">{money(s.grossAmount)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Audit Timeline */}
-                {reviewHistory.length > 0 && (
-                  <div className="space-y-2 pt-2">
-                    <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                      <History className="w-3.5 h-3.5 text-gray-500" /> Invoice Review Timeline
-                    </span>
-                    <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2 text-xs">
-                      {reviewHistory.map((item, idx) => (
-                        <div key={idx} className="flex items-start justify-between border-b border-gray-200/60 pb-2 last:border-0 last:pb-0">
-                          <div>
-                            <span className="font-bold text-gray-900">{item.action}</span>
-                            {item.notes && <p className="text-[11px] text-gray-600 mt-0.5">{item.notes}</p>}
-                          </div>
-                          <span className="text-[10px] text-gray-400">
-                            {item.changedAt ? new Date(item.changedAt).toLocaleString() : ''}
-                          </span>
-                        </div>
-                      ))}
+                  {/* History */}
+                  {reviewHistory.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <History className="w-3.5 h-3.5 text-gray-500" /> Invoice history
+                      </h3>
+                      <ul className="rounded-xl border border-gray-200 divide-y divide-gray-100">
+                        {reviewHistory.map((item, idx) => (
+                          <li key={idx} className="flex items-start justify-between gap-3 px-4 py-2.5 text-xs">
+                            <div>
+                              <span className="font-semibold text-gray-900">{item.action}</span>
+                              {item.notes && <p className="text-[11px] text-gray-600 mt-0.5">{item.notes}</p>}
+                            </div>
+                            <span className="text-[11px] text-gray-400 whitespace-nowrap">
+                              {item.changedAt ? format(new Date(item.changedAt), 'dd MMM yyyy, HH:mm') : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-6 border-t border-[#E5E7EB] bg-[#F9FAFB] flex justify-between items-center">
-                <div className="text-[10px] text-[#9CA3AF] font-medium">
-                  Authoritative Settlement Record &bull; QStudy Portal
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  {selectedPayoff.status === 'PENDING' && (
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-[#E5E7EB] bg-[#F9FAFB] flex flex-wrap justify-end gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setIsViewOpen(false)} className="h-9 px-5 text-xs font-bold">
+                    Close
+                  </Button>
+                  {p.status === 'PENDING' && (
                     <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-9 px-4 text-xs font-bold text-red-700 border-red-200 hover:bg-red-50"
+                        onClick={() => handleOpenCancel(selectedPayoff)}
+                      >
+                        <Ban className="w-3.5 h-3.5 mr-1.5" /> Cancel payoff
+                      </Button>
                       <Button
                         size="sm"
                         className="h-9 px-4 text-xs font-bold text-white bg-[#27500A] hover:bg-[#1E3D07]"
@@ -566,32 +605,14 @@ const AdminPayoffsPage = () => {
                           handleOpenSettlement(selectedPayoff);
                         }}
                       >
-                        <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Settle Payoff
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 px-4 text-xs font-bold text-red-700 border-red-200 hover:bg-red-50"
-                        onClick={() => {
-                          handleOpenCancel(selectedPayoff);
-                        }}
-                      >
-                        <Ban className="w-3.5 h-3.5 mr-1.5" /> Cancel Payoff
+                        <CreditCard className="w-3.5 h-3.5 mr-1.5" /> Mark as Paid
                       </Button>
                     </>
                   )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setIsViewOpen(false)}
-                    className="h-9 px-6 text-xs font-bold"
-                  >
-                    Close
-                  </Button>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

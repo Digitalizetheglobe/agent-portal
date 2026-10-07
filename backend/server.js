@@ -7,7 +7,7 @@ const { connectDB, sequelize } = require('./config/db');
 const { initStorage } = require('./utils/storage');
 
 // Import models to ensure associations are registered
-const { User, Event, Student, University, Course, CommissionSnapshot, Payoff } = require('./models');
+const { User, Event, Student, University, Course, CommissionSnapshot, Payoff, Application } = require('./models');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -239,6 +239,25 @@ const startServer = async () => {
     console.log('🔄 Synchronizing PostgreSQL database schema...');
     await sequelize.sync({ alter: true });
     console.log('✅ PostgreSQL schema synchronized successfully');
+
+    // One-time backfill for the deposit lifecycle: deposits already marked paid before
+    // depositStatus existed were treated as verified, so keep them verified.
+    try {
+      const [backfilled] = await Application.update(
+        { depositStatus: 'Verified', depositVerifiedAt: new Date() },
+        { where: { depositPaid: true, depositStatus: 'Required' } }
+      );
+      if (backfilled > 0) console.log(`✅ Deposit backfill: ${backfilled} paid deposit(s) set to Verified`);
+
+      const enrolledWithoutDeposit = await Application.count({
+        where: { status: 'Enrolled', depositStatus: { [require('sequelize').Op.ne]: 'Verified' } }
+      });
+      if (enrolledWithoutDeposit > 0) {
+        console.warn(`⚠️ ${enrolledWithoutDeposit} enrolled application(s) have no verified deposit; review them manually.`);
+      }
+    } catch (error) {
+      console.error('❌ Deposit backfill failed:', error.message);
+    }
 
     // Initialize object storage
     try {

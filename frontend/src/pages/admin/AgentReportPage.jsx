@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -39,7 +39,12 @@ import { cn } from '../../lib/utils';
 const AgentReportPage = () => {
   const { agentId } = useParams();
   const navigate = useNavigate();
-  const { agents, students, events, invoices } = useData();
+  const { agents, students, events, invoices, fetchAgents, viewAgentDocument } = useData();
+
+  // Agents upload verification documents after the admin's list was loaded, so refresh on open
+  useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
 
   const agent = useMemo(() => agents.find(a => a.id === agentId), [agents, agentId]);
 
@@ -280,6 +285,44 @@ const AgentReportPage = () => {
 
         {/* Detailed Student List */}
         <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-[#111827] font-['Outfit'] tracking-tight">Verification Documents</h3>
+            <Badge variant="outline" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider bg-white">
+              {(agent.verificationDocuments || []).length} Documents
+            </Badge>
+          </div>
+          <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden print:hidden">
+            {(agent.verificationDocuments || []).length === 0 ? (
+              <p className="text-sm text-[#6B7280] text-center py-8">This agent hasn't uploaded any verification documents yet.</p>
+            ) : (
+              <div className="divide-y divide-[#F3F4F6]">
+                {agent.verificationDocuments.map((doc) => (
+                  <div key={doc.id || doc._id} className="flex items-center justify-between px-6 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
+                        <FileText className="w-4 h-4 text-[#6B7280]" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[#111827]">{doc.docType}</p>
+                        <p className="text-[11px] text-[#6B7280] truncate">
+                          {doc.fileName}{doc.uploadedAt ? ` · Uploaded ${new Date(doc.uploadedAt).toLocaleDateString()}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge className={cn('text-[10px] h-5 capitalize', doc.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : doc.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600')}>
+                        {doc.status}
+                      </Badge>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => viewAgentDocument(agent.id, doc.id || doc._id)}>
+                        View
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold text-[#111827] font-['Outfit'] tracking-tight">Detailed Registrations</h3>
             <Badge variant="outline" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider bg-white">

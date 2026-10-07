@@ -3,6 +3,8 @@ const { sequelize } = require('../config/db');
 const { Student, User, Application, Event } = require('../models');
 
 const VERIFICATION_STATUSES = ['Pending', 'UnderReview', 'Verified', 'Rejected'];
+// No documents are mandatory unless an event's checklist marks them so
+const DEFAULT_REQUIRED_CATEGORIES = [];
 const ALLOWED_TRANSITIONS = {
   Pending:     ['UnderReview'],
   UnderReview: ['Verified', 'Rejected'],
@@ -49,6 +51,59 @@ const formatVerification = (student) => {
   };
 };
 
+// Option B (verification only after enrollment) is off by default. Set
+// VERIFICATION_REQUIRES_ENROLLMENT=true in the backend env to enforce it.
+const VERIFICATION_REQUIRES_ENROLLMENT = process.env.VERIFICATION_REQUIRES_ENROLLMENT === 'true';
+
+/**
+ * Student verification happens after enrollment. A student is ready when at least one of their
+ * applications is Enrolled with a confirmed admission, an enrollment date and a verified deposit.
+ */
+const getEnrollmentReadiness = async (studentId, transaction = null) => {
+  const enrolled = await Application.findAll({
+    where: { studentId, status: 'Enrolled' },
+    attributes: ['id', 'applicationNumber', 'courseName', 'status', 'admissionDate', 'enrollmentDate', 'depositStatus'],
+    transaction
+  });
+
+  const checked = enrolled.map(app => {
+    const missing = [];
+    if (!app.admissionDate) missing.push('admission confirmation');
+    if (!app.enrollmentDate) missing.push('enrollment date');
+    if (app.depositStatus !== 'Verified') missing.push('verified deposit');
+    return {
+      id: app.id,
+      applicationNumber: app.applicationNumber,
+      courseName: app.courseName,
+      depositStatus: app.depositStatus,
+      missing
+    };
+  });
+
+  const ready = checked.some(a => a.missing.length === 0);
+  const blockers = [];
+  if (enrolled.length === 0) {
+    blockers.push('The student has no enrolled application yet.');
+  } else if (!ready) {
+    checked.forEach(a => blockers.push(`Application ${a.applicationNumber} is missing: ${a.missing.join(', ')}.`));
+  }
+
+  return { ready, enforced: VERIFICATION_REQUIRES_ENROLLMENT, enrolledApplications: checked, blockers };
+};
+
+const assertReadyForVerification = async (studentId, transaction = null) => {
+  const readiness = await getEnrollmentReadiness(studentId, transaction);
+  if (VERIFICATION_REQUIRES_ENROLLMENT && !readiness.ready) {
+    const err = new Error(
+      `Student verification starts after enrollment. ${readiness.blockers.join(' ')} ` +
+      'Enroll the student (with a verified deposit) first.'
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+  return readiness;
+};
+
 class StudentVerificationService {
 
   async getVerificationQueue(query, currentUser) {
@@ -76,15 +131,31 @@ class StudentVerificationService {
       where, include: verificationIncludes,
       order: [['updatedAt', 'DESC']], limit: parsedLimit, offset, distinct: true
     });
+    const readyApps = rows.length === 0 ? [] : await Application.findAll({
+      where: {
+        studentId: { [Op.in]: rows.map(r => r.id) },
+        status: 'Enrolled',
+        depositStatus: 'Verified',
+        admissionDate: { [Op.ne]: null },
+        enrollmentDate: { [Op.ne]: null }
+      },
+      attributes: ['studentId']
+    });
+    const readyIds = new Set(readyApps.map(a => String(a.studentId)));
     return { total: count, page: parsedPage, limit: parsedLimit,
-      totalPages: Math.ceil(count / parsedLimit) || 1, students: rows.map(formatVerification) };
+      totalPages: Math.ceil(count / parsedLimit) || 1,
+      students: rows.map(r => ({
+        ...formatVerification(r),
+        readyForVerification: !VERIFICATION_REQUIRES_ENROLLMENT || readyIds.has(String(r.id))
+      })) };
   }
 
   async getVerificationDetail(studentId, currentUser) {
     const student = await Student.findByPk(studentId, { include: verificationIncludes });
     if (!student) { const err = new Error('Student not found'); err.statusCode = 404; throw err; }
     enforceOwnership(student, currentUser);
-    return formatVerification(student);
+    const readiness = await getEnrollmentReadiness(student.id);
+    return { ...formatVerification(student), readiness };
   }
 
   async _transition(studentId, to, extra, historyEntry, currentUser, t) {
@@ -108,6 +179,7 @@ class StudentVerificationService {
 
   async initiateVerification(studentId, currentUser) {
     requireAdmin(currentUser);
+    await assertReadyForVerification(studentId);
     const t = await sequelize.transaction();
     try {
       await this._transition(studentId, 'UnderReview', {},
@@ -128,14 +200,18 @@ class StudentVerificationService {
       });
       if (!student) { const err = new Error('Student not found'); err.statusCode = 404; throw err; }
 
+      // Verification is the final check after enrollment: admission, verified deposit and enrollment must hold
+      await assertReadyForVerification(studentId, t);
+
       // ─── Phase 8.1-C: Authoritative Document Checklist & Approval Gate ───────
       const docs = Array.isArray(student.documents) ? student.documents : [];
 
       // 1. Determine authoritative required document checklist from Event if student is event-linked
-      let requiredCategories = [];
+      // Without an event checklist nothing is mandatory; the admin can still request documents from the agent
+      let requiredCategories = DEFAULT_REQUIRED_CATEGORIES;
       if (student.eventId) {
         const event = await Event.findByPk(student.eventId, { transaction: t });
-        if (event && Array.isArray(event.requiredDocuments)) {
+        if (event && Array.isArray(event.requiredDocuments) && event.requiredDocuments.length > 0) {
           requiredCategories = event.requiredDocuments
             .filter(d => d.mandatory !== false)
             .map(d => (d.value || d.category || d.name || d.label || '').trim())
@@ -195,7 +271,7 @@ class StudentVerificationService {
         where: {
           studentId,
           status: 'Enrolled',
-          depositPaid: true,
+          depositStatus: 'Verified',
           admissionDate: { [Op.ne]: null }
         },
         transaction: t

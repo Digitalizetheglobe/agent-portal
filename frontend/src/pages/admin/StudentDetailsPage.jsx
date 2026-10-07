@@ -21,17 +21,20 @@ import {
   STUDENT_VERIFICATION_STATUS_LABELS
 } from '../../constants/status';
 import StudentRejectionModal from '../../components/modals/StudentRejectionModal';
+import DocumentReviewDialog from '../../components/modals/DocumentReviewDialog';
 
 const StudentDetailsPage = () => {
   const { studentId: id } = useParams();
   const navigate = useNavigate();
-  const { students, events, agents, universities, getStudentById, uploadStudentDocument, updateStudentStatus, verifyStudentDocument } = useData();
+  const { students, events, agents, universities, getStudentById, uploadStudentDocument, updateStudentStatus, verifyStudentDocument, requestStudentDocument } = useData();
   const { isAdmin, isAgent } = useAuth();
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [errorStatus, setErrorStatus] = useState(null);
   const [uploading, setUploading] = useState(false);
+  // Dialog for document reviews that need remarks (declared up here: hooks must precede the early returns)
+  const [reviewDialog, setReviewDialog] = useState({ open: false, docId: null, status: null, label: '' });
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('Other');
   const fileInputRef = useRef(null);
@@ -120,12 +123,37 @@ const StudentDetailsPage = () => {
 
   const requiredDocs = useMemo(() => {
     const DEFAULT_DOC_CATEGORIES = [
-      { label: 'Passport', value: 'Passport', mandatory: true },
-      { label: 'Academic Transcripts', value: 'Transcript', mandatory: true },
+      { label: 'Passport', value: 'Passport', mandatory: false },
+      { label: 'Academic Transcripts', value: 'Transcript', mandatory: false },
       { label: 'Language Test', value: 'LanguageTest', mandatory: false }
     ];
     return event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
   }, [event]);
+
+  // Checklist of required documents against what the agent has actually uploaded
+  const documentChecklist = useMemo(() => {
+    const docs = student?.documents || [];
+    const requests = student?.documentRequests || [];
+    return requiredDocs.map(req => {
+      const doc = docs.find(d => (d.category || '').toLowerCase() === (req.value || '').toLowerCase());
+      const request = requests.find(r => (r.category || '').toLowerCase() === (req.value || '').toLowerCase());
+      return { ...req, mandatory: req.mandatory !== false, doc, request };
+    });
+  }, [requiredDocs, student?.documents, student?.documentRequests]);
+
+  const missingDocsCount = useMemo(
+    () => documentChecklist.filter(item => !item.doc).length,
+    [documentChecklist]
+  );
+
+  const missingMandatoryDocs = useMemo(
+    () => documentChecklist.filter(item => item.mandatory && !item.doc),
+    [documentChecklist]
+  );
+
+  // Verification is the final step after enrollment; the backend reports whether the student is ready
+  const verificationReadiness = verificationDetail?.readiness;
+  const notReadyForVerification = Boolean(verificationReadiness?.enforced) && !verificationReadiness.ready;
 
   // Current verification status: prefer verificationDetail if loaded, else student.verificationStatus
   const currentVerificationStatus = verificationDetail?.verificationStatus || student?.verificationStatus || STUDENT_VERIFICATION_STATUS.PENDING;
@@ -146,6 +174,11 @@ const StudentDetailsPage = () => {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleRequestDocument = async (item) => {
+    const requests = await requestStudentDocument(student.id, item.value, item.label);
+    if (requests) setStudent(prev => ({ ...prev, documentRequests: requests }));
   };
 
   const handleVerifyStudent = async () => {
@@ -398,32 +431,25 @@ const StudentDetailsPage = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handleVerifyDocumentAction = async (docId, status) => {
-    let remarks = '';
-    const sLower = (status || '').toLowerCase();
-    if (sLower.includes('correction')) {
-      remarks = prompt('Enter correction reason / instructions for the agent:');
-      if (remarks === null) return;
-      if (!remarks.trim()) {
-        toast.error('Remarks are required when requesting correction');
-        return;
-      }
-    } else if (sLower === 'rejected') {
-      remarks = prompt('Enter reason for document rejection:');
-      if (remarks === null) return;
-      if (!remarks.trim()) {
-        toast.error('Remarks are required when rejecting a document');
-        return;
-      }
-    }
+  // Review actions that need remarks (More Information Required / Rejected) open a dialog first
 
+  const submitDocumentReview = async (docId, status, remarks = '') => {
     try {
       const updatedStudent = await verifyStudentDocument(student.id, docId, { status, remarks });
       setStudent(updatedStudent);
-      toast.success(`Document marked as ${status}`);
+      toast.success(`Document marked as ${status === 'CorrectionRequired' ? 'More Information Required' : status}`);
     } catch (error) {
       console.error('Error verifying document:', error);
     }
+  };
+
+  const handleVerifyDocumentAction = (docId, status) => {
+    if (status === 'CorrectionRequired' || status === 'Rejected') {
+      const doc = (student?.documents || []).find(d => (d.id || d._id) === docId);
+      setReviewDialog({ open: true, docId, status, label: doc?.category || 'Document' });
+      return;
+    }
+    submitDocumentReview(docId, status);
   };
 
   const getDocStatusBadge = (status) => {
@@ -436,7 +462,7 @@ const StudentDetailsPage = () => {
         return <Badge className="bg-blue-100 text-blue-700 border-blue-200 gap-1"><Clock className="w-3 h-3" /> Under Review</Badge>;
       case 'correctionrequired':
       case 'correction_required':
-        return <Badge className="bg-amber-100 text-amber-800 border-amber-300 gap-1"><AlertCircle className="w-3 h-3" /> Correction Required</Badge>;
+        return <Badge className="bg-amber-100 text-amber-800 border-amber-300 gap-1"><AlertCircle className="w-3 h-3" /> More Information Required</Badge>;
       case 'rejected':
         return <Badge variant="destructive" className="gap-1"><X className="w-3 h-3" /> Rejected</Badge>;
       case 'submitted':
@@ -615,7 +641,7 @@ const StudentDetailsPage = () => {
             </CardHeader>
             <CardContent className="p-6 space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6]">
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0 flex-1">
                   <div className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Current Verification State</div>
                   <div className="text-sm font-semibold text-[#111827]">
                     {STUDENT_VERIFICATION_STATUS_LABELS[currentVerificationStatus] || currentVerificationStatus}
@@ -623,19 +649,20 @@ const StudentDetailsPage = () => {
                   <p className="text-xs text-[#6B7280]">
                     {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.PENDING && 'Student registration submitted. Verification has not yet started.'}
                     {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.UNDER_REVIEW && 'Student is actively being reviewed by an administrator.'}
-                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.VERIFIED && 'Student identity and profile have been verified and approved.'}
+                    {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.VERIFIED && 'All submitted documents have been approved and the student profile is verified.'}
                     {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.REJECTED && 'Student verification was rejected. Review the remarks below.'}
                   </p>
                 </div>
 
                 {/* Admin Verification Controls */}
                 {isAdmin() && (
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {/* Pending state -> Start Verification */}
                     {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.PENDING && (
                       <Button
                         size="sm"
-                        disabled={actionLoading}
+                        disabled={actionLoading || notReadyForVerification}
+                        title={notReadyForVerification ? 'Enroll the student with a verified deposit first' : undefined}
                         onClick={handleInitiateVerification}
                         className="bg-[#042C53] hover:bg-[#0C447C] text-white font-bold text-xs h-9 px-4 shadow-sm"
                       >
@@ -648,7 +675,8 @@ const StudentDetailsPage = () => {
                       <>
                         <Button
                           size="sm"
-                          disabled={actionLoading}
+                          disabled={actionLoading || missingMandatoryDocs.length > 0 || notReadyForVerification}
+                          title={notReadyForVerification ? 'Enroll the student with a verified deposit first' : missingMandatoryDocs.length > 0 ? 'Mandatory documents are missing' : undefined}
                           onClick={handleVerifyStudent}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 shadow-sm"
                         >
@@ -672,7 +700,8 @@ const StudentDetailsPage = () => {
                     {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.REJECTED && (
                       <Button
                         size="sm"
-                        disabled={actionLoading}
+                        disabled={actionLoading || notReadyForVerification}
+                        title={notReadyForVerification ? 'Enroll the student with a verified deposit first' : undefined}
                         onClick={handleInitiateVerification}
                         className="bg-[#042C53] hover:bg-[#0C447C] text-white font-bold text-xs h-9 px-4 shadow-sm"
                       >
@@ -689,6 +718,41 @@ const StudentDetailsPage = () => {
                   </div>
                 )}
               </div>
+
+              {/* Verification comes after enrollment: show what is still outstanding */}
+              {isAdmin() && verificationReadiness?.enforced && currentVerificationStatus !== STUDENT_VERIFICATION_STATUS.VERIFIED && (
+                <div className={`p-4 rounded-xl border space-y-2 ${verificationReadiness.ready ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                  <p className={`text-xs font-bold ${verificationReadiness.ready ? 'text-emerald-900' : 'text-amber-900'}`}>
+                    {verificationReadiness.ready ? 'Ready for verification: enrollment and deposit are confirmed' : 'Not ready for verification yet'}
+                  </p>
+                  {!verificationReadiness.ready && (
+                    <ul className="text-xs text-amber-800 leading-relaxed list-disc pl-4 space-y-0.5">
+                      {verificationReadiness.blockers.map((b, i) => <li key={i}>{b}</li>)}
+                    </ul>
+                  )}
+                  {verificationReadiness.ready && (
+                    <ul className="text-xs text-emerald-800 space-y-0.5">
+                      {verificationReadiness.enrolledApplications.filter(a => a.missing.length === 0).map(a => (
+                        <li key={a.id}>{a.applicationNumber}: {a.courseName}, enrolled, deposit verified</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {/* Missing mandatory documents block verification */}
+              {isAdmin() && currentVerificationStatus === STUDENT_VERIFICATION_STATUS.UNDER_REVIEW && missingMandatoryDocs.length > 0 && (
+                <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50">
+                  <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-xs font-bold text-amber-900">Cannot verify yet: mandatory documents are missing</p>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      The agent has not uploaded {missingMandatoryDocs.map(d => d.label).join(', ')}.
+                      Use <span className="font-semibold">Request</span> in the Required Documents list to ask for them.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Verified Metadata */}
               {currentVerificationStatus === STUDENT_VERIFICATION_STATUS.VERIFIED && (
@@ -1004,6 +1068,60 @@ const StudentDetailsPage = () => {
               </Badge>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
+              {/* Required documents checklist: shows what the agent has not uploaded yet */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">Required Documents</p>
+                  {missingMandatoryDocs.length > 0 ? (
+                    <Badge className="text-[10px] font-bold bg-red-50 text-red-700 border-red-200">
+                      {missingMandatoryDocs.length} mandatory missing
+                    </Badge>
+                  ) : missingDocsCount > 0 ? (
+                    <Badge className="text-[10px] font-bold bg-amber-50 text-amber-700 border-amber-200">
+                      {missingDocsCount} not uploaded
+                    </Badge>
+                  ) : (
+                    <Badge className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border-emerald-200">
+                      All uploaded
+                    </Badge>
+                  )}
+                </div>
+                {documentChecklist.map(item => (
+                  <div key={item.value} className="flex items-center justify-between gap-3 p-2.5 border border-[#F3F4F6] rounded-lg bg-white">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[#111827] flex items-center gap-1.5">
+                        {item.label}
+                        {item.mandatory && <span className="text-[8px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase">Mandatory</span>}
+                      </p>
+                      {!item.doc && item.request && (
+                        <p className="text-[10px] text-amber-700 mt-0.5">
+                          Requested from agent on {new Date(item.request.requestedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    {item.doc ? (
+                      getDocStatusBadge(item.doc.status)
+                    ) : (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${item.mandatory ? 'bg-[#FCEBEB] text-[#791F1F]' : 'bg-gray-100 text-gray-500'}`}>
+                          Not uploaded
+                        </span>
+                        {isAdmin() && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[9px] font-bold border-[#042C53] text-[#042C53] hover:bg-[#042C53] hover:text-white"
+                            onClick={() => handleRequestDocument(item)}
+                          >
+                            {item.request ? 'Request Again' : 'Request'}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
               {/* Documents List */}
               <div className="space-y-3">
                 {student.documents && student.documents.length > 0 ? (
@@ -1059,7 +1177,7 @@ const StudentDetailsPage = () => {
                               : "bg-gray-50 text-gray-800 border-gray-200"
                         )}>
                           <span className="font-bold text-[10px] uppercase block mb-0.5">
-                            {(doc.status || '').toLowerCase().includes('correction') ? 'Correction Note' : (doc.status || '').toLowerCase() === 'rejected' ? 'Rejection Reason' : 'Verifier Remarks'}:
+                            {(doc.status || '').toLowerCase().includes('correction') ? 'Information Requested' : (doc.status || '').toLowerCase() === 'rejected' ? 'Rejection Reason' : 'Verifier Remarks'}:
                           </span>
                           {doc.remarks}
                         </div>
@@ -1092,7 +1210,7 @@ const StudentDetailsPage = () => {
                                 className="h-6 text-[9px] font-bold bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] hover:bg-[#FEF3C7]"
                                 onClick={() => handleVerifyDocumentAction(doc.id || doc._id, 'CorrectionRequired')}
                               >
-                                Correction
+                                More Info
                               </Button>
                             )}
                             {(doc.status || '').toLowerCase() !== 'rejected' && (
@@ -1214,6 +1332,14 @@ const StudentDetailsPage = () => {
           </Card>
         </div>
       </div>
+
+      <DocumentReviewDialog
+        open={reviewDialog.open}
+        onOpenChange={(o) => setReviewDialog(prev => ({ ...prev, open: o }))}
+        mode={reviewDialog.status}
+        documentLabel={reviewDialog.label}
+        onConfirm={(remarks) => submitDocumentReview(reviewDialog.docId, reviewDialog.status, remarks)}
+      />
 
       {/* Student Rejection Modal */}
       <StudentRejectionModal

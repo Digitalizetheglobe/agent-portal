@@ -14,6 +14,12 @@ const ALLOWED_REVIEW_STATUSES = [
 ];
 const ALLOWED_INVOICE_STATUSES = ['Pending', 'Paid', 'Rejected'];
 
+// Admin-configured commission rate on the agent profile (null when not set)
+const getAgentDefaultRate = async (agentId) => {
+  const agent = await User.findByPk(agentId, { attributes: ['id', 'commissionRate'] });
+  return agent && agent.commissionRate ? parseFloat(agent.commissionRate) : null;
+};
+
 // Helper to format review record
 const formatReview = async (invoice) => {
   const inv = invoice.toJSON ? invoice.toJSON() : { ...invoice };
@@ -406,13 +412,16 @@ class InvoiceReviewService {
     const totalTuition = apps.reduce((sum, a) => sum + (parseFloat(a.tuitionFee) || 0), 0);
     const newAmount = Math.round((totalTuition * (parsedRate / 100)) * 100) / 100;
 
+    const agentRate = await getAgentDefaultRate(invoice.agentId);
+
     invoice.commissionRate = parsedRate;
     invoice.amount = newAmount;
 
     const history = Array.isArray(invoice.financeReviewHistory) ? [...invoice.financeReviewHistory] : [];
     history.push({
-      action: 'RATE_ESTABLISHED',
+      action: agentRate !== null && agentRate !== parsedRate ? 'RATE_OVERRIDDEN' : 'RATE_ESTABLISHED',
       commissionRate: parsedRate,
+      agentDefaultRate: agentRate,
       amount: newAmount,
       changedBy: currentUser.id,
       changedAt: new Date().toISOString()
@@ -488,6 +497,10 @@ class InvoiceReviewService {
           throw err;
         }
         invoice.commissionRate = parsedRate;
+      } else if (!(parseFloat(invoice.commissionRate) > 0)) {
+        // No rate on the invoice: fall back to the agent's admin-configured rate
+        const agentRate = await getAgentDefaultRate(invoice.agentId);
+        if (agentRate !== null) invoice.commissionRate = agentRate;
       }
 
       // Invariant: An invoice cannot be approved without a verified positive commission rate

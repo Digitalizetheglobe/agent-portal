@@ -54,6 +54,11 @@ const Application = sequelize.define('Application', {
   },
 
   // Course / Intake
+  // courseId references the Course catalog; null only for legacy free-text applications.
+  courseId: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
   courseName: {
     type: DataTypes.STRING(200),
     allowNull: false
@@ -148,12 +153,32 @@ const Application = sequelize.define('Application', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  // Deposit lifecycle: Required -> Paid -> Verified | NotVerified.
+  // Only 'Verified' counts toward enrollment and commission eligibility.
+  depositStatus: {
+    type: DataTypes.ENUM('Required', 'Paid', 'Verified', 'NotVerified'),
+    allowNull: false,
+    defaultValue: 'Required'
+  },
+  // Legacy mirror: true once the deposit has been reported paid (Paid, Verified or NotVerified)
   depositPaid: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
   },
   depositAmount: {
     type: DataTypes.DECIMAL(10, 2),
+    allowNull: true
+  },
+  depositVerifiedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  depositVerifiedBy: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
+  depositNotes: {
+    type: DataTypes.TEXT,
     allowNull: true
   },
 
@@ -192,6 +217,7 @@ const Application = sequelize.define('Application', {
     { fields: ['studentId'] },
     { fields: ['agentId'] },
     { fields: ['universityId'] },
+    { fields: ['courseId'] },
     { fields: ['sourceEventId'] },
     { fields: ['status'] }
   ]
@@ -205,6 +231,9 @@ Application.prototype.toJSON = function() {
   values.studentId = values.studentId ? values.studentId.toString() : values.studentId;
   values.agentId = values.agentId ? values.agentId.toString() : values.agentId;
   values.universityId = values.universityId ? values.universityId.toString() : values.universityId;
+  if (values.courseId) {
+    values.courseId = values.courseId.toString();
+  }
   if (values.sourceEventId) {
     values.sourceEventId = values.sourceEventId.toString();
   }

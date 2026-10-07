@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Input } from '../../components/ui/input';
+import { Link } from 'react-router-dom';
 import { Dialog, DialogContent } from '../../components/ui/dialog';
 import InvoiceModal from '../../components/modals/InvoiceModal';
 import FinanceReviewModal from '../../components/modals/FinanceReviewModal';
@@ -441,15 +442,33 @@ const AdminInvoicesPage = () => {
                       {selectedInvoice.applications && selectedInvoice.applications.length > 0 ? (
                         selectedInvoice.applications.map((app, idx) => (
                           <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB]">
-                            <TableCell className="px-6 py-3.5 text-xs font-bold text-[#111827] font-mono">
-                              {app.applicationNumber}
+                            <TableCell className="px-6 py-3.5 text-xs font-bold font-mono">
+                              {app.id ? (
+                                <Link to={`/admin/applications/${app.id}`} className="text-blue-600 hover:underline">
+                                  {app.applicationNumber}
+                                </Link>
+                              ) : (
+                                <span className="text-[#111827]">{app.applicationNumber}</span>
+                              )}
                             </TableCell>
                             <TableCell className="px-6 py-3.5 text-xs text-[#4B5563]">
-                              <span className="font-semibold text-gray-900 block">{app.student?.name || 'Applicant'}</span>
+                              {(app.studentId || app.student?.id) ? (
+                                <Link to={`/admin/students/${app.studentId || app.student.id}`} className="font-semibold text-[#042C53] hover:underline block">
+                                  {app.student?.name || 'Applicant'}
+                                </Link>
+                              ) : (
+                                <span className="font-semibold text-gray-900 block">{app.student?.name || 'Applicant'}</span>
+                              )}
                               <span className="text-[11px] text-gray-500">{app.student?.email}</span>
                             </TableCell>
                             <TableCell className="px-6 py-3.5 text-xs text-[#4B5563]">
-                              <span className="font-medium text-gray-900 block">{app.university?.name || 'University'}</span>
+                              {(app.universityId || app.university?.id) ? (
+                                <Link to={`/admin/universities/${app.universityId || app.university.id}`} className="font-medium text-[#042C53] hover:underline block">
+                                  {app.university?.name || 'University'}
+                                </Link>
+                              ) : (
+                                <span className="font-medium text-gray-900 block">{app.university?.name || 'University'}</span>
+                              )}
                               <span className="text-[11px] text-gray-500">{app.courseName}</span>
                             </TableCell>
                             <TableCell className="px-6 py-3.5 text-right text-xs font-bold text-gray-900 tabular-nums">

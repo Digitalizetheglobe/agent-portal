@@ -16,7 +16,8 @@ import {
   Lock,
   Unlock,
   Globe,
-  GraduationCap
+  GraduationCap,
+  Mail
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -52,6 +53,7 @@ import { cn } from '../../lib/utils';
 
 const fieldTypeIcons = {
   text: Type,
+  email: Mail,
   paragraph: AlignLeft,
   radio: RadioIcon,
   date: Calendar,
@@ -63,6 +65,7 @@ const fieldTypeIcons = {
 
 const fieldTypeLabels = {
   text: 'Text',
+  email: 'Email',
   paragraph: 'Paragraph',
   radio: 'Radio',
   date: 'Date',
@@ -182,7 +185,7 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
       placeholder: field.placeholder || '',
       useCountryCode: field.useCountryCode || false,
       defaultCountry: field.defaultCountry || 'US',
-      options: field.options.length > 0 ? field.options : [''],
+      options: field.options?.length > 0 ? field.options : [''],
       regex: field.regex || '',
       regexError: field.regexError || 'Invalid format'
     });
@@ -391,7 +394,7 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
                   </SelectTrigger>
                   <SelectContent>
                     {Object.entries(fieldTypeLabels).map(([type, label]) => {
-                      const Icon = fieldTypeIcons[type];
+                      const Icon = fieldTypeIcons[type] || Type;
                       return (
                         <SelectItem key={type} value={type}>
                           <div className="flex items-center gap-2">
@@ -551,7 +554,7 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
           {value
             .sort((a, b) => a.order - b.order)
             .map((field, index) => {
-              const Icon = fieldTypeIcons[field.type];
+              const Icon = fieldTypeIcons[field.type] || Type;
               return (
                 <div
                   key={field.id}
@@ -627,7 +630,7 @@ const FormFieldBuilder = ({ value = [], onChange, className }) => {
                         {field.placeholder}
                       </p>
                     )}
-                    {(field.options.length > 0) && (
+                    {(field.options?.length > 0) && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Options: {field.options.join(', ')}
                       </p>

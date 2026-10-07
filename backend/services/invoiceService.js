@@ -186,7 +186,7 @@ class InvoiceService {
         }
 
         // Institutional 4-pillar gate verification
-        if (!app.depositPaid || !app.admissionDate) {
+        if (app.depositStatus !== 'Verified' || !app.admissionDate) {
           const err = new Error(`Application ${app.applicationNumber || app.id} lacks verified deposit or admission confirmation`);
           err.statusCode = 400;
           throw err;
@@ -230,17 +230,25 @@ class InvoiceService {
           err.statusCode = 400;
           throw err;
         }
-        // Initial state for agent-created invoice: rate & amount will be established during Admin Finance Review
-        effectiveCommissionRate = 0;
-        serverCalculatedAmount = 0;
+        // Rate defaults to the admin-configured rate on the agent profile (0 if none yet);
+        // Finance confirms or overrides it during review.
+        const agentUser = await User.findByPk(currentUser.id, { attributes: ['id', 'commissionRate'] });
+        effectiveCommissionRate = agentUser && agentUser.commissionRate ? parseFloat(agentUser.commissionRate) : 0;
+        const totalTuition = applications.reduce((sum, app) => sum + (parseFloat(app.tuitionFee) || 0), 0);
+        serverCalculatedAmount = Math.round((totalTuition * (effectiveCommissionRate / 100)) * 100) / 100;
       } else if (currentUser.role === 'admin') {
-        // Admin must provide an authoritative, valid commission rate between 0 and 100
-        if (commissionRate === undefined || commissionRate === null || commissionRate === '') {
-          const err = new Error('Commission rate is required for Admin invoice creation (must be a valid percentage between 0 and 100)');
+        // Admin supplies the rate, or it defaults to the agent's configured rate
+        let rawRate = commissionRate;
+        if (rawRate === undefined || rawRate === null || rawRate === '') {
+          const rateOwner = await User.findByPk(data.agentId || applications[0].agentId, { attributes: ['id', 'commissionRate'] });
+          rawRate = rateOwner ? rateOwner.commissionRate : null;
+        }
+        if (rawRate === undefined || rawRate === null || rawRate === '') {
+          const err = new Error('Commission rate is required for Admin invoice creation: set one on the agent profile or provide it (percentage between 0 and 100)');
           err.statusCode = 400;
           throw err;
         }
-        const parsedRate = parseFloat(commissionRate);
+        const parsedRate = parseFloat(rawRate);
         if (isNaN(parsedRate) || parsedRate < 0 || parsedRate > 100 || !isFinite(parsedRate)) {
           const err = new Error('Commission rate must be a valid percentage between 0 and 100');
           err.statusCode = 400;

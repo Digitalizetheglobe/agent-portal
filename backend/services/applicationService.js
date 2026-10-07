@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
-const { Application, Student, University, User, Event, Invoice } = require('../models');
+const { Application, Student, University, User, Event, Invoice, Course } = require('../models');
+const { parseCourseTuitionFee } = require('../utils/tuitionUtils');
 const admissionTrackingService = require('./admissionTrackingService');
 
 // Allowed status enum values
@@ -31,7 +32,7 @@ const standardIncludes = [
   {
     model: Student,
     as: 'student',
-    attributes: ['id', 'name', 'email', 'phone', 'country', 'education', 'status']
+    attributes: ['id', 'name', 'email', 'phone', 'country', 'education', 'status', 'verificationStatus']
   },
   {
     model: User,
@@ -63,6 +64,38 @@ const generateApplicationNumber = () => {
   return `APP-${year}-${timestamp}-${random}`;
 };
 
+/**
+ * Resolve a catalog course for an application. The course must be active and
+ * offered by the given university (or be open to all universities).
+ * Returns the application fields derived from the course.
+ */
+const resolveCatalogCourse = async (courseId, universityId) => {
+  const course = await Course.findByPk(courseId);
+  if (!course) {
+    const err = new Error('Course not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (course.status !== 'active') {
+    const err = new Error('Selected course is not active');
+    err.statusCode = 400;
+    throw err;
+  }
+  const { universityIds } = course.toJSON();
+  const isOpenToAll = !universityIds.length;
+  if (!isOpenToAll && !universityIds.includes(String(universityId))) {
+    const err = new Error('Selected course is not offered by the selected university');
+    err.statusCode = 400;
+    throw err;
+  }
+  return {
+    courseId: course.id,
+    courseName: course.name,
+    courseLevel: ALLOWED_COURSE_LEVELS.includes(course.level) ? course.level : null,
+    tuitionFee: parseCourseTuitionFee(course.tuitionFee)
+  };
+};
+
 class ApplicationService {
   /**
    * Create a new application
@@ -73,13 +106,13 @@ class ApplicationService {
       agentId: requestedAgentId,
       universityId,
       sourceEventId,
-      courseName,
-      courseLevel,
+      courseId,
       intakeTerm,
       tuitionFee,
       currency,
       remarks
     } = data;
+    let { courseName, courseLevel } = data;
 
     // 1. Validate required fields
     if (!studentId) {
@@ -92,8 +125,8 @@ class ApplicationService {
       err.statusCode = 400;
       throw err;
     }
-    if (!courseName || !courseName.trim()) {
-      const err = new Error('Course name is required');
+    if (!courseId) {
+      const err = new Error('Course ID is required. Select a course from the university catalog.');
       err.statusCode = 400;
       throw err;
     }
@@ -140,6 +173,11 @@ class ApplicationService {
       throw err;
     }
 
+    // 4b. Course comes from the catalog; name, level and tuition are derived from it
+    const catalogCourse = await resolveCatalogCourse(courseId, university.id);
+    courseName = catalogCourse.courseName;
+    courseLevel = catalogCourse.courseLevel;
+
     // 5. Validate sourceEventId if provided
     let finalSourceEventId = null;
     if (sourceEventId) {
@@ -170,6 +208,11 @@ class ApplicationService {
       }
     }
 
+    // Catalog tuition is authoritative when it parses to a single amount
+    if (catalogCourse.tuitionFee !== null) {
+      numericTuitionFee = catalogCourse.tuitionFee;
+    }
+
     // 8. Generate unique application number
     let applicationNumber = generateApplicationNumber();
     // Ensure uniqueness
@@ -198,7 +241,8 @@ class ApplicationService {
       agentId: effectiveAgentId,
       universityId: university.id,
       sourceEventId: finalSourceEventId,
-      courseName: courseName.trim(),
+      courseId: catalogCourse.courseId,
+      courseName,
       courseLevel: courseLevel || null,
       intakeTerm: intakeTerm ? intakeTerm.trim() : null,
       tuitionFee: numericTuitionFee,
@@ -332,6 +376,7 @@ class ApplicationService {
     const {
       universityId,
       sourceEventId,
+      courseId,
       courseName,
       courseLevel,
       intakeTerm,
@@ -357,6 +402,7 @@ class ApplicationService {
     } = updateData;
 
     // Validate universityId if updated
+    const universityChanged = universityId !== undefined && String(universityId) !== String(application.universityId);
     if (universityId !== undefined) {
       const uni = await University.findByPk(universityId);
       if (!uni) {
@@ -413,7 +459,29 @@ class ApplicationService {
       application.agentId = agentId;
     }
 
-    if (courseName !== undefined) {
+    // Catalog course: re-resolve when the course changes, or when the university
+    // changes on an application that is already bound to a catalog course.
+    const courseChanged = courseId !== undefined && String(courseId) !== String(application.courseId);
+    const effectiveCourseId = courseId !== undefined ? courseId : application.courseId;
+    if (courseId !== undefined && !courseId) {
+      const err = new Error('Course ID cannot be empty. Select a course from the university catalog.');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (effectiveCourseId && (courseChanged || universityChanged)) {
+      const derived = await resolveCatalogCourse(effectiveCourseId, application.universityId);
+      application.courseId = derived.courseId;
+      application.courseName = derived.courseName;
+      application.courseLevel = derived.courseLevel;
+      if (courseChanged && derived.tuitionFee !== null) {
+        application.tuitionFee = derived.tuitionFee;
+      }
+    }
+
+    // Catalog-bound applications take name/level from the course, not from the client
+    const isCatalogBound = Boolean(application.courseId);
+
+    if (courseName !== undefined && !isCatalogBound) {
       if (!courseName || !courseName.trim()) {
         const err = new Error('Course name cannot be empty');
         err.statusCode = 400;
@@ -422,7 +490,7 @@ class ApplicationService {
       application.courseName = courseName.trim();
     }
 
-    if (courseLevel !== undefined) {
+    if (courseLevel !== undefined && !isCatalogBound) {
       if (courseLevel && !ALLOWED_COURSE_LEVELS.includes(courseLevel)) {
         const err = new Error(`Invalid course level. Allowed: ${ALLOWED_COURSE_LEVELS.join(', ')}`);
         err.statusCode = 400;
@@ -457,6 +525,7 @@ class ApplicationService {
       const protectedInstitutionalFields = [
         'isInvoiceEligible',
         'depositPaid',
+        'depositStatus',
         'depositAmount',
         'admissionDate',
         'admissionLetterUrl',
@@ -497,7 +566,11 @@ class ApplicationService {
     // Enrollment milestone
     if (enrollmentDate !== undefined) application.enrollmentDate = enrollmentDate;
     if (enrollmentProofUrl !== undefined) application.enrollmentProofUrl = enrollmentProofUrl;
-    if (depositPaid !== undefined) application.depositPaid = Boolean(depositPaid);
+    if (depositPaid !== undefined) {
+      const err = new Error('Deposit status can only be changed through the deposit verification action.');
+      err.statusCode = 400;
+      throw err;
+    }
     if (depositAmount !== undefined) {
       const parsed = parseFloat(depositAmount);
       application.depositAmount = isNaN(parsed) ? null : parsed;
@@ -561,6 +634,10 @@ class ApplicationService {
         err.statusCode = 400;
         throw err;
       }
+    }
+
+    if (newStatus === 'Enrolled') {
+      admissionTrackingService.assertDepositVerifiedForEnrollment(application);
     }
 
     const oldStatus = application.status;
