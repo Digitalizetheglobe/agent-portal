@@ -378,7 +378,8 @@ const FinanceReviewModal = ({
         {/* Header */}
         <DialogHeader className="px-6 py-5 border-b border-gray-100 bg-white">
           <div className="flex items-center justify-between gap-4">
-            <div>
+            <img src="/assets/QStudylogo(blue).png" alt="QStudy" className="h-8 object-contain shrink-0 hidden sm:block" />
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <DialogTitle className="text-lg font-bold text-[#111827] font-mono">
                   {invoice?.invoiceNumber || 'Invoice'}

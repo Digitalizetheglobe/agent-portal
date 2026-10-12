@@ -24,7 +24,13 @@ import {
   MapPin,
   ArrowUpRight,
   LayoutGrid,
-  List
+  List,
+  User,
+  Activity,
+  Clock,
+  Building2,
+  Hash,
+  Percent
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Button } from '../../components/ui/button';
@@ -59,6 +65,32 @@ import AgentModal from '../../components/modals/AgentModal';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
+const formatDate = (d) =>
+  d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
+
+const formatINR = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+
+const DrawerSection = ({ title, icon: Icon, block, children }) => (
+  <section className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+    <h4 className="px-4 py-2.5 border-b border-[#F3F4F6] text-[11px] font-semibold uppercase tracking-wider text-[#6B7280] flex items-center gap-2">
+      <Icon className="w-3.5 h-3.5 text-[#042C53]" /> {title}
+    </h4>
+    <div className={block ? 'px-4 py-2' : 'p-4 grid grid-cols-2 gap-x-4 gap-y-4'}>{children}</div>
+  </section>
+);
+
+const DrawerField = ({ icon: Icon, label, value, wide }) => (
+  <div className={cn('space-y-1 min-w-0', wide && 'col-span-2')}>
+    <p className="text-[10px] font-medium text-[#9CA3AF] uppercase tracking-wider">{label}</p>
+    <div className="text-sm text-[#111827] flex items-start gap-2 break-words min-w-0">
+      <Icon className="w-3.5 h-3.5 text-[#9CA3AF] mt-0.5 shrink-0" />
+      {value || <span className="text-[#9CA3AF]">Not provided</span>}
+    </div>
+  </div>
+);
+
+const PAGE_SIZE = 10;
+
 const AgentsPage = () => {
   const navigate = useNavigate();
   const {
@@ -84,6 +116,7 @@ const AgentsPage = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [agentInDrawer, setAgentInDrawer] = useState(null);
   const [displayMode, setDisplayMode] = useState('table');
+  const [page, setPage] = useState(1);
 
   const stats = getStats();
 
@@ -131,6 +164,27 @@ const AgentsPage = () => {
     });
   }, [agents, students, events, invoices]);
 
+  const drawerEvents = useMemo(() => {
+    if (!agentInDrawer) return [];
+    return events.filter(e => e.assignedAgents?.includes(agentInDrawer.id));
+  }, [agentInDrawer, events]);
+
+  const drawerStudents = useMemo(() => {
+    if (!agentInDrawer) return [];
+    return students.filter(s => s.agentId === agentInDrawer.id).slice(0, 8);
+  }, [agentInDrawer, students]);
+
+  const drawerEarnings = useMemo(() => {
+    const mine = agentInDrawer ? invoices.filter(inv => inv.agentId === agentInDrawer.id) : [];
+    const sum = (list) => list.reduce((t, inv) => t + (Number(inv.amount) || 0), 0);
+    const st = (inv) => (inv.status || '').toLowerCase();
+    return {
+      count: mine.length,
+      paid: sum(mine.filter(inv => st(inv) === 'paid')),
+      pending: sum(mine.filter(inv => st(inv) !== 'paid' && st(inv) !== 'rejected')),
+    };
+  }, [agentInDrawer, invoices]);
+
   const filteredAgents = useMemo(() => {
     return processedAgents.filter(agent => {
       const matchesSearch =
@@ -147,6 +201,16 @@ const AgentsPage = () => {
       return matchesSearch && matchesFilter;
     });
   }, [processedAgents, searchQuery, currentFilter]);
+
+  // Back to page 1 whenever the filter/search changes
+  useEffect(() => { setPage(1); }, [searchQuery, currentFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAgents.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedAgents = useMemo(
+    () => filteredAgents.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredAgents, currentPage]
+  );
 
   const pendingVerificationAgents = useMemo(() => {
     return processedAgents.filter(agent => !agent.isVerified && agent.verificationStatus !== 'rejected');
@@ -455,7 +519,7 @@ const AgentsPage = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredAgents.map((agent) => {
+                  pagedAgents.map((agent) => {
                     const styles = getAvatarStyles(agent.name);
                     const rateValue = parseFloat(agent.convRate);
                     const rateColor = rateValue >= 18 ? 'text-[#27500A]' : rateValue >= 12 ? 'text-[#633806]' : 'text-[#791F1F]';
@@ -531,7 +595,7 @@ const AgentsPage = () => {
               <p className="text-sm text-[#6B7280] font-medium">No agents found matching your criteria.</p>
             </div>
           ) : (
-            filteredAgents.map((agent) => {
+            pagedAgents.map((agent) => {
               const styles = getAvatarStyles(agent.name);
               const rateValue = parseFloat(agent.convRate);
               const rateColor = rateValue >= 18 ? 'text-[#27500A]' : rateValue >= 12 ? 'text-[#633806]' : 'text-[#791F1F]';
@@ -625,11 +689,37 @@ const AgentsPage = () => {
         </div>
       )}
 
+      {/* Pagination */}
+      {filteredAgents.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <span>
+            Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredAgents.length)} of {filteredAgents.length.toLocaleString()} agents
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage <= 1}
+              onClick={() => setPage(currentPage - 1)}
+              className="px-3 py-1 rounded border border-slate-200 bg-white disabled:opacity-40 hover:bg-slate-50 font-semibold"
+            >
+              Previous
+            </button>
+            <span className="font-semibold">Page {currentPage} of {totalPages}</span>
+            <button
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(currentPage + 1)}
+              className="px-3 py-1 rounded border border-slate-200 bg-white disabled:opacity-40 hover:bg-slate-50 font-semibold"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Agent Detail Drawer */}
       {drawerOpen && agentInDrawer && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
-          <div className="absolute inset-y-0 right-0 max-w-lg w-full bg-white shadow-2xl animate-slideIn">
+          <div className="absolute inset-y-0 right-0 max-w-xl w-full bg-white shadow-2xl animate-slideIn">
             <div className="h-full flex flex-col">
               <div className="p-6 border-b border-[#E5E7EB] flex flex-col gap-4">
                 <div className="flex items-center justify-between">
@@ -663,74 +753,134 @@ const AgentsPage = () => {
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                {/* Contact Info */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Email</p>
-                    <p className="text-sm text-[#111827] flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-[#9CA3AF]" /> {agentInDrawer.email}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Phone</p>
-                    <p className="text-sm text-[#111827] flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-[#9CA3AF]" /> {agentInDrawer.phone || 'N/A'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Region</p>
-                    <p className="text-sm text-[#111827] flex items-center gap-2"><Globe className="w-3.5 h-3.5 text-[#9CA3AF]" /> {agentInDrawer.region || 'Not Set'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Joined</p>
-                    <p className="text-sm text-[#111827] flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-[#9CA3AF]" /> {new Date(agentInDrawer.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                  </div>
-                </div>
-
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F9FAFB]">
                 {/* Performance Stats */}
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 gap-3">
                   {[
                     { label: 'Registrations', val: agentInDrawer.registrations },
                     { label: 'Confirmed', val: agentInDrawer.confirmed },
                     { label: 'Converted', val: agentInDrawer.converted },
-                    { label: 'Conv. Rate', val: agentInDrawer.convRate },
-                  ].map((s, i) => (
-                    <div key={i} className="bg-[#F9FAFB] rounded-lg p-3 text-center border border-[#E5E7EB]">
-                      <p className="text-xl font-semibold text-[#111827]">{s.val}</p>
-                      <p className="text-[10px] text-[#6B7280] mt-0.5">{s.label}</p>
+                    { label: 'Conv. rate', val: agentInDrawer.convRate },
+                    { label: 'Events assigned', val: agentInDrawer.assignedEvents },
+                    { label: 'Commission rate', val: agentInDrawer.commissionRate != null ? `${agentInDrawer.commissionRate}%` : 'Not set' },
+                  ].map((st, i) => (
+                    <div key={i} className="bg-white rounded-lg p-3 border border-[#E5E7EB]">
+                      <p className="text-lg font-semibold text-[#111827] leading-tight">{st.val}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-[#6B7280] mt-1">{st.label}</p>
                     </div>
                   ))}
                 </div>
 
+                {/* Earnings */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-lg p-3 border border-[#E5E7EB]">
+                    <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">Invoiced · paid</p>
+                    <p className="text-lg font-semibold text-[#27500A] mt-1">{formatINR(drawerEarnings.paid)}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-[#E5E7EB]">
+                    <p className="text-[10px] uppercase tracking-wider text-[#6B7280]">Invoiced · outstanding</p>
+                    <p className="text-lg font-semibold text-[#633806] mt-1">{formatINR(drawerEarnings.pending)}</p>
+                    <p className="text-[10px] text-[#9CA3AF]">{drawerEarnings.count} invoice{drawerEarnings.count === 1 ? '' : 's'} total</p>
+                  </div>
+                </div>
+
+                {/* Account & contact */}
+                <DrawerSection title="Account & contact" icon={User}>
+                  <DrawerField icon={Mail} label="Email" value={agentInDrawer.email} />
+                  <DrawerField icon={Phone} label="Phone" value={agentInDrawer.phone} />
+                  <DrawerField icon={User} label="User ID" value={agentInDrawer.userId} />
+                  <DrawerField
+                    icon={Activity}
+                    label="Account status"
+                    value={
+                      <span className={cn("inline-flex items-center gap-1.5 font-medium", agentInDrawer.status === 'active' ? 'text-[#27500A]' : 'text-[#791F1F]')}>
+                        <span className={cn("w-1.5 h-1.5 rounded-full", agentInDrawer.status === 'active' ? 'bg-[#27500A]' : 'bg-[#791F1F]')} />
+                        {agentInDrawer.status === 'active' ? 'Active' : 'Inactive'}
+                      </span>
+                    }
+                  />
+                  <DrawerField icon={Calendar} label="Joined" value={formatDate(agentInDrawer.createdAt)} />
+                  <DrawerField icon={Clock} label="Last updated" value={formatDate(agentInDrawer.updatedAt)} />
+                </DrawerSection>
+
+                {/* Agency */}
+                <DrawerSection title="Agency information" icon={Building2}>
+                  <DrawerField icon={Building2} label="Agency name" value={agentInDrawer.agencyName} />
+                  <DrawerField icon={Hash} label="Registration #" value={agentInDrawer.businessRegistrationNumber} />
+                  <DrawerField icon={Globe} label="Region" value={agentInDrawer.region} />
+                  <DrawerField icon={Percent} label="Commission rate" value={agentInDrawer.commissionRate != null ? `${agentInDrawer.commissionRate}%` : null} />
+                  <DrawerField icon={MapPin} label="Address" value={agentInDrawer.fullAddress} wide />
+                </DrawerSection>
+
+                {/* Assigned events */}
+                <DrawerSection title={`Assigned events (${drawerEvents.length})`} icon={Calendar} block>
+                  {drawerEvents.length === 0 ? (
+                    <p className="text-xs text-[#6B7280] py-2">No events assigned yet.</p>
+                  ) : (
+                    <div className="divide-y divide-[#F3F4F6]">
+                      {drawerEvents.map(ev => (
+                        <div key={ev.id} className="flex items-center justify-between py-2 gap-3">
+                          <p className="text-sm text-[#111827] truncate">{ev.title}</p>
+                          <span className="text-[11px] text-[#6B7280] whitespace-nowrap">{formatDate(ev.date)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </DrawerSection>
+
+                {/* Recent students */}
+                <DrawerSection title={`Students (${agentInDrawer.registrations})`} icon={Users} block>
+                  {drawerStudents.length === 0 ? (
+                    <p className="text-xs text-[#6B7280] py-2">No students registered by this agent.</p>
+                  ) : (
+                    <div className="divide-y divide-[#F3F4F6]">
+                      {drawerStudents.map(stu => (
+                        <div key={stu.id} className="flex items-center justify-between py-2 gap-3">
+                          <p className="text-sm text-[#111827] truncate">{stu.name || 'Student'}</p>
+                          <Badge variant="secondary" className="text-[10px] h-5 font-medium">{stu.status || 'New'}</Badge>
+                        </div>
+                      ))}
+                      {agentInDrawer.registrations > drawerStudents.length && (
+                        <p className="text-[11px] text-[#6B7280] pt-2">Showing latest {drawerStudents.length} of {agentInDrawer.registrations}</p>
+                      )}
+                    </div>
+                  )}
+                </DrawerSection>
+
                 {/* Verification Documents */}
-                <div className="space-y-3">
-                  <h4 className="text-xs font-semibold text-[#111827] flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-[#042C53]" /> Verification Documents
-                  </h4>
-                  <div className="space-y-2">
+                <DrawerSection title={`Verification documents (${(agentInDrawer.verificationDocuments || []).length})`} icon={ShieldCheck} block>
+                  <div className="space-y-2 py-1">
                     {(agentInDrawer.verificationDocuments || []).map((doc, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-[#E5E7EB] bg-white group hover:bg-gray-50">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
-                            <FileText className="w-4 h-4 text-[#6B7280]" />
+                      <div key={i} className="p-3 rounded-lg border border-[#E5E7EB] bg-white">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4 text-[#6B7280]" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-[#111827]">{doc.docType}</p>
+                              <p className="text-[11px] text-[#6B7280] truncate">{doc.fileName}{doc.uploadedAt ? ` · ${formatDate(doc.uploadedAt)}` : ''}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-[#111827]">{doc.docType}</p>
-                            <p className="text-[11px] text-[#6B7280]">{doc.fileName}</p>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge className={cn("text-[10px] h-5 capitalize", doc.status === 'approved' ? "bg-emerald-50 text-emerald-600" : doc.status === 'rejected' ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600")}>{doc.status}</Badge>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => viewAgentDocument(agentInDrawer.id, doc._id || doc.id)}>
+                              <Eye className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Badge className={cn("text-[10px] h-5 ", doc.status === 'approved' ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-colors" : "bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-colors")}>{doc.status}</Badge>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-amber-600 hover:text-white transition-colors" onClick={() => viewAgentDocument(agentInDrawer.id, doc._id)}>
-                            <Eye className="w-4 h-4 hover:text-white transition-colors" />
-                          </Button>
-                        </div>
+                        {doc.remarks && (
+                          <p className="text-[11px] text-[#6B7280] bg-[#F9FAFB] rounded p-2 mt-2"><strong>Remarks:</strong> {doc.remarks}</p>
+                        )}
                       </div>
                     ))}
                     {(!agentInDrawer.verificationDocuments || agentInDrawer.verificationDocuments.length === 0) && (
-                      <div className="text-center py-8 border border-dashed rounded-lg">
+                      <div className="text-center py-6 border border-dashed rounded-lg">
                         <p className="text-xs text-[#6B7280]">No documents available</p>
                       </div>
                     )}
                   </div>
-                </div>
+                </DrawerSection>
               </div>
 
               <div className="p-6 border-t border-[#E5E7EB] bg-white mt-auto">

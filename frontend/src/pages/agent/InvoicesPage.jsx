@@ -62,10 +62,21 @@ const InvoicesPage = () => {
     }
   }, [fetchInvoices, fetchPayoffs]);
 
+  // Unique student names covered by an invoice (from applications, falling back to studentIds)
+  const getStudentNames = (inv) => {
+    const fromApps = (inv.applications || []).map(a => a.student?.name).filter(Boolean);
+    const names = fromApps.length > 0
+      ? fromApps
+      : (inv.studentIds || []).map(s => s?.name).filter(Boolean);
+    return [...new Set(names)];
+  };
+
   const filteredInvoices = useMemo(() => {
+    const term = searchTerm.toLowerCase();
     return invoices.filter(inv =>
-      inv.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.remarks?.toLowerCase().includes(searchTerm.toLowerCase())
+      inv.invoiceNumber?.toLowerCase().includes(term) ||
+      inv.remarks?.toLowerCase().includes(term) ||
+      getStudentNames(inv).some(n => n.toLowerCase().includes(term))
     );
   }, [invoices, searchTerm]);
 
@@ -161,11 +172,11 @@ const InvoicesPage = () => {
         <TableHeader>
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Applications</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Gross Amount</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Financial Lifecycle</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payoff Status</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Raised At</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Student(s)</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Your Commission</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Invoice Status</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payment Status</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Submitted On</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Action</TableHead>
           </TableRow>
         </TableHeader>
@@ -182,6 +193,7 @@ const InvoicesPage = () => {
           ) : (
             list.map((invoice) => {
               const appCount = invoice.applications?.length || invoice.studentIds?.length || 0;
+              const studentNames = getStudentNames(invoice);
               const linkedPayoff = (payoffs || []).find(
                 p => (p.invoiceId?._id || p.invoiceId?.id || p.invoiceId) === (invoice._id || invoice.id)
               );
@@ -191,14 +203,30 @@ const InvoicesPage = () => {
                   <TableCell className="px-6 py-4 font-bold text-[#111827]">
                     <span className="font-mono text-xs whitespace-nowrap">{invoice.invoiceNumber}</span>
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center">
-                    {appCount} {appCount === 1 ? 'Application' : 'Applications'}
+                  <TableCell className="px-6 py-4 text-xs">
+                    {studentNames.length > 0 ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-[#111827]">
+                          {studentNames.slice(0, 2).join(', ')}
+                          {studentNames.length > 2 && (
+                            <span className="text-[#6B7280] font-medium"> +{studentNames.length - 2} more</span>
+                          )}
+                        </span>
+                        <span className="text-[11px] text-[#6B7280]">
+                          {appCount} {appCount === 1 ? 'application' : 'applications'}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[#9CA3AF]">
+                        {appCount} {appCount === 1 ? 'application' : 'applications'}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="px-6 py-4 font-bold text-[#111827] text-center font-['Outfit'] tabular-nums">
                     {invoice.amount > 0 ? (
                       formatCurrency(invoice.amount, invoice.currency)
                     ) : (
-                      <span className="text-xs text-amber-600 font-medium">Pending Review</span>
+                      <span className="text-xs text-amber-600 font-medium">Finance will calculate</span>
                     )}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
@@ -219,7 +247,7 @@ const InvoicesPage = () => {
                         )}
                       </div>
                     ) : (
-                      <span className="text-xs text-gray-400 font-medium">Pre-Payoff</span>
+                      <span className="text-xs text-gray-400 font-medium">Not paid yet</span>
                     )}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center font-['Outfit'] tabular-nums">
@@ -248,9 +276,12 @@ const InvoicesPage = () => {
     <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Invoice Management</h1>
-          <p className="text-sm font-medium text-[#6B7280] mt-0.5">Track your commission claims, review statuses, and offline payout milestones.</p>
+        <div className="flex items-center gap-4">
+          <img src="/assets/QStudylogo(blue).png" alt="QStudy" className="h-10 object-contain shrink-0" />
+          <div>
+            <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Invoice Management</h1>
+            <p className="text-sm font-medium text-[#6B7280] mt-0.5">Track your commission claims, review statuses, and offline payout milestones.</p>
+          </div>
         </div>
         <div className="flex gap-3">
           <Button
@@ -286,7 +317,7 @@ const InvoicesPage = () => {
       <div className="relative w-full md:w-96">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
         <Input
-          placeholder="Search by invoice # or remarks..."
+          placeholder="Search by student name, invoice # or remarks..."
           className="pl-9 h-10 border-[#E5E7EB] text-sm focus-visible:ring-[#042C53]/10 bg-white"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -356,7 +387,7 @@ const InvoicesPage = () => {
 
       {/* Invoice Details Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
+        <DialogContent className="max-w-4xl w-[95vw] p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
           {selectedInvoice && (() => {
             const inv = selectedInvoice;
             const review = inv.financeReviewStatus || 'PendingReview';
@@ -381,16 +412,20 @@ const InvoicesPage = () => {
               Rejected: ['bg-red-50 border-red-200 text-red-900', 'Finance rejected this invoice. No commission will be paid for it. The reason is below.']
             };
             const [tone, summary] = summaries[review] || summaries.PendingReview;
+            const studentNames = getStudentNames(inv);
 
             return (
               <div className="flex flex-col max-h-[90vh]">
                 {/* Header */}
                 <div className="bg-[#042C53] px-6 py-5 text-white flex items-center justify-between gap-4">
-                  <div>
-                    <DialogTitle className="text-lg font-bold font-['Outfit'] text-white">Invoice Details</DialogTitle>
-                    <DialogDescription className="text-xs text-blue-200 mt-1">
-                      <span className="font-mono">{inv.invoiceNumber}</span>
-                      {inv.raisedAt && <> &middot; Submitted {formatFinancialDate(inv.raisedAt)}</>}
+                  <div className="bg-white p-2.5 rounded-xl shrink-0 hidden sm:block">
+                    <img src="/assets/QStudylogo(blue).png" alt="QStudy" className="h-7 object-contain" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Invoice</p>
+                    <DialogTitle className="text-xl font-bold font-mono text-white mt-0.5">{inv.invoiceNumber}</DialogTitle>
+                    <DialogDescription className="text-xs text-blue-100 mt-1 truncate">
+                      {studentNames.length > 0 ? `For ${studentNames.join(', ')}` : 'Commission claim'}
                     </DialogDescription>
                   </div>
                   <FinancialStatusBadge status={review} size="md" />
@@ -399,6 +434,89 @@ const InvoicesPage = () => {
                 <div className="px-6 py-5 space-y-5 overflow-y-auto">
                   {/* Plain-language summary */}
                   <div className={`p-4 rounded-xl border text-sm leading-relaxed ${tone}`}>{summary}</div>
+
+                  {/* Key facts */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Submitted on', value: inv.raisedAt ? formatFinancialDate(inv.raisedAt) : 'N/A' },
+                      { label: 'Students', value: studentNames.length || applications.length || 0 },
+                      { label: 'Commission rate', value: Number(inv.commissionRate) > 0 ? formatPercentage(inv.commissionRate) : 'Set on approval' },
+                      { label: 'Your commission', value: hasAmount ? money(inv.amount) : 'Not calculated yet', strong: true }
+                    ].map((f) => (
+                      <div key={f.label} className="rounded-xl border border-gray-200 bg-[#F9FAFB] px-4 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{f.label}</p>
+                        <p className={`mt-1 font-bold tabular-nums ${f.strong ? 'text-lg text-[#042C53]' : 'text-sm text-gray-900'}`}>{f.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Students & applications covered */}
+                  <div>
+                    <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Students on this invoice</h3>
+                    <div className="rounded-xl border border-gray-200 overflow-x-auto">
+                      <Table>
+                        <TableHeader className="bg-[#F9FAFB]">
+                          <TableRow>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 whitespace-nowrap">Student / Application</TableHead>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 whitespace-nowrap">University &amp; Course</TableHead>
+                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 text-right whitespace-nowrap">Tuition Fee</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {applications.length > 0 ? applications.map((app, idx) => {
+                            const studentId = app.studentId || app.student?.id;
+                            const legacyStudent = (inv.studentIds || []).find(st => st?.id === studentId) || (inv.studentIds || [])[0];
+                            const studentName = app.student?.name || legacyStudent?.name || 'Student';
+                            const studentEmail = app.student?.email || legacyStudent?.email;
+                            const universityId = app.universityId || app.university?.id;
+                            return (
+                              <TableRow key={app.id || idx} className="border-b border-[#F3F4F6] last:border-0 align-top">
+                                <TableCell className="px-4 py-3 text-xs">
+                                  {studentId ? (
+                                    <Link to={`/agent/students/${studentId}`} className="text-sm font-semibold text-[#042C53] hover:underline block">
+                                      {studentName}
+                                    </Link>
+                                  ) : (
+                                    <span className="text-sm font-semibold text-gray-900 block">{studentName}</span>
+                                  )}
+                                  {studentEmail && <span className="text-[11px] text-gray-500 block">{studentEmail}</span>}
+                                  {app.id ? (
+                                    <Link to={`/agent/applications/${app.id}`} className="text-[11px] font-mono text-blue-600 hover:underline">
+                                      {app.applicationNumber}
+                                    </Link>
+                                  ) : (
+                                    <span className="text-[11px] font-mono text-gray-500">{app.applicationNumber}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 text-xs">
+                                  {universityId ? (
+                                    <Link to={`/agent/universities/${universityId}`} className="font-medium text-[#042C53] hover:underline block">
+                                      {app.university?.name || 'University'}
+                                    </Link>
+                                  ) : (
+                                    <span className="font-medium text-gray-900 block">{app.university?.name || 'University'}</span>
+                                  )}
+                                  <span className="text-[11px] text-gray-500">{app.courseName}</span>
+                                </TableCell>
+                                <TableCell className="px-4 py-3 text-right text-xs font-bold text-gray-900 tabular-nums whitespace-nowrap">
+                                  {app.tuitionFee ? money(app.tuitionFee) : 'N/A'}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          }) : (inv.studentIds || []).map((student, idx) => (
+                            <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0 align-top">
+                              <TableCell className="px-4 py-3 text-xs">
+                                <span className="text-sm font-semibold text-gray-900 block">{student.name || 'Student'}</span>
+                                {student.email && <span className="text-[11px] text-gray-500">{student.email}</span>}
+                              </TableCell>
+                              <TableCell className="px-4 py-3 text-xs text-gray-400">&mdash;</TableCell>
+                              <TableCell className="px-4 py-3 text-right text-xs text-gray-400">N/A</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
 
                   {/* Correction: finance note + agent reply */}
                   {review === 'CorrectionRequired' && (
@@ -451,20 +569,6 @@ const InvoicesPage = () => {
                     </div>
                   )}
 
-                  {/* Amount */}
-                  <div>
-                    <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Your commission</h3>
-                    <div className="rounded-xl border border-gray-200 px-4">
-                      <Row label="Commission rate">{Number(inv.commissionRate) > 0 ? formatPercentage(inv.commissionRate) : 'Set by Finance on approval'}</Row>
-                      <div className="flex items-center justify-between py-3">
-                        <span className="text-sm font-bold text-gray-900">Commission amount</span>
-                        <span className="text-xl font-bold text-[#042C53] font-['Outfit'] tabular-nums">
-                          {hasAmount ? money(inv.amount) : 'Not calculated yet'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Payment status */}
                   {review === 'Approved' && (
                     <div>
@@ -486,67 +590,6 @@ const InvoicesPage = () => {
                       </Link>
                     </div>
                   )}
-
-                  {/* What the invoice covers */}
-                  <div>
-                    <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Students on this invoice</h3>
-                    <div className="rounded-xl border border-gray-200 overflow-x-auto">
-                      <Table>
-                        <TableHeader className="bg-[#F9FAFB]">
-                          <TableRow>
-                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 whitespace-nowrap">Student</TableHead>
-                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 whitespace-nowrap">University / Course</TableHead>
-                            <TableHead className="text-[10px] font-bold text-[#6B7280] uppercase px-4 py-2.5 text-right whitespace-nowrap">Tuition</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {applications.length > 0 ? applications.map((app, idx) => {
-                            const studentId = app.studentId || app.student?.id;
-                            const universityId = app.universityId || app.university?.id;
-                            return (
-                              <TableRow key={app.id || idx} className="border-b border-[#F3F4F6] last:border-0">
-                                <TableCell className="px-4 py-3 text-xs">
-                                  {studentId ? (
-                                    <Link to={`/agent/students/${studentId}`} className="font-semibold text-[#042C53] hover:underline block">
-                                      {app.student?.name || 'Student'}
-                                    </Link>
-                                  ) : (
-                                    <span className="font-semibold text-gray-900 block">{app.student?.name || 'Student'}</span>
-                                  )}
-                                  {app.id ? (
-                                    <Link to={`/agent/applications/${app.id}`} className="text-[11px] text-blue-600 hover:underline">
-                                      {app.applicationNumber}
-                                    </Link>
-                                  ) : (
-                                    <span className="text-[11px] text-gray-500">{app.applicationNumber}</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="px-4 py-3 text-xs">
-                                  {universityId ? (
-                                    <Link to={`/agent/universities/${universityId}`} className="font-medium text-[#042C53] hover:underline block">
-                                      {app.university?.name || 'University'}
-                                    </Link>
-                                  ) : (
-                                    <span className="font-medium text-gray-900 block">{app.university?.name || 'University'}</span>
-                                  )}
-                                  <span className="text-[11px] text-gray-500">{app.courseName}</span>
-                                </TableCell>
-                                <TableCell className="px-4 py-3 text-right text-xs font-bold text-gray-900 tabular-nums">
-                                  {app.tuitionFee ? money(app.tuitionFee) : 'N/A'}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          }) : (inv.studentIds || []).map((student, idx) => (
-                            <TableRow key={idx} className="border-b border-[#F3F4F6] last:border-0">
-                              <TableCell className="px-4 py-3 text-xs font-semibold text-gray-900">{student.name || 'Student'}</TableCell>
-                              <TableCell className="px-4 py-3 text-xs text-gray-500">{student.email}</TableCell>
-                              <TableCell className="px-4 py-3 text-right text-xs text-gray-500">N/A</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
 
                   {/* Remarks & document */}
                   {inv.remarks && review !== 'CorrectionRequired' && (

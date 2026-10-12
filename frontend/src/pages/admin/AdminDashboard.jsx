@@ -23,6 +23,7 @@ import {
 import { useData } from '../../context/DataContext';
 import { Button } from '../../components/ui/button';
 import { formatCurrency } from '../../utils/financialFormatters';
+import { ChartCard, TrendChart, DonutChart, HBarChart, bucketByMonth, countBy, prettyStatus } from '../../components/dashboard/DashboardCharts';
 
 const AdminDashboard = () => {
   const {
@@ -122,6 +123,26 @@ const AdminDashboard = () => {
     const st = (s.verificationStatus || '').toLowerCase();
     return st === 'pending' || st === 'initiated';
   }).length || 0;
+
+  // ═══ CHART DATA ═══
+  const studentTrend = bucketByMonth(
+    students, s => s.createdAt,
+    [{ key: 'registered' }, { key: 'converted', filter: s => s.status === 'Converted' }]
+  );
+  const studentStatusData = countBy(students, s => s.status || 'New');
+  const applicationStatusData = countBy(applications, a => prettyStatus(a.status));
+  const invoiceStatusData = countBy(invoices, inv => prettyStatus(inv.financeReviewStatus || inv.status || 'Submitted'));
+  const payoffTrend = bucketByMonth(
+    payoffs, p => p.settledAt || p.updatedAt || p.createdAt,
+    [
+      { key: 'settled', filter: p => ['SETTLED', 'COMPLETED'].includes((p.status || '').toUpperCase()), value: getPayoffAmount },
+      { key: 'pending', filter: p => ['PENDING', 'APPROVED'].includes((p.status || '').toUpperCase()), value: getPayoffAmount },
+    ]
+  );
+  const topAgentsData = countBy(
+    students.filter(s => s.agentId),
+    s => agents.find(a => a.id === s.agentId)?.name || 'Unknown agent'
+  ).slice(0, 6);
 
   // ═══ ACTION QUEUE ═══
   const actionQueue = [];
@@ -397,6 +418,39 @@ const AdminDashboard = () => {
             link="/admin/payoffs"
           />
         </div>
+
+        {/* ═══ TRENDS & BREAKDOWNS ═══ */}
+        <div className="mb-2">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Trends</span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <ChartCard className="lg:col-span-2" title="Student registrations" hint="New students and conversions over the last 6 months">
+            <TrendChart data={studentTrend} series={[
+              { key: 'registered', name: 'Registered', color: '#042C53' },
+              { key: 'converted', name: 'Converted', color: '#10B981' },
+            ]} />
+          </ChartCard>
+          <ChartCard title="Students by status" hint="Where all students are in the pipeline">
+            <DonutChart data={studentStatusData} />
+          </ChartCard>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <ChartCard title="Applications by status" hint="How many applications are at each stage">
+            <HBarChart data={applicationStatusData} color="#534AB7" labelWidth={120} name="Applications" />
+          </ChartCard>
+          <ChartCard title="Invoices by status" hint="Where invoices are in finance review">
+            <DonutChart data={invoiceStatusData} />
+          </ChartCard>
+          <ChartCard title="Top agents" hint="Agents with the most registered students">
+            <HBarChart data={topAgentsData} color="#0EA5E9" name="Students" />
+          </ChartCard>
+        </div>
+        <ChartCard className="mb-8" title="Payoffs per month" hint="Amount settled versus still pending, last 6 months" height={260}>
+          <TrendChart type="bar" stacked money data={payoffTrend} series={[
+            { key: 'settled', name: 'Settled', color: '#10B981' },
+            { key: 'pending', name: 'Pending', color: '#F59E0B' },
+          ]} />
+        </ChartCard>
 
         {/* ═══ ACTION QUEUE + RECENT ACTIVITY ═══ */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

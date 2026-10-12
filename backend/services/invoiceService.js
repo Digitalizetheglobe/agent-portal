@@ -90,6 +90,7 @@ const formatInvoice = async (invoice) => {
         'universityId',
         'courseName',
         'courseLevel',
+        'tuitionFee',
         'status',
         'isInvoiceEligible',
         'isInvoiced',
@@ -451,10 +452,15 @@ class InvoiceService {
             'universityId',
             'courseName',
             'courseLevel',
+            'tuitionFee',
             'status',
             'isInvoiceEligible',
             'isInvoiced',
             'invoiceId'
+          ],
+          include: [
+            { model: Student, as: 'student', attributes: ['id', 'name', 'email'] },
+            { model: University, as: 'university', attributes: ['id', 'name', 'code'] }
           ]
         }
       ],
@@ -508,6 +514,7 @@ class InvoiceService {
             'universityId',
             'courseName',
             'courseLevel',
+            'tuitionFee',
             'status',
             'isInvoiceEligible',
             'isInvoiced',

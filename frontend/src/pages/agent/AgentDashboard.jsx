@@ -25,6 +25,7 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import ComplianceStatus from '../../components/agent/ComplianceStatus';
 import { formatCurrency } from '../../utils/financialFormatters';
+import { ChartCard, TrendChart, DonutChart, HBarChart, bucketByMonth, countBy, prettyStatus } from '../../components/dashboard/DashboardCharts';
 
 const AgentDashboard = () => {
   const { user } = useAuth();
@@ -156,6 +157,22 @@ const AgentDashboard = () => {
       link: '/agent/payoffs'
     }
   ];
+
+  // ── Chart data ──
+  const registrationTrend = bucketByMonth(
+    myStudents, s => s.createdAt,
+    [{ key: 'registered' }, { key: 'converted', filter: s => s.status === 'Converted' }]
+  );
+  const studentStatusData = countBy(myStudents, s => s.status || 'New');
+  const applicationStatusData = countBy(myApplications, a => prettyStatus(a.status));
+  const earningsTrend = bucketByMonth(
+    myPayoffs, p => p.settledAt || p.updatedAt || p.createdAt,
+    [
+      { key: 'settled', filter: p => ['SETTLED', 'COMPLETED'].includes((p.status || '').toUpperCase()), value: getPayoffAmount },
+      { key: 'pending', filter: p => ['PENDING', 'APPROVED'].includes((p.status || '').toUpperCase()), value: getPayoffAmount },
+    ]
+  );
+  const invoiceStatusData = countBy(myInvoices, inv => prettyStatus(inv.financeReviewStatus || inv.status || 'Submitted'));
 
   // ── Action items aggregation ──
   const actionItems = [];
@@ -358,6 +375,33 @@ const AgentDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* ═══ CHARTS ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <ChartCard className="lg:col-span-2" title="My student registrations" hint="Students you registered and how many converted, last 6 months">
+          <TrendChart data={registrationTrend} series={[
+            { key: 'registered', name: 'Registered', color: '#042C53' },
+            { key: 'converted', name: 'Converted', color: '#10B981' },
+          ]} />
+        </ChartCard>
+        <ChartCard title="My students by status" hint="Where your students are right now">
+          <DonutChart data={studentStatusData} />
+        </ChartCard>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <ChartCard title="Applications by status" hint="Progress of the applications you submitted">
+          <HBarChart data={applicationStatusData} color="#534AB7" labelWidth={120} name="Applications" />
+        </ChartCard>
+        <ChartCard title="Invoices by status" hint="Where your commission invoices are">
+          <DonutChart data={invoiceStatusData} />
+        </ChartCard>
+        <ChartCard title="My earnings per month" hint="Settled versus pending payouts, last 6 months">
+          <TrendChart type="bar" stacked money data={earningsTrend} series={[
+            { key: 'settled', name: 'Settled', color: '#10B981' },
+            { key: 'pending', name: 'Pending', color: '#F59E0B' },
+          ]} />
+        </ChartCard>
+      </div>
 
       {/* ═══ RECENT APPLICATIONS ═══ */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
