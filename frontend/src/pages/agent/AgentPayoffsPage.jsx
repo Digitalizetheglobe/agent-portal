@@ -28,7 +28,7 @@ import { FinancialStatusBadge } from '../../components/common/FinancialStatusBad
 import { formatCurrency, formatFinancialDate } from '../../utils/financialFormatters';
 
 const AgentPayoffsPage = () => {
-  const { payoffs, fetchPayoffs, loading } = useData();
+  const { payoffs, fetchPayoffs, viewPayoffSlip, loading } = useData();
   const { user } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -146,6 +146,11 @@ const AgentPayoffsPage = () => {
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
                     {getPayoffBadge(payoff.status)}
+                    {payoff.status === 'PENDING' && (
+                      <span className="mt-1.5 flex w-fit mx-auto items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#FAEEDA] text-[#633806]">
+                        {payoff.universityPaid || payoff.blockBypassed ? 'Being paid by Accounts' : 'Waiting for the university to pay QStudy'}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center">
                     {payoff.status === 'SETTLED' ? (
@@ -321,6 +326,15 @@ const AgentPayoffsPage = () => {
                         <span>{selectedPayoff.settledAt ? format(new Date(selectedPayoff.settledAt), 'MMMM dd, yyyy') : 'N/A'}</span>
                       </div>
                     </div>
+                    {selectedPayoff.paymentSlip && (
+                      <button
+                        type="button"
+                        onClick={() => viewPayoffSlip(selectedPayoff.id)}
+                        className="text-xs font-semibold text-emerald-900 underline underline-offset-2"
+                      >
+                        View payment slip
+                      </button>
+                    )}
                     {selectedPayoff.settlementNotes && (
                       <p className="text-xs text-emerald-800 pt-1 border-t border-emerald-200/60 mt-1 italic">
                         Memo: {selectedPayoff.settlementNotes}
@@ -354,7 +368,7 @@ const AgentPayoffsPage = () => {
                 {/* Linked Invoice Applications Breakdown */}
                 {selectedPayoff.invoiceId?.applications && selectedPayoff.invoiceId.applications.length > 0 && (
                   <div className="space-y-2">
-                    <span className="text-xs font-bold text-gray-900 block">Enrolled Student Applications Linked to this Payoff</span>
+                    <span className="text-xs font-bold text-gray-900 block">Student Applications Linked to this Payoff</span>
                     <div className="border border-[#E5E7EB] rounded-xl overflow-hidden">
                       <Table>
                         <TableHeader className="bg-[#F9FAFB]">

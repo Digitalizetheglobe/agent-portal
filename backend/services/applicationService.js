@@ -1,19 +1,14 @@
 const { Op } = require('sequelize');
-const { Application, Student, University, User, Event, Invoice, Course } = require('../models');
+const { Application, Student, University, User, Invoice, Course } = require('../models');
 const { parseCourseTuitionFee } = require('../utils/tuitionUtils');
 const admissionTrackingService = require('./admissionTrackingService');
+const { scopeWhereToAgents, assertCanAccessAgent } = require('../utils/agentScope');
 
 // Allowed status enum values
 const ALLOWED_STATUSES = [
   'Draft',
   'Submitted',
   'UnderReview',
-  'VisitScheduled',
-  'VisitCompleted',
-  'OfferReceived',
-  'ConditionalOffer',
-  'AdmissionConfirmed',
-  'Enrolled',
   'Rejected',
   'Withdrawn'
 ];
@@ -32,7 +27,7 @@ const standardIncludes = [
   {
     model: Student,
     as: 'student',
-    attributes: ['id', 'name', 'email', 'phone', 'country', 'education', 'status', 'verificationStatus']
+    attributes: ['id', 'name', 'email', 'phone', 'country', 'education', 'verificationStatus']
   },
   {
     model: User,
@@ -43,11 +38,6 @@ const standardIncludes = [
     model: University,
     as: 'university',
     attributes: ['id', 'name', 'code', 'country', 'city', 'website', 'logoUrl', 'status']
-  },
-  {
-    model: Event,
-    as: 'sourceEvent',
-    attributes: ['id', 'title', 'date', 'location', 'type']
   },
   {
     model: Invoice,
@@ -105,7 +95,6 @@ class ApplicationService {
       studentId,
       agentId: requestedAgentId,
       universityId,
-      sourceEventId,
       courseId,
       intakeTerm,
       tuitionFee,
@@ -152,6 +141,8 @@ class ApplicationService {
     } else {
       // For admins, allow specifying agentId or default to the student's assigned agent
       effectiveAgentId = requestedAgentId || student.agentId;
+      await assertCanAccessAgent(currentUser, student.agentId);
+      if (requestedAgentId) await assertCanAccessAgent(currentUser, requestedAgentId);
       if (!effectiveAgentId) {
         const err = new Error('Agent ID is required');
         err.statusCode = 400;
@@ -178,18 +169,6 @@ class ApplicationService {
     courseName = catalogCourse.courseName;
     courseLevel = catalogCourse.courseLevel;
 
-    // 5. Validate sourceEventId if provided
-    let finalSourceEventId = null;
-    if (sourceEventId) {
-      const event = await Event.findByPk(sourceEventId);
-      if (!event) {
-        const err = new Error('Source event not found');
-        err.statusCode = 404;
-        throw err;
-      }
-      finalSourceEventId = event.id;
-    }
-
     // 6. Validate courseLevel if provided
     if (courseLevel && !ALLOWED_COURSE_LEVELS.includes(courseLevel)) {
       const err = new Error(`Invalid course level. Allowed: ${ALLOWED_COURSE_LEVELS.join(', ')}`);
@@ -208,8 +187,8 @@ class ApplicationService {
       }
     }
 
-    // Catalog tuition is authoritative when it parses to a single amount
-    if (catalogCourse.tuitionFee !== null) {
+    // Catalog tuition is only a default; a fee supplied by the user overrides it
+    if (numericTuitionFee === null && catalogCourse.tuitionFee !== null) {
       numericTuitionFee = catalogCourse.tuitionFee;
     }
 
@@ -240,7 +219,6 @@ class ApplicationService {
       studentId: student.id,
       agentId: effectiveAgentId,
       universityId: university.id,
-      sourceEventId: finalSourceEventId,
       courseId: catalogCourse.courseId,
       courseName,
       courseLevel: courseLevel || null,
@@ -268,8 +246,7 @@ class ApplicationService {
       status,
       studentId,
       agentId,
-      universityId,
-      sourceEventId
+      universityId
     } = query;
 
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -284,6 +261,8 @@ class ApplicationService {
     } else if (agentId) {
       where.agentId = agentId;
     }
+    // Account Managers only see applications of their own agents
+    await scopeWhereToAgents(where, currentUser);
 
     // 2. Specific filters
     if (status) {
@@ -297,7 +276,6 @@ class ApplicationService {
 
     if (studentId) where.studentId = studentId;
     if (universityId) where.universityId = universityId;
-    if (sourceEventId) where.sourceEventId = sourceEventId;
 
     // 3. Search filter
     if (search && search.trim()) {
@@ -350,6 +328,7 @@ class ApplicationService {
       err.statusCode = 403;
       throw err;
     }
+    await assertCanAccessAgent(currentUser, application.agentId);
 
     return application.toJSON();
   }
@@ -372,30 +351,16 @@ class ApplicationService {
       err.statusCode = 403;
       throw err;
     }
+    await assertCanAccessAgent(currentUser, application.agentId);
 
     const {
       universityId,
-      sourceEventId,
       courseId,
       courseName,
       courseLevel,
       intakeTerm,
       tuitionFee,
       currency,
-      visitDate,
-      visitLocation,
-      visitNotes,
-      visitCompleted,
-      offerDate,
-      offerLetterUrl,
-      offerConditions,
-      admissionDate,
-      admissionLetterUrl,
-      universityStudentId,
-      enrollmentDate,
-      enrollmentProofUrl,
-      depositPaid,
-      depositAmount,
       remarks,
       studentId,
       agentId
@@ -413,21 +378,6 @@ class ApplicationService {
       application.universityId = universityId;
     }
 
-    // Validate sourceEventId if updated
-    if (sourceEventId !== undefined) {
-      if (sourceEventId) {
-        const event = await Event.findByPk(sourceEventId);
-        if (!event) {
-          const err = new Error('Source event not found');
-          err.statusCode = 404;
-          throw err;
-        }
-        application.sourceEventId = sourceEventId;
-      } else {
-        application.sourceEventId = null;
-      }
-    }
-
     // Admin-only reassignment of student or agent
     if (studentId !== undefined) {
       if (currentUser.role !== 'admin') {
@@ -441,6 +391,7 @@ class ApplicationService {
         err.statusCode = 404;
         throw err;
       }
+      await assertCanAccessAgent(currentUser, st.agentId);
       application.studentId = studentId;
     }
 
@@ -456,6 +407,7 @@ class ApplicationService {
         err.statusCode = 404;
         throw err;
       }
+      await assertCanAccessAgent(currentUser, agentId);
       application.agentId = agentId;
     }
 
@@ -520,22 +472,12 @@ class ApplicationService {
     }
     if (currency !== undefined) application.currency = currency;
 
-    // Agent authority enforcement: Agents cannot mutate institutional milestone fields or invoice eligibility
+    // Agent authority enforcement: Agents cannot change invoice eligibility or the visa pipeline
     if (currentUser.role === 'agent') {
       const protectedInstitutionalFields = [
         'isInvoiceEligible',
-        'depositPaid',
-        'depositStatus',
-        'depositAmount',
-        'admissionDate',
-        'admissionLetterUrl',
-        'universityStudentId',
-        'enrollmentDate',
-        'enrollmentProofUrl',
-        'visitCompleted',
-        'offerDate',
-        'offerLetterUrl',
-        'offerConditions'
+        'pipelineStage',
+        'feeStatus'
       ];
 
       for (const field of protectedInstitutionalFields) {
@@ -545,35 +487,6 @@ class ApplicationService {
           throw err;
         }
       }
-    }
-
-    // Visit milestone
-    if (visitDate !== undefined) application.visitDate = visitDate;
-    if (visitLocation !== undefined) application.visitLocation = visitLocation;
-    if (visitNotes !== undefined) application.visitNotes = visitNotes;
-    if (visitCompleted !== undefined) application.visitCompleted = Boolean(visitCompleted);
-
-    // Offer milestone
-    if (offerDate !== undefined) application.offerDate = offerDate;
-    if (offerLetterUrl !== undefined) application.offerLetterUrl = offerLetterUrl;
-    if (offerConditions !== undefined) application.offerConditions = offerConditions;
-
-    // Admission milestone
-    if (admissionDate !== undefined) application.admissionDate = admissionDate;
-    if (admissionLetterUrl !== undefined) application.admissionLetterUrl = admissionLetterUrl;
-    if (universityStudentId !== undefined) application.universityStudentId = universityStudentId;
-
-    // Enrollment milestone
-    if (enrollmentDate !== undefined) application.enrollmentDate = enrollmentDate;
-    if (enrollmentProofUrl !== undefined) application.enrollmentProofUrl = enrollmentProofUrl;
-    if (depositPaid !== undefined) {
-      const err = new Error('Deposit status can only be changed through the deposit verification action.');
-      err.statusCode = 400;
-      throw err;
-    }
-    if (depositAmount !== undefined) {
-      const parsed = parseFloat(depositAmount);
-      application.depositAmount = isNaN(parsed) ? null : parsed;
     }
 
     if (remarks !== undefined) application.remarks = remarks;
@@ -635,10 +548,7 @@ class ApplicationService {
         throw err;
       }
     }
-
-    if (newStatus === 'Enrolled') {
-      admissionTrackingService.assertDepositVerifiedForEnrollment(application);
-    }
+    await assertCanAccessAgent(currentUser, application.agentId);
 
     const oldStatus = application.status;
     application.status = newStatus;
@@ -693,6 +603,8 @@ class ApplicationService {
       }
     }
 
+    await assertCanAccessAgent(currentUser, application.agentId);
+
     // Check if application is associated with an active invoice
     if (application.isInvoiced || application.invoiceId) {
       const err = new Error('Cannot delete an application that has been invoiced');
@@ -725,6 +637,8 @@ class ApplicationService {
       throw err;
     }
 
+    await assertCanAccessAgent(currentUser, student.agentId);
+
     return await this.getApplications({ studentId }, currentUser);
   }
 
@@ -751,6 +665,8 @@ class ApplicationService {
       err.statusCode = 403;
       throw err;
     }
+
+    await assertCanAccessAgent(currentUser, agentId);
 
     const agent = await User.findByPk(agentId);
     if (!agent) {

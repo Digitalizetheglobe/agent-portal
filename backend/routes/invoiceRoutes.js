@@ -8,7 +8,7 @@ const {
   updateInvoiceStatus,
   deleteInvoice
 } = require('../controllers/invoiceController');
-const { protect, restrictTo } = require('../middleware/auth');
+const { protect, restrictToStaffRole } = require('../middleware/auth');
 
 // All invoice routes require authentication
 router.use(protect);
@@ -27,6 +27,6 @@ router.route('/:id')
   .delete(deleteInvoice);
 
 // Admin-only status update
-router.patch('/:id/status', restrictTo('admin'), updateInvoiceStatus);
+router.patch('/:id/status', restrictToStaffRole('head_admission'), updateInvoiceStatus);
 
 module.exports = router;

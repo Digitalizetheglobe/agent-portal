@@ -18,6 +18,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { hasStaffRole } from '../../utils/staffRoles';
 import { useData } from '../../context/DataContext';
 import { universityAPI, formatApiError } from '../../utils/api';
 import { Button } from '../../components/ui/button';
@@ -32,13 +33,16 @@ import {
   TableRow
 } from '../../components/ui/table';
 import UniversityModal from '../../components/modals/UniversityModal';
+import UniversityContent from '../../components/university/UniversityContent';
 import { toast } from 'sonner';
 
 const UniversityDetailsPage = () => {
   const { id: paramId, universityId } = useParams();
   const id = paramId || universityId;
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
+  // University information is maintained by the Head of Admission
+  const canManage = hasStaffRole(user, 'head_admission');
   const { updateUniversityStatus } = useData();
 
   const [university, setUniversity] = useState(null);
@@ -107,12 +111,6 @@ const UniversityDetailsPage = () => {
 
   const getApplicationStatusBadge = (status) => {
     const s = String(status || '').toLowerCase();
-    if (s === 'enrolled' || s === 'admissionconfirmed') {
-      return <Badge className="bg-[#EAF3DE] text-[#27500A] border-[#C0DD97] text-[10px] font-bold">{status}</Badge>;
-    }
-    if (s === 'conditionaloffer' || s === 'unconditionaloffer' || s === 'offerreceived') {
-      return <Badge className="bg-[#E6F1FB] text-[#0C447C] border-[#B5D4F4] text-[10px] font-bold">{status}</Badge>;
-    }
     if (s === 'underreview' || s === 'submitted') {
       return <Badge className="bg-[#FAEEDA] text-[#633806] border-[#FAC775] text-[10px] font-bold">{status}</Badge>;
     }
@@ -178,7 +176,7 @@ const UniversityDetailsPage = () => {
           <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Universities
         </Button>
 
-        {isAdmin() && (
+        {canManage && (
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -300,6 +298,12 @@ const UniversityDetailsPage = () => {
                   <span className="font-semibold text-gray-900 mt-0.5 block">{university.city || 'N/A'}</span>
                 </div>
                 <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Agent Commission</span>
+                  <span className="font-semibold text-gray-900 mt-0.5 block">
+                    {university.commissionRate != null ? `${university.commissionRate}% of tuition` : 'Not set'}
+                  </span>
+                </div>
+                <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Institution Code</span>
                   <span className="font-mono font-bold text-gray-900 mt-0.5 block">{university.code}</span>
                 </div>
@@ -353,6 +357,8 @@ const UniversityDetailsPage = () => {
           </Card>
         </div>
       </div>
+
+      <UniversityContent university={university} canManage={canManage} onChanged={fetchUniversityDetails} />
 
       {/* Associated Applications Table */}
       <Card className="border-[#E5E7EB] bg-white shadow-none">
@@ -439,7 +445,7 @@ const UniversityDetailsPage = () => {
       </Card>
 
       {/* University Edit Modal */}
-      {isAdmin() && (
+      {canManage && (
         <UniversityModal
           open={editModalOpen}
           onOpenChange={setEditModalOpen}

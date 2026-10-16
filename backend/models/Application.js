@@ -44,14 +44,6 @@ const Application = sequelize.define('Application', {
       key: 'id'
     }
   },
-  sourceEventId: {
-    type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: 'Events',
-      key: 'id'
-    }
-  },
 
   // Course / Intake
   // courseId references the Course catalog; null only for legacy free-text applications.
@@ -86,6 +78,9 @@ const Application = sequelize.define('Application', {
       'Draft',
       'Submitted',
       'UnderReview',
+      // Legacy: campus visits, offers, admission and enrollment were removed. These values are never set any
+      // more (existing rows are moved to UnderReview at startup); they stay in the list only because a
+      // Postgres enum cannot drop values.
       'VisitScheduled',
       'VisitCompleted',
       'OfferReceived',
@@ -98,86 +93,47 @@ const Application = sequelize.define('Application', {
     defaultValue: 'Draft'
   },
 
-  // University Visit Milestone
-  visitDate: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  visitLocation: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  visitNotes: {
-    type: DataTypes.TEXT,
-    allowNull: true
-  },
-  visitCompleted: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-
-  // Offer Milestone
-  offerDate: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  offerLetterUrl: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  offerConditions: {
-    type: DataTypes.TEXT,
-    allowNull: true
-  },
-
-  // Admission Milestone
-  admissionDate: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  admissionLetterUrl: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  universityStudentId: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-
-  // Enrollment Milestone
-  enrollmentDate: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
-  enrollmentProofUrl: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  // Deposit lifecycle: Required -> Paid -> Verified | NotVerified.
-  // Only 'Verified' counts toward enrollment and commission eligibility.
-  depositStatus: {
-    type: DataTypes.ENUM('Required', 'Paid', 'Verified', 'NotVerified'),
+  // Visa progress pipeline (separate from the admission status above). The Head of Admission moves
+  // the student through it; an agent can invoice once the stage is Visa100 and the fees are accepted.
+  pipelineStage: {
+    type: DataTypes.ENUM('Application', 'Visa15', 'Visa35', 'Visa70', 'Arrival', 'Registration', 'Visa100'),
     allowNull: false,
-    defaultValue: 'Required'
+    defaultValue: 'Application'
   },
-  // Legacy mirror: true once the deposit has been reported paid (Paid, Verified or NotVerified)
-  depositPaid: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-  depositAmount: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: true
-  },
-  depositVerifiedAt: {
+  pipelineUpdatedAt: {
     type: DataTypes.DATE,
     allowNull: true
   },
-  depositVerifiedBy: {
+  // Entered when the student reaches the Arrival stage
+  arrivalPerson: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  arrivalDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+
+  // Proof that the student's fees were paid: the agent uploads it, the Head of Admission accepts or rejects it
+  feeStatus: {
+    type: DataTypes.ENUM('Pending', 'ProofSubmitted', 'Accepted', 'Rejected'),
+    allowNull: false,
+    defaultValue: 'Pending'
+  },
+  // { id, fileUrl, fileName, contentType, uploadedAt, uploadedBy, note }
+  feeProof: {
+    type: DataTypes.JSONB,
+    allowNull: true
+  },
+  feeReviewedBy: {
     type: DataTypes.UUID,
     allowNull: true
   },
-  depositNotes: {
+  feeReviewedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  feeRemarks: {
     type: DataTypes.TEXT,
     allowNull: true
   },
@@ -218,7 +174,6 @@ const Application = sequelize.define('Application', {
     { fields: ['agentId'] },
     { fields: ['universityId'] },
     { fields: ['courseId'] },
-    { fields: ['sourceEventId'] },
     { fields: ['status'] }
   ]
 });
@@ -233,9 +188,6 @@ Application.prototype.toJSON = function() {
   values.universityId = values.universityId ? values.universityId.toString() : values.universityId;
   if (values.courseId) {
     values.courseId = values.courseId.toString();
-  }
-  if (values.sourceEventId) {
-    values.sourceEventId = values.sourceEventId.toString();
   }
   if (values.invoiceId) {
     values.invoiceId = values.invoiceId.toString();

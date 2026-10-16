@@ -392,7 +392,7 @@ const AdminStudentVerificationPage = () => {
                               <Button
                                 size="sm"
                                 disabled={isActing || notReady}
-                                title={notReady ? 'Verification starts after the student is enrolled with a verified deposit' : undefined}
+                                title={notReady ? 'Verification starts once the student reaches Registration in the visa pipeline' : undefined}
                                 className="h-7 px-2.5 text-[10px] font-bold bg-[#042C53] hover:bg-[#0C447C] text-white disabled:opacity-50"
                                 onClick={() => handleInitiate(student.id, student.name)}
                               >

@@ -56,11 +56,7 @@ import {
   AlertDialogTitle
 } from '../../components/ui/alert-dialog';
 import ApplicationModal from '../../components/modals/ApplicationModal';
-import VisitModal from '../../components/modals/VisitModal';
-import OfferModal from '../../components/modals/OfferModal';
-import AdmissionModal from '../../components/modals/AdmissionModal';
-import EnrollmentModal from '../../components/modals/EnrollmentModal';
-import DepositModal from '../../components/modals/DepositModal';
+import VisaPipelinePanel from '../../components/application/VisaPipelinePanel';
 import InvoiceModal from '../../components/modals/InvoiceModal';
 import {
   APPLICATION_STATUS,
@@ -73,46 +69,18 @@ import { toast } from 'sonner';
 const ALLOWED_TRANSITIONS = {
   Draft: ['Submitted', 'Withdrawn'],
   Submitted: ['UnderReview', 'Withdrawn'],
-  UnderReview: ['VisitScheduled', 'OfferReceived', 'ConditionalOffer', 'Rejected', 'Withdrawn'],
-  VisitScheduled: ['VisitCompleted', 'Withdrawn'],
-  VisitCompleted: ['OfferReceived', 'ConditionalOffer', 'Rejected', 'Withdrawn'],
-  OfferReceived: ['AdmissionConfirmed', 'Withdrawn', 'Rejected'],
-  ConditionalOffer: ['AdmissionConfirmed', 'Rejected', 'Withdrawn'],
-  AdmissionConfirmed: ['Enrolled', 'Withdrawn'],
-  Enrolled: [],
+  UnderReview: ['Rejected', 'Withdrawn'],
   Rejected: [],
   Withdrawn: []
 };
 
-// Action button configurations
+// Review actions (the visa pipeline below the review is handled by VisaPipelinePanel)
+const REVIEW_STATUSES = ['Submitted', 'UnderReview', 'Rejected', 'Withdrawn'];
 const ACTION_CONFIG = {
   Submitted: { label: 'Submit Application', color: 'bg-blue-600 hover:bg-blue-700 text-white' },
   UnderReview: { label: 'Start Review', color: 'bg-amber-600 hover:bg-amber-700 text-white' },
-  VisitScheduled: { label: 'Schedule Visit', color: 'bg-indigo-600 hover:bg-indigo-700 text-white' },
-  VisitCompleted: { label: 'Complete Visit', color: 'bg-indigo-700 hover:bg-indigo-800 text-white' },
-  OfferReceived: { label: 'Issue Offer', color: 'bg-emerald-600 hover:bg-emerald-700 text-white' },
-  ConditionalOffer: { label: 'Conditional Offer', color: 'bg-teal-600 hover:bg-teal-700 text-white' },
-  AdmissionConfirmed: { label: 'Confirm Admission', color: 'bg-teal-700 hover:bg-teal-800 text-white' },
-  Enrolled: { label: 'Complete Enrollment', color: 'bg-green-700 hover:bg-green-800 text-white' },
   Rejected: { label: 'Reject Application', color: 'bg-red-600 hover:bg-red-700 text-white' },
   Withdrawn: { label: 'Withdraw Application', color: 'border border-gray-300 text-gray-700 hover:bg-gray-100 bg-white' }
-};
-
-// 6 Core Admission Milestones
-const ADMISSION_MILESTONES = [
-  { id: 'application', label: 'Application', desc: 'Draft & Submission' },
-  { id: 'review', label: 'Review', desc: 'Admissions Evaluation' },
-  { id: 'visit', label: 'Campus Visit', desc: 'Tour & Interview' },
-  { id: 'offer', label: 'Offer', desc: 'Conditional / Direct' },
-  { id: 'admission', label: 'Admission', desc: 'Student Accepted' },
-  { id: 'enrollment', label: 'Enrolled', desc: 'Official Matriculation' }
-];
-
-const DEPOSIT_LABELS = {
-  Required: 'Deposit Required',
-  Paid: 'Paid, Awaiting Verification',
-  Verified: 'Deposit Verified',
-  NotVerified: 'Not Verified'
 };
 
 const ApplicationDetailsPage = () => {
@@ -123,7 +91,6 @@ const ApplicationDetailsPage = () => {
   const { deleteApplication } = useData();
 
   const [application, setApplication] = useState(null);
-  const [trackingData, setTrackingData] = useState(null);
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState(null);
@@ -134,14 +101,6 @@ const ApplicationDetailsPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Admission Tracking Specialized Modals (Phase 5)
-  const [visitModalOpen, setVisitModalOpen] = useState(false);
-  const [visitModalMode, setVisitModalMode] = useState('schedule');
-  const [offerModalOpen, setOfferModalOpen] = useState(false);
-  const [offerModalType, setOfferModalType] = useState('unconditional');
-  const [admissionModalOpen, setAdmissionModalOpen] = useState(false);
-  const [enrollmentModalOpen, setEnrollmentModalOpen] = useState(false);
-  const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
 
   // Generic Workflow Action Dialog (for Draft->Submitted, Submitted->UnderReview, Reject, Withdraw)
@@ -160,14 +119,6 @@ const ApplicationDetailsPage = () => {
       // 1. Fetch main application
       const appRes = await applicationAPI.getById(id);
       setApplication(appRes.data);
-
-      // 2. Fetch specialized admission tracking details
-      try {
-        const trackRes = await admissionTrackingAPI.getTracking(id);
-        setTrackingData(trackRes.data?.tracking || null);
-      } catch (trackErr) {
-        console.warn('Tracking fetch fallback:', trackErr);
-      }
 
       // 3. Fetch audit history
       try {
@@ -208,31 +159,12 @@ const ApplicationDetailsPage = () => {
   };
 
   /**
-   * Routes user to the appropriate specialized modal or generic workflow dialog
+   * Opens the confirmation dialog for a review transition (submit, start review, reject, withdraw)
    */
   const handleActionClick = (target) => {
-    if (target === 'VisitScheduled') {
-      setVisitModalMode('schedule');
-      setVisitModalOpen(true);
-    } else if (target === 'VisitCompleted') {
-      setVisitModalMode('complete');
-      setVisitModalOpen(true);
-    } else if (target === 'OfferReceived') {
-      setOfferModalType('unconditional');
-      setOfferModalOpen(true);
-    } else if (target === 'ConditionalOffer') {
-      setOfferModalType('conditional');
-      setOfferModalOpen(true);
-    } else if (target === 'AdmissionConfirmed') {
-      setAdmissionModalOpen(true);
-    } else if (target === 'Enrolled') {
-      openEnrollment();
-    } else {
-      // Generic transition (Draft->Submitted, Submitted->UnderReview, Rejected, Withdrawn)
-      setTargetStatus(target);
-      setWorkflowNotes('');
-      setWorkflowDialogOpen(true);
-    }
+    setTargetStatus(target);
+    setWorkflowNotes('');
+    setWorkflowDialogOpen(true);
   };
 
   const confirmGenericWorkflowTransition = async () => {
@@ -276,108 +208,13 @@ const ApplicationDetailsPage = () => {
   // Next allowed transitions
   const allowedNextTransitions = useMemo(() => {
     if (!application?.status) return [];
-    const transitions = ALLOWED_TRANSITIONS[application.status] || [];
+    const transitions = (ALLOWED_TRANSITIONS[application.status] || []).filter(t => REVIEW_STATUSES.includes(t));
     if (!isAdmin()) {
       // Agents can only submit a draft application or withdraw
       return transitions.filter(t => t === 'Submitted' || t === 'Withdrawn');
     }
     return transitions;
   }, [application?.status, isAdmin]);
-
-  // Derived tracking data safely falling back to main application fields
-  const tracking = useMemo(() => {
-    return {
-      visit: {
-        visitDate: trackingData?.visit?.visitDate || application?.visitDate,
-        visitLocation: trackingData?.visit?.visitLocation || application?.visitLocation,
-        visitNotes: trackingData?.visit?.visitNotes || application?.visitNotes,
-        visitCompleted: trackingData?.visit?.visitCompleted !== undefined ? trackingData.visit.visitCompleted : application?.visitCompleted
-      },
-      offer: {
-        offerDate: trackingData?.offer?.offerDate || application?.offerDate,
-        offerLetterUrl: trackingData?.offer?.offerLetterUrl || application?.offerLetterUrl,
-        offerConditions: trackingData?.offer?.offerConditions || application?.offerConditions
-      },
-      admission: {
-        admissionDate: trackingData?.admission?.admissionDate || application?.admissionDate,
-        admissionLetterUrl: trackingData?.admission?.admissionLetterUrl || application?.admissionLetterUrl,
-        universityStudentId: trackingData?.admission?.universityStudentId || application?.universityStudentId
-      },
-      enrollment: {
-        enrollmentDate: trackingData?.enrollment?.enrollmentDate || application?.enrollmentDate,
-        enrollmentProofUrl: trackingData?.enrollment?.enrollmentProofUrl || application?.enrollmentProofUrl
-      },
-      deposit: {
-        depositStatus: trackingData?.deposit?.depositStatus || application?.depositStatus || 'Required',
-        depositPaid: trackingData?.deposit?.depositPaid !== undefined ? trackingData.deposit.depositPaid : application?.depositPaid,
-        depositAmount: trackingData?.deposit?.depositAmount !== undefined ? trackingData.deposit.depositAmount : application?.depositAmount,
-        depositNotes: trackingData?.deposit?.depositNotes !== undefined ? trackingData.deposit.depositNotes : application?.depositNotes
-      },
-      invoice: {
-        isInvoiceEligible: trackingData?.invoice?.isInvoiceEligible !== undefined ? trackingData.invoice.isInvoiceEligible : application?.isInvoiceEligible,
-        isInvoiced: trackingData?.invoice?.isInvoiced !== undefined ? trackingData.invoice.isInvoiced : application?.isInvoiced,
-        invoiceId: trackingData?.invoice?.invoiceId || application?.invoiceId
-      }
-    };
-  }, [trackingData, application]);
-
-  // The checks that together make an application commission eligible (mirrors the backend rule)
-  const eligibilityChecks = [
-    { label: 'Admission confirmed', passed: Boolean(tracking.admission.admissionDate), pending: 'Waiting for admission' },
-    { label: 'Tuition deposit verified', passed: tracking.deposit.depositStatus === 'Verified', pending: DEPOSIT_LABELS[tracking.deposit.depositStatus] || 'Required' },
-    { label: 'Student enrolled', passed: application?.status === 'Enrolled' && Boolean(tracking.enrollment.enrollmentDate), pending: 'Not enrolled yet' },
-    { label: 'Student documents verified', passed: application?.student?.verificationStatus === 'Verified', pending: application?.student?.verificationStatus || 'Pending' }
-  ];
-
-  // Enrollment is blocked until the tuition deposit is verified
-  const depositVerified = tracking.deposit.depositStatus === 'Verified';
-  const openEnrollment = () => {
-    if (!depositVerified) {
-      toast.error('Verify the tuition deposit before enrolling the student', {
-        description: 'Enrollment is blocked until the deposit status is Verified.'
-      });
-      setDepositModalOpen(true);
-      return;
-    }
-    setEnrollmentModalOpen(true);
-  };
-
-  // Progress Stepper Status Calculation
-  const milestoneStatuses = useMemo(() => {
-    const st = application?.status;
-    const res = {};
-
-    // 1. Application: Draft -> Active, else Completed
-    if (st === 'Draft') res.application = 'active';
-    else res.application = 'completed';
-
-    // 2. Review: Submitted or UnderReview
-    if (st === 'Submitted' || st === 'UnderReview') res.review = 'active';
-    else if (['VisitScheduled', 'VisitCompleted', 'OfferReceived', 'ConditionalOffer', 'AdmissionConfirmed', 'Enrolled'].includes(st)) res.review = 'completed';
-    else res.review = 'pending';
-
-    // 3. Visit: VisitScheduled / VisitCompleted
-    if (st === 'VisitScheduled') res.visit = 'active';
-    else if (st === 'VisitCompleted' || tracking.visit.visitCompleted) res.visit = 'completed';
-    else if (['OfferReceived', 'ConditionalOffer', 'AdmissionConfirmed', 'Enrolled'].includes(st)) res.visit = tracking.visit.visitDate ? 'completed' : 'skipped';
-    else res.visit = 'pending';
-
-    // 4. Offer: OfferReceived / ConditionalOffer
-    if (st === 'OfferReceived' || st === 'ConditionalOffer') res.offer = 'active';
-    else if (['AdmissionConfirmed', 'Enrolled'].includes(st)) res.offer = 'completed';
-    else res.offer = 'pending';
-
-    // 5. Admission: AdmissionConfirmed
-    if (st === 'AdmissionConfirmed') res.admission = 'active';
-    else if (st === 'Enrolled') res.admission = 'completed';
-    else res.admission = 'pending';
-
-    // 6. Enrollment: Enrolled
-    if (st === 'Enrolled') res.enrollment = 'completed';
-    else res.enrollment = 'pending';
-
-    return res;
-  }, [application?.status, tracking.visit]);
 
   // Back destination
   const backRoute = isAdmin() ? '/admin/applications' : '/agent/applications';
@@ -437,7 +274,7 @@ const ApplicationDetailsPage = () => {
     );
   }
 
-  const isTerminal = ['Enrolled', 'Rejected', 'Withdrawn'].includes(application.status);
+  const isTerminal = ['Rejected', 'Withdrawn'].includes(application.status);
 
   return (
     <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="application-details-page">
@@ -481,17 +318,6 @@ const ApplicationDetailsPage = () => {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Deposit Quick Action */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setDepositModalOpen(true)}
-            className="h-9 px-3 border-[#E5E7EB] bg-white hover:bg-gray-50 text-xs font-semibold text-[#111827]"
-          >
-            <CreditCard className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
-            {`Deposit: ${DEPOSIT_LABELS[tracking.deposit.depositStatus] || 'Required'}`}
-          </Button>
-
           {/* Edit (allowed for draft or admin) */}
           {(isAdmin() || application.status === 'Draft') && (
             <Button
@@ -518,31 +344,25 @@ const ApplicationDetailsPage = () => {
         </div>
       </div>
 
-      {/* Current Lifecycle Status & Action Bar Card */}
-      <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
-        <div className="h-1 bg-[#042C53]" />
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            {/* Status Information */}
+      {/* One track for the whole journey: QStudy's application review, then the visa pipeline */}
+      <VisaPipelinePanel application={application} onChange={fetchAllApplicationData}>
+        <div className="space-y-3" data-testid="application-review-row">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block">
-                Current Lifecycle State
+                Application review
               </span>
               <div className="flex items-center gap-2.5">
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${getStatusBadgeStyle(application.status)}`}>
                   <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5" />
                   {APPLICATION_STATUS_LABELS[application.status] || application.status}
                 </span>
-
                 {isTerminal && (
-                  <span className="text-xs text-[#6B7280]">
-                    (Terminal State — No further transitions)
-                  </span>
+                  <span className="text-xs text-[#6B7280]">(No further changes)</span>
                 )}
               </div>
             </div>
 
-            {/* Allowed Next Transitions */}
             {!isTerminal && allowedNextTransitions.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 {allowedNextTransitions.map((nextSt) => {
@@ -566,489 +386,23 @@ const ApplicationDetailsPage = () => {
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Admission Milestone Journey Stepper */}
-      <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
-        <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
-            <Clock className="w-4 h-4 text-[#042C53]" />
-            Admission Milestone Journey
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {ADMISSION_MILESTONES.map((step, idx) => {
-              const state = milestoneStatuses[step.id] || 'pending';
-              const isCompleted = state === 'completed';
-              const isActive = state === 'active';
-              const isSkipped = state === 'skipped';
-
-              return (
-                <div
-                  key={step.id}
-                  className={`p-3 rounded-xl border transition-all ${
-                    isActive
-                      ? 'border-[#042C53] bg-[#E6F1FB]/40'
-                      : isCompleted
-                      ? 'border-emerald-200 bg-[#EAF3DE]/40'
-                      : isSkipped
-                      ? 'border-[#E5E7EB] bg-gray-50 opacity-60'
-                      : 'border-[#E5E7EB] bg-[#F9FAFB]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                        isActive
-                          ? 'bg-[#042C53] text-white'
-                          : isCompleted
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-gray-200 text-[#4B5563]'
-                      }`}
-                    >
-                      {isCompleted ? <Check className="w-3.5 h-3.5" /> : idx + 1}
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className={`text-[9px] uppercase tracking-wider px-1.5 py-0 ${
-                        isActive
-                          ? 'bg-blue-100 text-[#042C53] border-blue-200 font-bold'
-                          : isCompleted
-                          ? 'bg-emerald-100 text-[#27500A] border-[#C0DD97]'
-                          : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'
-                      }`}
-                    >
-                      {isActive ? 'Active' : isCompleted ? 'Completed' : isSkipped ? 'Skipped' : 'Pending'}
-                    </Badge>
-                  </div>
-                  <div className="mt-2.5">
-                    <span
-                      className={`text-xs font-bold block ${
-                        isActive ? 'text-[#042C53]' : isCompleted ? 'text-[#111827]' : 'text-[#6B7280]'
-                      }`}
-                    >
-                      {step.label}
-                    </span>
-                    <span className="text-[10px] text-[#9CA3AF] block mt-0.5">{step.desc}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Terminal state warning banner */}
           {(application.status === 'Rejected' || application.status === 'Withdrawn') && (
-            <div className="mt-4 p-3.5 bg-red-50/80 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-800">
+            <div className="p-3.5 bg-red-50/80 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-800">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
               <span>
-                <strong>Application Concluded:</strong> This application reached a terminal state with status{' '}
-                <strong>{application.status}</strong>.
+                <strong>Application Concluded:</strong> This application is <strong>{application.status}</strong>.
                 {application.remarks && ` Recorded Reason: "${application.remarks}"`}
               </span>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </VisaPipelinePanel>
 
       {/* Main Details Grid: 2 Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Milestones + Overview + History (Span 2) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Admission Tracking Milestones Section */}
-          <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
-            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
-                  <Clock className="w-4 h-4 text-[#042C53]" /> Admission Tracking Milestones
-                </CardTitle>
-                <CardDescription className="text-xs text-[#6B7280] mt-0.5">
-                  Verified progression of campus visits, university offers, confirmation, and matriculation
-                </CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              {/* 1. Campus Visit Milestone */}
-              <div className="p-4 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#E6F1FB] text-[#042C53] flex items-center justify-center shrink-0">
-                      <MapPin className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-[#111827]">1. University Campus Visit</p>
-                      <p className="text-[11px] text-[#6B7280]">Student and counselor on-site university visit</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      className={`text-[10px] font-bold ${
-                        tracking.visit.visitCompleted
-                          ? 'bg-[#EAF3DE] text-[#27500A] border-[#C0DD97]'
-                          : tracking.visit.visitDate
-                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                          : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'
-                      }`}
-                    >
-                      {tracking.visit.visitCompleted ? 'Completed' : tracking.visit.visitDate ? 'Scheduled' : 'Not Scheduled'}
-                    </Badge>
-                    {/* Contextual Action Button */}
-                    {isAdmin() && application.status === 'VisitScheduled' && (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setVisitModalMode('complete');
-                          setVisitModalOpen(true);
-                        }}
-                        className="text-xs h-7 px-2.5 bg-[#042C53] hover:bg-[#0C447C] text-white font-semibold rounded-lg"
-                      >
-                        Complete Visit
-                      </Button>
-                    )}
-                    {(application.status === 'UnderReview' || application.status === 'VisitCompleted') && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setVisitModalMode('schedule');
-                          setVisitModalOpen(true);
-                        }}
-                        className="text-xs h-7 px-2.5 border-[#E5E7EB] bg-white text-[#111827] hover:bg-gray-50 rounded-lg"
-                      >
-                        Schedule Visit
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-2 border-t border-[#E5E7EB]/60">
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Scheduled Date</span>
-                    <span className="font-semibold text-[#111827] mt-0.5 block">
-                      {tracking.visit.visitDate ? new Date(tracking.visit.visitDate).toLocaleString() : 'Not yet recorded'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Visit Location</span>
-                    <span className="font-semibold text-[#111827] mt-0.5 block">
-                      {tracking.visit.visitLocation || 'Not specified'}
-                    </span>
-                  </div>
-                </div>
-                {tracking.visit.visitNotes && (
-                  <div className="bg-white p-3 rounded-lg border border-[#E5E7EB] text-xs text-[#4B5563]">
-                    <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block mb-1">Visit Notes & Remarks</span>
-                    <p className="italic leading-relaxed">"{tracking.visit.visitNotes}"</p>
-                  </div>
-                )}
-              </div>
-
-              {/* 2. University Offer Milestone */}
-              <div className="p-4 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-                      <Award className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-[#111827]">2. University Offer Letter</p>
-                      <p className="text-[11px] text-[#6B7280]">Official admissions acceptance from partner university</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      className={`text-[10px] font-bold ${
-                        application.status === 'ConditionalOffer'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : tracking.offer.offerDate
-                          ? 'bg-[#EAF3DE] text-[#27500A] border-[#C0DD97]'
-                          : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'
-                      }`}
-                    >
-                      {application.status === 'ConditionalOffer'
-                        ? 'Conditional Offer'
-                        : tracking.offer.offerDate
-                        ? 'Unconditional Offer'
-                        : 'Pending'}
-                    </Badge>
-                    {/* Contextual Action Button */}
-                    {isAdmin() && ['UnderReview', 'VisitCompleted'].includes(application.status) && (
-                      <div className="flex gap-1.5">
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setOfferModalType('unconditional');
-                            setOfferModalOpen(true);
-                          }}
-                          className="text-xs h-7 px-2.5 bg-[#042C53] hover:bg-[#0C447C] text-white font-semibold rounded-lg"
-                        >
-                          Record Offer
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setOfferModalType('conditional');
-                            setOfferModalOpen(true);
-                          }}
-                          className="text-xs h-7 px-2.5 border-[#E5E7EB] bg-white text-[#111827] hover:bg-gray-50 rounded-lg"
-                        >
-                          Conditional
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-2 border-t border-[#E5E7EB]/60">
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Offer Date</span>
-                    <span className="font-semibold text-[#111827] mt-0.5 block">
-                      {tracking.offer.offerDate ? new Date(tracking.offer.offerDate).toLocaleDateString() : 'Not yet recorded'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Official Document</span>
-                    {tracking.offer.offerLetterUrl ? (
-                      <a
-                        href={tracking.offer.offerLetterUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#042C53] hover:underline mt-0.5"
-                      >
-                        <FileText className="w-3.5 h-3.5" /> View Offer Letter <ExternalLink className="w-3 h-3 ml-0.5" />
-                      </a>
-                    ) : (
-                      <span className="text-[#9CA3AF] italic text-xs mt-0.5 block">No document attached</span>
-                    )}
-                  </div>
-                </div>
-                {tracking.offer.offerConditions && (
-                  <div className="bg-white p-3 rounded-lg border border-[#E5E7EB] text-xs text-[#4B5563]">
-                    <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block mb-1">
-                      {application.status === 'ConditionalOffer' ? 'Prerequisites & Conditions' : 'Offer Remarks'}
-                    </span>
-                    <p className="text-[#111827] font-medium leading-relaxed">{tracking.offer.offerConditions}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* 3. Admission Confirmation Milestone */}
-              <div className="p-4 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
-                      <GraduationCap className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-[#111827]">3. Admission Confirmation</p>
-                      <p className="text-[11px] text-[#6B7280]">Candidate offer acceptance & university student ID</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      className={`text-[10px] font-bold ${
-                        tracking.admission.admissionDate
-                          ? 'bg-teal-50 text-teal-800 border-teal-200'
-                          : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'
-                      }`}
-                    >
-                      {tracking.admission.admissionDate ? 'Confirmed' : 'Pending'}
-                    </Badge>
-                    {/* Contextual Action Button */}
-                    {isAdmin() && ['OfferReceived', 'ConditionalOffer'].includes(application.status) && (
-                      <Button
-                        size="sm"
-                        onClick={() => setAdmissionModalOpen(true)}
-                        className="text-xs h-7 px-2.5 bg-teal-700 hover:bg-teal-800 text-white font-semibold rounded-lg"
-                      >
-                        Confirm Admission
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-2 border-t border-[#E5E7EB]/60">
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Confirmation Date</span>
-                    <span className="font-semibold text-[#111827] mt-0.5 block">
-                      {tracking.admission.admissionDate ? new Date(tracking.admission.admissionDate).toLocaleDateString() : 'Not yet confirmed'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">University Student ID</span>
-                    <span className="font-mono font-bold text-[#111827] mt-0.5 block">
-                      {tracking.admission.universityStudentId || 'Not assigned yet'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Admission Letter</span>
-                    {tracking.admission.admissionLetterUrl ? (
-                      <a
-                        href={tracking.admission.admissionLetterUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 hover:underline mt-0.5"
-                      >
-                        <FileText className="w-3.5 h-3.5" /> View Letter <ExternalLink className="w-3 h-3 ml-0.5" />
-                      </a>
-                    ) : (
-                      <span className="text-[#9CA3AF] italic text-xs mt-0.5 block">No document attached</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* 4. Final Enrollment Milestone */}
-              <div className="p-4 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-green-50 text-green-700 flex items-center justify-center shrink-0">
-                      <FileCheck2 className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-[#111827]">4. Final Official Enrollment</p>
-                      <p className="text-[11px] text-[#6B7280]">Student matriculated and verified at university</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      className={`text-[10px] font-bold ${
-                        application.status === 'Enrolled' || tracking.enrollment.enrollmentDate
-                          ? 'bg-green-100 text-green-900 border-green-300'
-                          : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'
-                      }`}
-                    >
-                      {application.status === 'Enrolled' || tracking.enrollment.enrollmentDate ? 'Officially Enrolled' : 'Pending'}
-                    </Badge>
-                    {/* Contextual Action Button */}
-                    {isAdmin() && application.status === 'AdmissionConfirmed' && (
-                      <Button
-                        size="sm"
-                        onClick={openEnrollment}
-                        title={depositVerified ? undefined : 'Verify the tuition deposit first'}
-                        className={`text-xs h-7 px-2.5 text-white font-semibold rounded-lg ${depositVerified ? 'bg-green-700 hover:bg-green-800' : 'bg-gray-400 hover:bg-gray-500'}`}
-                      >
-                        Mark as Enrolled
-                      </Button>
-                    )}
-                    {isAdmin() && application.status === 'AdmissionConfirmed' && !depositVerified && (
-                      <span className="text-[10px] text-amber-700 font-medium">Verify the deposit first</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-2 border-t border-[#E5E7EB]/60">
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Enrollment Date</span>
-                    <span className="font-semibold text-[#111827] mt-0.5 block">
-                      {tracking.enrollment.enrollmentDate ? new Date(tracking.enrollment.enrollmentDate).toLocaleDateString() : 'Not yet enrolled'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Enrollment Proof</span>
-                    {tracking.enrollment.enrollmentProofUrl ? (
-                      <a
-                        href={tracking.enrollment.enrollmentProofUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 hover:underline mt-0.5"
-                      >
-                        <FileText className="w-3.5 h-3.5" /> View Proof <ExternalLink className="w-3 h-3 ml-0.5" />
-                      </a>
-                    ) : (
-                      <span className="text-[#9CA3AF] italic text-xs mt-0.5 block">No document attached</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* 5. Tuition Deposit Tracking Card */}
-              <div className="p-4 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-                      <DollarSign className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-[#111827]">5. Tuition Deposit Tracking</p>
-                      <p className="text-[11px] text-[#6B7280]">Payment status and deposit amount recorded with university</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      className={`text-[10px] font-bold ${
-                        tracking.deposit.depositStatus === 'Verified'
-                          ? 'bg-[#EAF3DE] text-[#27500A] border-[#C0DD97]'
-                          : tracking.deposit.depositStatus === 'Paid'
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : tracking.deposit.depositStatus === 'NotVerified'
-                              ? 'bg-red-50 text-red-800 border-red-200'
-                              : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'
-                      }`}
-                    >
-                      {DEPOSIT_LABELS[tracking.deposit.depositStatus] || 'Required'}
-                    </Badge>
-                    {isAdmin() && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDepositModalOpen(true)}
-                        className="text-xs h-7 px-2.5 border-[#E5E7EB] bg-white text-[#111827] hover:bg-gray-50 rounded-lg"
-                      >
-                        Update Deposit
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-2 border-t border-[#E5E7EB]/60">
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Deposit Status</span>
-                    <span className="font-semibold text-[#111827] mt-0.5 block">
-                      {DEPOSIT_LABELS[tracking.deposit.depositStatus] || 'Required'}
-                    </span>
-                    {tracking.deposit.depositNotes && (
-                      <span className="text-[11px] text-[#6B7280] mt-0.5 block">{tracking.deposit.depositNotes}</span>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider block">Deposit Amount</span>
-                    <span className="font-bold text-emerald-700 mt-0.5 block">
-                      {tracking.deposit.depositAmount !== null && tracking.deposit.depositAmount !== undefined
-                        ? `${Number(tracking.deposit.depositAmount).toLocaleString()} ${application.currency || 'USD'}`
-                        : 'Not recorded'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 6. Commission Eligibility Checklist */}
-              <div className="p-4 rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold text-[#111827]">6. Commission Eligibility</p>
-                    <p className="text-[11px] text-[#6B7280]">Every check must pass before this application can be invoiced. Eligible does not mean paid.</p>
-                  </div>
-                  <Badge className={`text-[10px] font-bold ${tracking.invoice.isInvoiceEligible ? 'bg-[#EAF3DE] text-[#27500A] border-[#C0DD97]' : 'bg-gray-100 text-[#6B7280] border-[#E5E7EB]'}`}>
-                    {tracking.invoice.isInvoiced ? 'Invoiced' : tracking.invoice.isInvoiceEligible ? 'Commission Eligible' : 'Not Eligible Yet'}
-                  </Badge>
-                </div>
-                <div className="space-y-1.5 pt-2 border-t border-[#E5E7EB]/60">
-                  {eligibilityChecks.map((check) => (
-                    <div key={check.label} className="flex items-center justify-between text-xs">
-                      <span className="text-[#374151] font-medium">{check.label}</span>
-                      <span className={`font-semibold ${check.passed ? 'text-emerald-700' : 'text-amber-700'}`}>
-                        {check.passed ? 'Done' : check.pending}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Program Overview */}
           <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
             <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
@@ -1079,12 +433,6 @@ const ApplicationDetailsPage = () => {
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block">Source Event</span>
-                  <span className="text-xs font-medium text-[#4B5563] mt-0.5 block">
-                    {application.sourceEvent ? application.sourceEvent.title : 'Direct Application (No Event)'}
-                  </span>
-                </div>
-                <div>
                   <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block">Invoice Eligibility</span>
                   <div className="flex items-center gap-1.5 mt-1">
                     {application.isInvoiced ? (
@@ -1097,7 +445,7 @@ const ApplicationDetailsPage = () => {
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="text-[#6B7280] text-[10px] border-[#E5E7EB]">
-                        Pending Enrollment
+                        Pending Fees
                       </Badge>
                     )}
                   </div>
@@ -1297,13 +645,13 @@ const ApplicationDetailsPage = () => {
                     <Clock className="w-3 h-3 mr-1" /> In Review
                   </Badge>
                 )
-              ) : application.status === 'Enrolled' && application.isInvoiceEligible ? (
+              ) : application.isInvoiceEligible ? (
                 <Badge className="bg-[#E6F1FB] text-[#042C53] border-blue-200 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
                   Eligible
                 </Badge>
               ) : (
                 <Badge variant="outline" className="text-[10px] text-[#6B7280] border-[#E5E7EB] uppercase tracking-wider px-2 py-0.5 rounded-full">
-                  Pending Enrollment
+                  Pending Fees
                 </Badge>
               )}
             </CardHeader>
@@ -1339,12 +687,12 @@ const ApplicationDetailsPage = () => {
                     </Button>
                   </div>
                 </div>
-              ) : application.status === 'Enrolled' && application.isInvoiceEligible ? (
+              ) : application.isInvoiceEligible ? (
                 <div className="space-y-3">
                   <div className="p-3 bg-[#E6F1FB]/60 border border-blue-200 rounded-xl space-y-1">
                     <span className="font-bold text-[#042C53] block">Ready for Invoicing</span>
                     <p className="text-[11px] text-[#0C447C]">
-                      Student has completed university enrollment. You can now raise the commission invoice for payoff review.
+                      The student reached Visa 100% and the fees are confirmed. You can now raise the commission invoice for payoff review.
                     </p>
                   </div>
                   <Button
@@ -1357,7 +705,7 @@ const ApplicationDetailsPage = () => {
                 </div>
               ) : (
                 <p className="text-[#6B7280] text-[11px] leading-relaxed">
-                  Commission payoffs are unlocked once the applicant completes university admission and reaches official <strong>Enrolled</strong> status.
+                  The commission invoice is unlocked once the student reaches <strong>Visa 100%</strong> and the <strong>fees are confirmed</strong> by QStudy.
                 </p>
               )}
             </CardContent>
@@ -1370,49 +718,6 @@ const ApplicationDetailsPage = () => {
         open={editModalOpen}
         onOpenChange={setEditModalOpen}
         application={application}
-        onSuccess={fetchAllApplicationData}
-      />
-
-      {/* Specialized Phase 5 Modals */}
-      <VisitModal
-        open={visitModalOpen}
-        onOpenChange={setVisitModalOpen}
-        mode={visitModalMode}
-        application={application}
-        existingVisit={tracking.visit}
-        onSuccess={fetchAllApplicationData}
-      />
-
-      <OfferModal
-        open={offerModalOpen}
-        onOpenChange={setOfferModalOpen}
-        type={offerModalType}
-        application={application}
-        existingOffer={tracking.offer}
-        onSuccess={fetchAllApplicationData}
-      />
-
-      <AdmissionModal
-        open={admissionModalOpen}
-        onOpenChange={setAdmissionModalOpen}
-        application={application}
-        existingAdmission={tracking.admission}
-        onSuccess={fetchAllApplicationData}
-      />
-
-      <EnrollmentModal
-        open={enrollmentModalOpen}
-        onOpenChange={setEnrollmentModalOpen}
-        application={application}
-        existingEnrollment={tracking.enrollment}
-        onSuccess={fetchAllApplicationData}
-      />
-
-      <DepositModal
-        open={depositModalOpen}
-        onOpenChange={setDepositModalOpen}
-        application={application}
-        existingDeposit={tracking.deposit}
         onSuccess={fetchAllApplicationData}
       />
 

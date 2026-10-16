@@ -3,34 +3,40 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
-  Calendar,
+  Newspaper,
   GraduationCap,
-  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   FileText,
   LifeBuoy,
+  MessageCircle,
+  UsersRound,
   Settings,
   Building2,
   BookOpen,
   FileCheck,
   CreditCard,
-  ShieldCheck
+  ShieldCheck,
+  ScrollText
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
+import { hasStaffRole } from '../../utils/staffRoles';
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
   const { isAdmin, user } = useAuth();
   const location = useLocation();
 
-  // Sections follow the real workflow: people -> admissions -> events -> money.
+  // Sections follow the real workflow: people -> admissions -> money.
   const adminSections = [
     { title: null, links: [
       { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/admin/news', icon: Newspaper, label: 'News & Updates' },
     ]},
     { title: 'People', links: [
       { to: '/admin/agents', icon: Users, label: 'Agents' },
+      // The team list is for the super admin only
+      ...(user?.role === 'admin' && !user.staffRole ? [{ to: '/admin/team', icon: UsersRound, label: 'Team' }] : []),
       { to: '/admin/students', icon: GraduationCap, label: 'Students' },
       { to: '/admin/verification', icon: ShieldCheck, label: 'Student Verification' },
     ]},
@@ -38,33 +44,36 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       { to: '/admin/universities', icon: Building2, label: 'Universities' },
       { to: '/admin/courses', icon: BookOpen, label: 'Courses' },
       { to: '/admin/applications', icon: FileCheck, label: 'Applications' },
-      { to: '/admin/events', icon: Calendar, label: 'Events' },
     ]},
     { title: 'Finance', links: [
       { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
       { to: '/admin/payoffs', icon: CreditCard, label: 'Payoffs' },
     ]},
     { title: 'Help', links: [
+      { to: '/admin/chat', icon: MessageCircle, label: 'Live Chat' },
       { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
       { to: '/admin/settings', icon: Settings, label: 'Settings' },
+      // The audit log is for the Head of Admission and super admin
+      ...(hasStaffRole(user, 'head_admission') ? [{ to: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' }] : []),
     ]},
   ];
 
   const agentSections = [
     { title: null, links: [
       { to: '/agent/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/agent/news', icon: Newspaper, label: 'News & Updates' },
     ]},
     { title: 'Admissions', links: [
       { to: '/agent/universities', icon: Building2, label: 'Universities' },
       { to: '/agent/students', icon: GraduationCap, label: 'Students' },
       { to: '/agent/applications', icon: FileCheck, label: 'Applications' },
-      { to: '/agent/events-management', icon: CalendarCheck, label: 'Events' },
     ]},
     { title: 'Finance', links: [
       { to: '/agent/invoices', icon: FileText, label: 'Invoices' },
       { to: '/agent/payoffs', icon: CreditCard, label: 'Payoffs' },
     ]},
     { title: 'Help', links: [
+      { to: '/agent/chat', icon: MessageCircle, label: 'Live Chat' },
       { to: '/agent/support', icon: LifeBuoy, label: 'Support' },
       { to: '/agent/settings', icon: Settings, label: 'Settings' },
     ]},
@@ -75,8 +84,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   // Detail pages (e.g. /admin/students/123) keep their parent item highlighted.
   const isLinkActive = (to) => {
     const path = location.pathname;
-    if (path === to || path.startsWith(`${to}/`)) return true;
-    return to === '/agent/events-management' && path.startsWith('/agent/events/');
+    return path === to || path.startsWith(`${to}/`);
   };
 
   return (

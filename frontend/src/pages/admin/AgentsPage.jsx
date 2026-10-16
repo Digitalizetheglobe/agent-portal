@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
+  Send,
   Search,
   Edit2,
   Trash2,
@@ -30,7 +31,6 @@ import {
   Clock,
   Building2,
   Hash,
-  Percent
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Button } from '../../components/ui/button';
@@ -62,6 +62,12 @@ import {
   AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import AgentModal from '../../components/modals/AgentModal';
+import InviteAgentDialog from '../../components/modals/InviteAgentDialog';
+import AgentApplicationDetails from '../../components/agent/AgentApplicationDetails';
+import AgentReviewDialog from '../../components/modals/AgentReviewDialog';
+import ReviewActionButtons from '../../components/agent/ReviewActionButtons';
+import { getOnboardingStatus, HISTORY_LABELS, IN_REVIEW_STATUSES } from '../../utils/onboarding';
+import { hasFeesPaid, isBeyondApplication } from '../../utils/studentProgress';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
@@ -98,9 +104,7 @@ const AgentsPage = () => {
     deleteAgent,
     getStats,
     students,
-    events,
     invoices,
-    verifyAgent,
     viewAgentDocument,
     updateAgent,
     fetchAgents
@@ -109,6 +113,8 @@ const AgentsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentFilter, setCurrentFilter] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState({ agent: null, action: null });
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [viewMode, setViewMode] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -144,10 +150,10 @@ const AgentsPage = () => {
     return agents.map(agent => {
       const agentStudents = students.filter(s => s.agentId === agent.id);
       const registrations = agentStudents.length;
-      const confirmed = agentStudents.filter(s => s.status === 'Confirmed' || s.status === 'Attended' || s.status === 'Converted').length;
-      const converted = agentStudents.filter(s => s.status === 'Converted').length;
+      // In the visa process or beyond, and with the fees paid
+      const confirmed = agentStudents.filter(isBeyondApplication).length;
+      const converted = agentStudents.filter(hasFeesPaid).length;
       const convRate = registrations > 0 ? ((converted / registrations) * 100).toFixed(1) : '0.0';
-      const assignedEvents = events.filter(e => e.assignedAgents?.includes(agent.id)).length;
       const totalCommission = invoices
         .filter(inv => inv.agentId === agent.id && inv.status === 'paid')
         .reduce((sum, inv) => sum + (inv.amount || 0), 0);
@@ -158,16 +164,10 @@ const AgentsPage = () => {
         confirmed,
         converted,
         convRate: convRate + '%',
-        assignedEvents,
         totalCommission: `₹${(totalCommission / 1000).toFixed(1)}k`
       };
     });
-  }, [agents, students, events, invoices]);
-
-  const drawerEvents = useMemo(() => {
-    if (!agentInDrawer) return [];
-    return events.filter(e => e.assignedAgents?.includes(agentInDrawer.id));
-  }, [agentInDrawer, events]);
+  }, [agents, students, invoices]);
 
   const drawerStudents = useMemo(() => {
     if (!agentInDrawer) return [];
@@ -213,7 +213,7 @@ const AgentsPage = () => {
   );
 
   const pendingVerificationAgents = useMemo(() => {
-    return processedAgents.filter(agent => !agent.isVerified && agent.verificationStatus !== 'rejected');
+    return processedAgents.filter(agent => IN_REVIEW_STATUSES.includes(agent.onboardingStatus));
   }, [processedAgents]);
 
   // The agent list is loaded once at login, so refresh it when this page opens and when the
@@ -265,14 +265,7 @@ const AgentsPage = () => {
     setAgentToDelete(null);
   };
 
-  const handleApprove = async (agentId) => {
-    try {
-      await verifyAgent(agentId, { isVerified: true, verificationStatus: 'approved' });
-      toast.success('Agent verified successfully');
-    } catch (error) {
-      console.error('Failed to verify agent', error);
-    }
-  };
+  const openReview = (agent, action) => setReviewTarget({ agent, action });
 
   const handleDeactivate = async (agent) => {
     try {
@@ -292,27 +285,12 @@ const AgentsPage = () => {
     });
   };
 
-  const handleAssignEvents = (agent) => {
-    setSelectedAgent(agent);
-    setViewMode(false);
-    setModalOpen(true);
-    setDrawerOpen(false);
+  const handleAgentDetails = (agent) => {
+    navigate(`/admin/agents/${agent.id}`);
   };
 
   const handlePerformanceReport = (agent) => {
     navigate(`/admin/agents/${agent.id}/report`);
-  };
-
-  const handleReject = async (agentId) => {
-    const reason = prompt('Please enter a reason for rejection:');
-    if (reason) {
-      try {
-        await verifyAgent(agentId, { isVerified: false, verificationStatus: 'rejected', remarks: reason });
-        toast.success('Agent verification rejected');
-      } catch (error) {
-        console.error('Failed to reject agent', error);
-      }
-    }
   };
 
   return (
@@ -331,6 +309,12 @@ const AgentsPage = () => {
           >
             <Download size={14} className="mr-2" /> Export
           </Button>
+          <Button onClick={() => setInviteOpen(true)} variant="outline" size="sm"
+            className="text-xs font-semibold h-10 px-4 border-slate-200 hover:bg-slate-50 transition-all hover:text-[#042C53] gap-2"
+            data-testid="invite-agent-btn"
+          >
+            <Send size={14} /> Send Invite Link
+          </Button>
           <Button onClick={handleCreate} size="sm"
             className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-lg shadow-[#042C53]/10 transition-all active:scale-95 gap-2"
           >  <Plus className="w-4 h-4" />  Onboard Agent
@@ -343,9 +327,9 @@ const AgentsPage = () => {
         {[
           { label: 'Total agents', val: agents.length, sub: `${agents.filter(a => a.status === 'active').length} active`, subColor: 'text-[#27500A]' },
           { label: 'Pending verification', val: agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length, sub: 'Needs review', subColor: 'text-[#633806]' },
-          { label: 'Avg conversion rate', val: stats.conversionRate + '%', sub: '+2.1% vs last month', subColor: 'text-[#27500A]' },
+          { label: 'Students with fees paid', val: stats.conversionRate + '%', sub: 'Of all registered students', subColor: 'text-[#27500A]' },
           // { label: 'Total commissions', val: `₹${(invoices.reduce((s, i) => s + (i.amount || 0), 0) / 100000).toFixed(1)}L`, sub: `₹${(invoices.filter(i => i.status === 'pending').reduce((s, i) => s + (i.amount || 0), 0) / 1000).toFixed(0)}K pending`, subColor: 'text-[#633806]' },
-          { label: 'Total students', val: students.length, sub: `${students.filter(s => s.status === 'Converted').length} conversions`, subColor: 'text-[#27500A]' },
+          { label: 'Total students', val: students.length, sub: `${students.filter(s => s.feesPaid).length} with fees paid`, subColor: 'text-[#27500A]' },
         ].map((kpi, i) => (
           <Card key={i} className="border-[#E5E7EB] bg-white shadow-none">
             <CardContent className="p-4">
@@ -361,7 +345,7 @@ const AgentsPage = () => {
       {pendingVerificationAgents.length > 0 && (
         <Card className="border-[#E5E7EB] shadow-none overflow-hidden">
           <div className="bg-[#F9FAFB] border-b border-[#E5E7EB] px-4 py-2">
-            <h3 className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Verification queue · {agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length} new</h3>
+            <h3 className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Awaiting review · {pendingVerificationAgents.length}</h3>
           </div>
           <div className="p-4 flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
             {pendingVerificationAgents.map((agent) => {
@@ -375,10 +359,10 @@ const AgentsPage = () => {
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <h4 className="text-sm font-semibold text-[#111827]">{agent.name}</h4>
-                        <Badge className="bg-[#FAEEDA] text-[#633806] border-none text-[10px] h-5">Pending</Badge>
+                        <Badge className={cn('border-none text-[10px] h-5', getOnboardingStatus(agent).style)}>{getOnboardingStatus(agent).label}</Badge>
                       </div>
                       <p className="text-[11px] text-[#6B7280] mt-0.5">
-                        {agent.agencyName || 'Independent'} · {agent.region || 'Region Unknown'} · Submitted {new Date(agent.createdAt).toLocaleDateString()}
+                        {agent.agencyName || 'Independent'} · {agent.region || 'Region Unknown'} · Submitted {new Date(agent.onboardingSubmittedAt || agent.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
@@ -400,28 +384,17 @@ const AgentsPage = () => {
                     )}
                   </div>
 
-                  <div className="flex gap-2 mt-4">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-[11px] font-medium bg-[#EAF3DE] text-[#27500A] border-[#C0DD97] hover:bg-[#C0DD97]"
-                      onClick={() => handleApprove(agent.id)}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-[11px] font-medium bg-[#FCEBEB] text-[#791F1F] border-[#F7C1C1] hover:bg-[#F7C1C1]"
-                      onClick={() => handleReject(agent.id)}
-                    >
-                      Reject
-                    </Button>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <ReviewActionButtons
+                      agent={agent}
+                      onOpenDialog={(action) => openReview(agent, action)}
+                      buttonClassName="h-8 text-[11px] font-medium"
+                    />
                     <Button
                       size="sm"
                       variant="outline"
                       className="h-8 text-[11px] font-medium border-[#E5E7EB] inline-flex items-center"
-                      onClick={() => handlePerformanceReport(agent)}
+                      onClick={() => handleAgentDetails(agent)}
                     >
                       View Details <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
                     </Button>
@@ -500,18 +473,16 @@ const AgentsPage = () => {
                   <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 pl-6 w-[26%]">Agent</TableHead>
                   <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Status</TableHead>
                   <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Registrations</TableHead>
-                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Confirmed</TableHead>
-                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Converted</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">In visa process</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Fees paid</TableHead>
                   <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Conv. Rate</TableHead>
-                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Events</TableHead>
-                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Commission</TableHead>
                   <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3  text-center w-[8%]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAgents.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-20">
+                    <TableCell colSpan={8} className="text-center py-20">
                       <div className="flex flex-col items-center gap-3">
                         <Users className="w-10 h-10 text-gray-200" />
                         <p className="text-sm text-[#6B7280] font-medium">No agents found matching your criteria.</p>
@@ -550,10 +521,6 @@ const AgentsPage = () => {
                         <TableCell className="py-3 text-center text-[13px] text-[#111827]">{agent.confirmed}</TableCell>
                         <TableCell className="py-3 text-center text-[13px] text-[#111827]">{agent.converted}</TableCell>
                         <TableCell className={cn("py-3 text-center text-[13px] font-medium", rateColor)}>{agent.convRate}</TableCell>
-                        <TableCell className="py-3 text-center text-[13px] text-[#6B7280]">{agent.assignedEvents} events</TableCell>
-                        <TableCell className="py-3 text-center text-[13px] font-medium text-[#111827]">
-                          {agent.commissionRate ? `${agent.commissionRate}%` : <span className="text-[#9CA3AF] font-normal">Not set</span>}
-                        </TableCell>
                         <TableCell className="py-3 pr-6 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
@@ -656,16 +623,8 @@ const AgentsPage = () => {
                         <p className={cn("text-sm font-bold", rateColor)}>{agent.convRate}</p>
                       </div>
                       <div className="space-y-0.5">
-                        <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Commission</p>
-                        <p className="text-sm font-semibold text-[#111827]">{agent.commissionRate ? `${agent.commissionRate}%` : 'Not set'}</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Converted</p>
+                        <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Fees paid</p>
                         <p className="text-sm font-semibold text-[#111827]">{agent.converted}</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-[10px] text-[#9CA3AF] uppercase font-medium">Events</p>
-                        <p className="text-sm font-semibold text-[#6B7280]">{agent.assignedEvents}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -733,21 +692,17 @@ const AgentsPage = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {agentInDrawer.verificationStatus === 'approved' || agentInDrawer.isVerified ? (
-                      <Badge className="bg-[#EAF3DE] text-[#27500A] h-6 hover:bg-[#27500A] hover:text-white transition-colors">Approve</Badge>
-                    ) : agentInDrawer.verificationStatus === 'rejected' ? (
-                      <Badge className="bg-[#FCEBEB] text-[#791F1F] h-6 hover:bg-[#791F1F] hover:text-white transition-colors">Rejected</Badge>
-                    ) : (
-                      <Badge className="bg-[#FAEEDA] text-[#633806] h-6 hover:bg-[#633806] hover:text-white transition-colors">Pending</Badge>
-                    )}
+                    <Badge className={cn('h-6 border-none', getOnboardingStatus(agentInDrawer).style)}>
+                      {getOnboardingStatus(agentInDrawer).label}
+                    </Badge>
                     <Button variant="ghost" size="icon" onClick={() => setDrawerOpen(false)} className="h-8 w-8">
                       <X className="w-5 h-5" />
                     </Button>
                   </div>
                 </div>
-                {agentInDrawer.verificationStatus === 'rejected' && agentInDrawer.verificationRemarks && (
-                  <div className="text-sm bg-red-50 border border-red-100 text-red-800 p-3 rounded-lg">
-                    <span className="font-semibold">Reason for rejection: </span>
+                {['rejected', 'correction_required'].includes(agentInDrawer.onboardingStatus) && agentInDrawer.verificationRemarks && (
+                  <div className={cn('text-sm border p-3 rounded-lg', agentInDrawer.onboardingStatus === 'rejected' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-orange-50 border-orange-100 text-orange-900')}>
+                    <span className="font-semibold">{agentInDrawer.onboardingStatus === 'rejected' ? 'Reason for rejection: ' : 'Changes requested: '}</span>
                     {agentInDrawer.verificationRemarks}
                   </div>
                 )}
@@ -758,11 +713,9 @@ const AgentsPage = () => {
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { label: 'Registrations', val: agentInDrawer.registrations },
-                    { label: 'Confirmed', val: agentInDrawer.confirmed },
-                    { label: 'Converted', val: agentInDrawer.converted },
-                    { label: 'Conv. rate', val: agentInDrawer.convRate },
-                    { label: 'Events assigned', val: agentInDrawer.assignedEvents },
-                    { label: 'Commission rate', val: agentInDrawer.commissionRate != null ? `${agentInDrawer.commissionRate}%` : 'Not set' },
+                    { label: 'In visa process', val: agentInDrawer.confirmed },
+                    { label: 'Fees paid', val: agentInDrawer.converted },
+                    { label: 'Fees paid rate', val: agentInDrawer.convRate },
                   ].map((st, i) => (
                     <div key={i} className="bg-white rounded-lg p-3 border border-[#E5E7EB]">
                       <p className="text-lg font-semibold text-[#111827] leading-tight">{st.val}</p>
@@ -808,23 +761,29 @@ const AgentsPage = () => {
                   <DrawerField icon={Building2} label="Agency name" value={agentInDrawer.agencyName} />
                   <DrawerField icon={Hash} label="Registration #" value={agentInDrawer.businessRegistrationNumber} />
                   <DrawerField icon={Globe} label="Region" value={agentInDrawer.region} />
-                  <DrawerField icon={Percent} label="Commission rate" value={agentInDrawer.commissionRate != null ? `${agentInDrawer.commissionRate}%` : null} />
+                  <DrawerField icon={User} label="Account manager" value={agentInDrawer.accountManager?.name || 'Unassigned'} />
                   <DrawerField icon={MapPin} label="Address" value={agentInDrawer.fullAddress} wide />
                 </DrawerSection>
 
-                {/* Assigned events */}
-                <DrawerSection title={`Assigned events (${drawerEvents.length})`} icon={Calendar} block>
-                  {drawerEvents.length === 0 ? (
-                    <p className="text-xs text-[#6B7280] py-2">No events assigned yet.</p>
+                {/* Full application form */}
+                <AgentApplicationDetails agent={agentInDrawer} />
+
+                {/* Onboarding review trail */}
+                <DrawerSection title="Onboarding review" icon={ShieldCheck} block>
+                  {(agentInDrawer.onboardingHistory || []).length === 0 ? (
+                    <p className="text-xs text-[#6B7280] py-2">Not submitted yet.</p>
                   ) : (
-                    <div className="divide-y divide-[#F3F4F6]">
-                      {drawerEvents.map(ev => (
-                        <div key={ev.id} className="flex items-center justify-between py-2 gap-3">
-                          <p className="text-sm text-[#111827] truncate">{ev.title}</p>
-                          <span className="text-[11px] text-[#6B7280] whitespace-nowrap">{formatDate(ev.date)}</span>
-                        </div>
+                    <ol className="divide-y divide-[#F3F4F6]">
+                      {[...agentInDrawer.onboardingHistory].reverse().map((h, i) => (
+                        <li key={i} className="py-2.5 text-sm">
+                          <p className="font-medium text-[#111827]">{HISTORY_LABELS[h.action] || h.action}</p>
+                          <p className="text-xs text-[#6B7280]">
+                            {h.byName || 'Unknown'} · {new Date(h.at).toLocaleString()}
+                          </p>
+                          {h.remarks && <p className="text-xs text-[#4B5563] mt-1">"{h.remarks}"</p>}
+                        </li>
                       ))}
-                    </div>
+                    </ol>
                   )}
                 </DrawerSection>
 
@@ -885,40 +844,25 @@ const AgentsPage = () => {
 
               <div className="p-6 border-t border-[#E5E7EB] bg-white mt-auto">
                 <div className="flex flex-col gap-2">
-                  <div className="flex gap-2 pb-3 border-b border-[#E5E7EB] mb-1">
-                    {(agentInDrawer.verificationStatus === 'pending' || agentInDrawer.verificationStatus === 'rejected') && (
-                      <Button
-                        className="flex-1 bg-[#27500A] hover:bg-[#1f3b08] text-white text-xs h-10"
-                        onClick={() => { handleApprove(agentInDrawer.id); setDrawerOpen(false); }}
-                      >
-                        <ShieldCheck className="w-4 h-4 mr-2" />
-                        Approve Agent
-                      </Button>
-                    )}
-                    {(agentInDrawer.verificationStatus === 'pending' || agentInDrawer.verificationStatus === 'approved' || agentInDrawer.isVerified) && (
-                      <Button
-                        variant="outline"
-                        className="flex-1 hover:text-red-600 border-red-200 text-red-700 hover:bg-red-50 text-xs h-10"
-                        onClick={() => { handleReject(agentInDrawer.id); setDrawerOpen(false); }}
-                      >
-                        <ShieldAlert className="w-4 h-4 mr-2" />
-                        Reject Agent
-                      </Button>
-                    )}
-                  </div>
+                  <ReviewActionButtons
+                    agent={agentInDrawer}
+                    onOpenDialog={(action) => openReview(agentInDrawer, action)}
+                    className="pb-3 border-b border-[#E5E7EB] mb-1"
+                    buttonClassName="flex-1 text-xs h-10"
+                  />
                   <div className="flex gap-2">
                     <Button
                       className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-xs h-10"
-                      onClick={() => handlePerformanceReport(agentInDrawer)}
+                      onClick={() => handleAgentDetails(agentInDrawer)}
                     >
-                      Full performance report
+                      Full details
                     </Button>
                     <Button
                       variant="outline"
                       className="flex-1 border-[#E5E7EB] text-xs h-10"
-                      onClick={() => handleAssignEvents(agentInDrawer)}
+                      onClick={() => handlePerformanceReport(agentInDrawer)}
                     >
-                      Assign events
+                      Performance report
                     </Button>
                   </div>
                   <div className="flex gap-2">
@@ -945,6 +889,12 @@ const AgentsPage = () => {
       )}
 
       {/* Modals & Dialogs */}
+      <InviteAgentDialog open={inviteOpen} onOpenChange={setInviteOpen} />
+      <AgentReviewDialog
+        agent={reviewTarget.agent}
+        action={reviewTarget.action}
+        onClose={() => setReviewTarget({ agent: null, action: null })}
+      />
       <AgentModal
         open={modalOpen}
         onOpenChange={setModalOpen}
@@ -958,7 +908,7 @@ const AgentsPage = () => {
             <AlertDialogTitle className="font-['Outfit'] text-xl">Delete Agent</AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
               Are you sure you want to delete <strong>{agentToDelete?.name}</strong>?
-              This action cannot be undone and will remove them from all assigned events.
+              This action cannot be undone and will permanently remove their account.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

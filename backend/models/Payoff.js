@@ -80,6 +80,63 @@ const Payoff = sequelize.define('Payoff', {
   batchReference: {
     type: DataTypes.STRING(100),
     allowNull: true
+  },
+
+  // ── University paid QStudy ──
+  // The agent is paid only after the university has paid QStudy. Accounts or the Head of Admission
+  // record that payment; until then settlement is blocked (see bypass below). The currency of the
+  // payment is the payoff's own currency (USD stays USD, RM stays RM).
+  universityPaidAmount: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: true
+  },
+  universityPaidAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  universityPaymentReference: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  universityPaymentNotes: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  universityPaymentRecordedBy: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
+  universityPaymentRecordedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+
+  // Exception: the Head of Admission (or super admin) lets the agent be paid before the university
+  // has paid, with a note. Accounts can then settle.
+  blockBypassedBy: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
+  blockBypassedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  blockBypassNote: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+
+  // Payment slip uploaded by Accounts when the payment to the agent is marked cleared
+  // { id, fileUrl, fileName, contentType, uploadedAt, uploadedBy }
+  paymentSlip: {
+    type: DataTypes.JSONB,
+    allowNull: true
+  },
+  // Audit trail: { action, by, byName, at, notes }
+  history: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+    defaultValue: []
   }
 }, {
   timestamps: true,
@@ -114,6 +171,13 @@ Payoff.prototype.toJSON = function() {
   values.grossCommission = parseFloat(values.grossCommission) || 0;
   values.deductions = parseFloat(values.deductions) || 0;
   values.netAmount = parseFloat(values.netAmount) || 0;
+  if (values.universityPaidAmount !== null && values.universityPaidAmount !== undefined) {
+    values.universityPaidAmount = parseFloat(values.universityPaidAmount);
+  }
+  // Convenience flags for the screens
+  values.universityPaid = Boolean(values.universityPaidAt);
+  values.blockBypassed = Boolean(values.blockBypassedAt);
+  values.paymentBlocked = values.status === 'PENDING' && !values.universityPaid && !values.blockBypassed;
   return values;
 };
 

@@ -24,7 +24,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import ComplianceStatus from '../../components/agent/ComplianceStatus';
+import PipelineSummary from '../../components/application/PipelineSummary';
 import { formatCurrency } from '../../utils/financialFormatters';
+import { getFunnelLabel } from '../../utils/studentProgress';
 import { ChartCard, TrendChart, DonutChart, HBarChart, bucketByMonth, countBy, prettyStatus } from '../../components/dashboard/DashboardCharts';
 
 const AgentDashboard = () => {
@@ -113,7 +115,7 @@ const AgentDashboard = () => {
     {
       title: 'Total Students',
       value: totalStudents,
-      subtitle: `${myStudents.filter(s => s.status === 'Converted').length} converted`,
+      subtitle: `${myStudents.filter(s => s.feesPaid).length} with fees paid`,
       icon: GraduationCap,
       color: '#185FA5',
       bgColor: '#E6F1FB',
@@ -161,9 +163,9 @@ const AgentDashboard = () => {
   // ── Chart data ──
   const registrationTrend = bucketByMonth(
     myStudents, s => s.createdAt,
-    [{ key: 'registered' }, { key: 'converted', filter: s => s.status === 'Converted' }]
+    [{ key: 'registered' }, { key: 'converted', filter: s => s.feesPaid }]
   );
-  const studentStatusData = countBy(myStudents, s => s.status || 'New');
+  const studentStatusData = countBy(myStudents, s => getFunnelLabel(s));
   const applicationStatusData = countBy(myApplications, a => prettyStatus(a.status));
   const earningsTrend = bucketByMonth(
     myPayoffs, p => p.settledAt || p.updatedAt || p.createdAt,
@@ -234,10 +236,9 @@ const AgentDashboard = () => {
   // ── Helpers ──
   const getApplicationStatusStyle = (status) => {
     const s = status?.toLowerCase() || '';
-    if (s.includes('admit') || s === 'completed' || s === 'enrolled') return 'bg-[#DCFCE7] text-[#166534]';
+    if (s === 'completed') return 'bg-[#DCFCE7] text-[#166534]';
     if (s.includes('review') || s === 'processing' || s === 'submitted') return 'bg-[#E6F1FB] text-[#0C447C]';
     if (s.includes('reject') || s === 'cancelled') return 'bg-[#FCEBEB] text-[#791F1F]';
-    if (s.includes('deposit') || s.includes('offer') || s === 'conditional_offer') return 'bg-[#FFF7ED] text-[#B45309]';
     if (s.includes('correction') || s.includes('action') || s.includes('document')) return 'bg-[#FEF3C7] text-[#92400E]';
     return 'bg-[#F3F4F6] text-[#374151]';
   };
@@ -280,6 +281,9 @@ const AgentDashboard = () => {
 
       {/* Compliance Warning */}
       <ComplianceStatus />
+
+      {/* Visa progress for your students */}
+      <PipelineSummary applications={myApplications} to="/agent/applications" />
 
       {/* KPI Cards — 5 cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -378,13 +382,13 @@ const AgentDashboard = () => {
 
       {/* ═══ CHARTS ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ChartCard className="lg:col-span-2" title="My student registrations" hint="Students you registered and how many converted, last 6 months">
+        <ChartCard className="lg:col-span-2" title="My student registrations" hint="Students you registered and how many have their fees paid, last 6 months">
           <TrendChart data={registrationTrend} series={[
             { key: 'registered', name: 'Registered', color: '#042C53' },
-            { key: 'converted', name: 'Converted', color: '#10B981' },
+            { key: 'converted', name: 'Fees paid', color: '#10B981' },
           ]} />
         </ChartCard>
-        <ChartCard title="My students by status" hint="Where your students are right now">
+        <ChartCard title="My students by progress" hint="Where your students are in the visa process">
           <DonutChart data={studentStatusData} />
         </ChartCard>
       </div>

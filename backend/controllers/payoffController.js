@@ -45,7 +45,7 @@ exports.getPayoff = async (req, res) => {
 // @access  Private (Admin only)
 exports.settlePayoff = async (req, res) => {
   try {
-    const payoff = await payoffService.settlePayoff(req.params.id, req.body, req.user);
+    const payoff = await payoffService.settlePayoff(req.params.id, req.body, req.user, req.file);
     res.status(200).json({
       success: true,
       detail: 'Payoff settled successfully',
@@ -53,6 +53,57 @@ exports.settlePayoff = async (req, res) => {
     });
   } catch (error) {
     console.error('Settle payoff error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Record that the university paid QStudy (unlocks paying the agent)
+// @route   PATCH /api/payoffs/:id/university-payment
+// @access  Private (Accounts, Head of Admission, super admin)
+exports.recordUniversityPayment = async (req, res) => {
+  try {
+    const payoff = await payoffService.recordUniversityPayment(req.params.id, req.body, req.user);
+    res.status(200).json(payoff);
+  } catch (error) {
+    console.error('Record university payment error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Allow the agent to be paid before the university has paid (needs a note)
+// @route   PATCH /api/payoffs/:id/bypass-block
+// @access  Private (Head of Admission, super admin)
+exports.authorizeBypass = async (req, res) => {
+  try {
+    const payoff = await payoffService.authorizeBypass(req.params.id, req.body, req.user);
+    res.status(200).json(payoff);
+  } catch (error) {
+    console.error('Authorize bypass error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};
+
+// @desc    Download the payment slip
+// @route   GET /api/payoffs/:id/slip
+// @access  Private (the agent who owns the payoff, staff)
+exports.downloadSlip = async (req, res) => {
+  try {
+    const { data, contentType, fileName } = await payoffService.getSlipFile(req.params.id, req.user);
+    res.setHeader('Content-Type', contentType);
+    const disposition = req.query.inline === 'true' ? 'inline' : 'attachment';
+    res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
+    res.send(Buffer.from(data));
+  } catch (error) {
+    console.error('Download payment slip error:', error);
     res.status(error.statusCode || 500).json({
       success: false,
       detail: error.message || 'Server error'

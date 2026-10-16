@@ -51,6 +51,7 @@ import {
   APPLICATION_STATUS_LIST,
   APPLICATION_STATUS_LABELS
 } from '../../constants/status';
+import { getDisplayStage, getDisplayStageInfo, isPipelineActive } from '../../utils/pipeline';
 import { getStatusBadgeStyle } from '../admin/ApplicationsPage';
 import { toast } from 'sonner';
 
@@ -169,12 +170,12 @@ const AgentApplicationsPage = () => {
   const stats = useMemo(() => {
     return {
       underReview: applications.filter(a =>
-        [APPLICATION_STATUS.UNDER_REVIEW, APPLICATION_STATUS.SUBMITTED, APPLICATION_STATUS.VISIT_SCHEDULED, APPLICATION_STATUS.VISIT_COMPLETED].includes(a.status)
+        [APPLICATION_STATUS.UNDER_REVIEW, APPLICATION_STATUS.SUBMITTED].includes(a.status)
       ).length,
-      offersAndAdmission: applications.filter(a =>
-        [APPLICATION_STATUS.OFFER_RECEIVED, APPLICATION_STATUS.CONDITIONAL_OFFER, APPLICATION_STATUS.ADMISSION_CONFIRMED].includes(a.status)
+      inVisaProcess: applications.filter(a =>
+        isPipelineActive(a) && ['Visa15', 'Visa35', 'Visa70', 'Arrival', 'Registration'].includes(getDisplayStage(a))
       ).length,
-      enrolled: applications.filter(a => a.status === APPLICATION_STATUS.ENROLLED).length
+      feesPaid: applications.filter(a => getDisplayStage(a) === 'FeesPaid').length
     };
   }, [applications]);
 
@@ -193,6 +194,8 @@ const AgentApplicationsPage = () => {
         </div>
         <Button
           onClick={handleOpenAdd}
+          disabled={!user?.isActivated}
+          title={user?.isActivated ? undefined : 'Available once your contract is signed and your E-Certificate is issued'}
           className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-sm gap-2"
         >
           <Plus className="w-4 h-4" /> New Application
@@ -210,22 +213,22 @@ const AgentApplicationsPage = () => {
         </Card>
         <Card className="border-[#E5E7EB] bg-white shadow-none">
           <CardContent className="p-4">
-            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">In Review & Visits</p>
+            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">In Review</p>
             <p className="text-2xl font-semibold text-amber-700 mt-1">{stats.underReview}</p>
             <p className="text-[10px] font-medium text-amber-600 mt-1">Pending admission outcome</p>
           </CardContent>
         </Card>
         <Card className="border-[#E5E7EB] bg-white shadow-none">
           <CardContent className="p-4">
-            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Offers & Admissions</p>
-            <p className="text-2xl font-semibold text-emerald-700 mt-1">{stats.offersAndAdmission}</p>
-            <p className="text-[10px] font-medium text-emerald-600 mt-1">Successful admissions</p>
+            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">In Visa Process</p>
+            <p className="text-2xl font-semibold text-emerald-700 mt-1">{stats.inVisaProcess}</p>
+            <p className="text-[10px] font-medium text-emerald-600 mt-1">Visa 15% to Registration</p>
           </CardContent>
         </Card>
         <Card className="border-[#E5E7EB] bg-white shadow-none">
           <CardContent className="p-4">
-            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Enrolled</p>
-            <p className="text-2xl font-semibold text-[#042C53] mt-1">{stats.enrolled}</p>
+            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Fees Paid</p>
+            <p className="text-2xl font-semibold text-[#042C53] mt-1">{stats.feesPaid}</p>
             <p className="text-[10px] font-medium text-purple-600 mt-1">Ready for commission invoicing</p>
           </CardContent>
         </Card>
@@ -419,6 +422,11 @@ const AgentApplicationsPage = () => {
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadgeStyle(app.status)}`}>
                         {APPLICATION_STATUS_LABELS[app.status] || app.status}
                       </span>
+                      {isPipelineActive(app) && (
+                        <span className={`mt-1 flex w-fit items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${getDisplayStageInfo(app).style}`}>
+                          {getDisplayStageInfo(app).label}
+                        </span>
+                      )}
                     </TableCell>
 
                     {/* Invoice Status */}

@@ -23,13 +23,16 @@ import {
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { agentAPI, formatApiError } from '../../utils/api';
+import { STAFF_ROLE_LABELS } from '../../utils/staffRoles';
+import { applicationStateFromUser, APPLICATION_KEYS } from '../../utils/agentApplication';
+import ApplicationFormFields from '../../components/agent/ApplicationFormFields';
 
 const NAV_ITEMS = [
   { id: 'profile', icon: User, label: 'Profile & Agency', roles: ['admin', 'agent'] },
   { id: 'security', icon: Lock, label: 'Password & Security', roles: ['admin', 'agent'] },
   { id: 'notifications', icon: Bell, label: 'Notifications', roles: ['admin', 'agent'] },
   { id: 'billing', icon: CreditCard, label: 'Payment Details', roles: ['agent'] },
-  { id: 'admins', icon: UserPlus, label: 'Manage Admins', roles: ['admin'] },
+  { id: 'admins', icon: UserPlus, label: 'Manage Admins', roles: ['admin'], superAdminOnly: true },
 ];
 
 const FieldLabel = ({ children }) => (
@@ -61,8 +64,17 @@ export default function SettingsPage() {
     confirm_password: '',
   });
 
+  const [application, setApplication] = useState(() => applicationStateFromUser(user));
+
+  // Only send application fields that have a value; clearing a mandatory field is rejected server-side
+  const buildApplicationPayload = (keys) =>
+    Object.fromEntries(
+      keys.filter(k => application[k] !== '' && application[k] !== null && application[k] !== undefined)
+        .map(k => [k, application[k]])
+    );
+
   const [newAdmin, setNewAdmin] = useState({
-    name: '', email: '', phone: '', password: '', confirmPassword: ''
+    name: '', email: '', phone: '', staffRole: '', password: '', confirmPassword: ''
   });
 
   const [notifPrefs, setNotifPrefs] = useState({
@@ -75,9 +87,22 @@ export default function SettingsPage() {
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const result = await updateProfile(profileData);
+    const bankKeys = ['bankBeneficiaryName', 'bankName', 'bankAccountNumber', 'bankSwiftCode', 'bankAddress'];
+    const payload = user?.role === 'agent'
+      ? { ...profileData, ...buildApplicationPayload(APPLICATION_KEYS.filter(k => !bankKeys.includes(k))) }
+      : profileData;
+    const result = await updateProfile(payload);
     setLoading(false);
     result.success ? toast.success('Profile updated') : toast.error(result.error || 'Update failed');
+  };
+
+  const handleBankUpdate = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const bankKeys = ['bankBeneficiaryName', 'bankName', 'bankAccountNumber', 'bankSwiftCode', 'bankAddress'];
+    const result = await updateProfile(buildApplicationPayload(bankKeys));
+    setLoading(false);
+    result.success ? toast.success('Bank details saved') : toast.error(result.error || 'Update failed');
   };
 
   const handlePasswordUpdate = async (e) => {
@@ -110,9 +135,10 @@ export default function SettingsPage() {
         email: newAdmin.email,
         password: newAdmin.password,
         phone: newAdmin.phone,
+        staffRole: newAdmin.staffRole || undefined,
       });
       toast.success(`Admin account created for ${newAdmin.name}`);
-      setNewAdmin({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+      setNewAdmin({ name: '', email: '', phone: '', staffRole: '', password: '', confirmPassword: '' });
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
@@ -160,7 +186,7 @@ export default function SettingsPage() {
               </span>
             </div>
 
-            {NAV_ITEMS.filter(item => item.roles.includes(user?.role)).map(item => {
+            {NAV_ITEMS.filter(item => item.roles.includes(user?.role) && (!item.superAdminOnly || !user?.staffRole)).map(item => {
               const Icon = item.icon;
               const active = activeTab === item.id;
               return (
@@ -231,38 +257,19 @@ export default function SettingsPage() {
                     <>
                       <Divider />
                       <div className="flex items-center justify-between pt-3 mb-5">
-                        <SectionTitle>Agency Details</SectionTitle>
+                        <SectionTitle>Application Details</SectionTitle>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                          <FieldLabel>Agency Name</FieldLabel>
-                          <input
-                            className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#042C53]/10 focus:border-[#042C53] transition-all"
-                            value={profileData.agencyName}
-                            onChange={e => setProfileData({ ...profileData, agencyName: e.target.value })}
-                            placeholder="ABC Education Consultancy"
-                          />
-                        </div>
-                        <div>
-                          <FieldLabel>Business Reg. Number</FieldLabel>
-                          <input
-                            className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#042C53]/10 focus:border-[#042C53] transition-all"
-                            value={profileData.businessRegistrationNumber}
-                            onChange={e => setProfileData({ ...profileData, businessRegistrationNumber: e.target.value })}
-                            placeholder="U12345MH2020PTC123456"
-                          />
-                        </div>
-                        <div className="md:col-span-2">
-                          <FieldLabel>Registered Address</FieldLabel>
-                          <textarea
-                            rows={3}
-                            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#042C53]/10 focus:border-[#042C53] transition-all resize-none"
-                            value={profileData.fullAddress}
-                            onChange={e => setProfileData({ ...profileData, fullAddress: e.target.value })}
-                            placeholder="Full street address, city, state, pincode"
-                          />
-                        </div>
-                      </div>
+                      <ApplicationFormFields
+                        values={application}
+                        onChange={setApplication}
+                        groups={['applicant', 'contacts', 'relative']}
+                      />
+                      {user?.declarationName && (
+                        <p className="text-xs text-slate-500 mt-4">
+                          Declaration signed by <strong>{user.declarationName}</strong>
+                          {user.declarationAcceptedAt ? ` on ${new Date(user.declarationAcceptedAt).toLocaleDateString()}` : ''}.
+                        </p>
+                      )}
                     </>
                   )}
 
@@ -334,7 +341,7 @@ export default function SettingsPage() {
                         className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#042C53]/10 focus:border-[#042C53] transition-all"
                         value={passwordData.new_password}
                         onChange={e => setPasswordData({ ...passwordData, new_password: e.target.value })}
-                        placeholder="Minimum 8 characters"
+                        placeholder="At least 10 characters, with a letter and a number"
                       />
                     </div>
                     <div>
@@ -402,7 +409,7 @@ export default function SettingsPage() {
 
                 <div className="divide-y divide-slate-100">
                   {[
-                    { key: 'email', label: 'Email Notifications', desc: 'Receive daily summaries and event alerts via email.' },
+                    { key: 'email', label: 'Email Notifications', desc: 'Receive updates on your students, applications and payments via email.' },
                     { key: 'inapp', label: 'In-app Notifications', desc: 'Real-time alerts inside the portal dashboard.' },
                     { key: 'sms', label: 'SMS Notifications', desc: 'Critical alerts sent to your phone. (Coming Soon)', disabled: true },
                     { key: 'marketing', label: 'Marketing Updates', desc: 'Stay updated with new institutional partners.' },
@@ -470,23 +477,27 @@ export default function SettingsPage() {
                   ))}
                 </div>
 
-                <div className="py-14 text-center border border-dashed border-slate-200 rounded-xl">
-                  <CreditCard className="w-8 h-8 text-slate-200 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-slate-900">No bank account linked</p>
-                  <p className="text-[11px] text-slate-500 font-medium mt-1 max-w-xs mx-auto">
-                    Add your bank account to receive commission payouts automatically.
-                  </p>
-                  <Button
-                    onClick={() => toast.info('Bank details form coming soon')}
-                    className="mt-5 bg-[#042C53] hover:bg-[#0C447C] text-white text-sm font-medium h-9 px-5 rounded-lg"
-                  >
-                    Add Bank Account
-                  </Button>
-                </div>
+                <form onSubmit={handleBankUpdate} className="max-w-2xl">
+                  <ApplicationFormFields
+                    values={application}
+                    onChange={setApplication}
+                    groups={['bank']}
+                  />
+                  <div className="flex justify-end pt-5">
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      className="bg-[#042C53] hover:bg-[#0C447C] text-white text-sm font-medium h-9 px-5 rounded-lg"
+                    >
+                      <Save className="w-3.5 h-3.5 mr-2" />
+                      Save Bank Details
+                    </Button>
+                  </div>
+                </form>
               </div>
             )}
             {/* ─── MANAGE ADMINS TAB ─── */}
-            {activeTab === 'admins' && user?.role === 'admin' && (
+            {activeTab === 'admins' && user?.role === 'admin' && !user?.staffRole && (
               <div className="bg-white border border-slate-200 rounded-xl p-6 px-7">
                 <div className="mb-5">
                   <SectionTitle>Add New Admin</SectionTitle>
@@ -529,6 +540,19 @@ export default function SettingsPage() {
                         placeholder="+91 98765 43210"
                       />
                     </div>
+                    <div>
+                      <FieldLabel>Staff Role</FieldLabel>
+                      <select
+                        className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#042C53]/10 focus:border-[#042C53] transition-all"
+                        value={newAdmin.staffRole}
+                        onChange={e => setNewAdmin({ ...newAdmin, staffRole: e.target.value })}
+                      >
+                        <option value="">Super Admin (full access)</option>
+                        {Object.entries(STAFF_ROLE_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
                     <div />
                     <div>
                       <FieldLabel>Password</FieldLabel>
@@ -538,7 +562,7 @@ export default function SettingsPage() {
                         className="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#042C53]/10 focus:border-[#042C53] transition-all"
                         value={newAdmin.password}
                         onChange={e => setNewAdmin({ ...newAdmin, password: e.target.value })}
-                        placeholder="Min. 6 characters"
+                        placeholder="At least 10 characters, with a letter and a number"
                       />
                     </div>
                     <div>

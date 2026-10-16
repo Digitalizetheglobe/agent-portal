@@ -39,6 +39,9 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
+import { agentAPI } from '../../utils/api';
+import { getOnboardingStatus } from '../../utils/onboarding';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 import { Textarea } from '../ui/textarea';
@@ -47,23 +50,32 @@ import PhoneInput from '../forms/specialized/PhoneInput';
 const agentSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
-  userId: z.string().min(3, 'User ID must be at least 3 characters').regex(/^[a-zA-Z0-9._]+$/, 'User ID can only contain letters, numbers, dots, and underscores'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  // Both are optional here: agents who registered through an invite link have no User ID, and
+  // an existing password is never sent back. onSubmit requires them when creating an agent.
+  userId: z.string().nullish().refine(
+    (v) => !v || (v.length >= 3 && /^[a-zA-Z0-9._]+$/.test(v)),
+    'User ID must be at least 3 characters (letters, numbers, dots and underscores only)'
+  ),
+  password: z.string().nullish().refine(
+    (v) => !v || (v.length >= 10 && /[A-Za-z]/.test(v) && /\d/.test(v)),
+    'Password must be at least 10 characters and include a letter and a number'
+  ),
   phone: z.string().min(10, 'Phone number must be at least 10 characters').regex(/^\+?[0-9]+$/, 'Phone number can only contain digits'),
   status: z.enum(['active', 'inactive']),
   agencyName: z.string().optional(),
   businessRegistrationNumber: z.string().optional(),
   fullAddress: z.string().optional(),
-  commissionRate: z.string().optional().refine(
-    (v) => !v || (Number(v) > 0 && Number(v) <= 100),
-    'Commission rate must be greater than 0 and at most 100'
-  ),
-  region: z.string().optional()
+  region: z.string().optional(),
+  accountManagerId: z.string().optional()
 });
 
 const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
   const { createAgent, updateAgent, agents, verifyAgent, viewAgentDocument } = useData();
+  const { user } = useAuth();
   const isEditing = !!agent;
+  // Account Managers own what they create; only other admins pick the manager
+  const canAssignManager = user?.staffRole !== 'account_manager';
+  const [accountManagers, setAccountManagers] = useState([]);
 
   const {
     register,
@@ -72,6 +84,7 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
     setValue,
     watch,
     control,
+    setError,
     formState: { errors, isSubmitting }
   } = useForm({
     resolver: zodResolver(agentSchema),
@@ -87,6 +100,14 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
   });
 
   const status = watch('status');
+  const accountManagerId = watch('accountManagerId');
+
+  useEffect(() => {
+    if (!open || !canAssignManager) return;
+    agentAPI.getAccountManagers()
+      .then(res => setAccountManagers(res.data))
+      .catch(() => setAccountManagers([]));
+  }, [open, canAssignManager]);
 
   // Reset form when modal opens/closes or agent changes
   useEffect(() => {
@@ -94,15 +115,15 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
       reset({
         name: agent.name,
         email: agent.email,
-        userId: agent.userId,
-        password: agent.password,
+        userId: agent.userId || '',
+        password: '',
         phone: agent.phone,
         status: agent.status,
         agencyName: agent.agencyName || '',
         businessRegistrationNumber: agent.businessRegistrationNumber || '',
         fullAddress: agent.fullAddress || '',
-        commissionRate: agent.commissionRate != null ? String(agent.commissionRate) : '',
-        region: agent.region || ''
+        region: agent.region || '',
+        accountManagerId: agent.accountManagerId || 'none'
       });
     } else if (open && !agent) {
       reset({
@@ -115,13 +136,21 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
         agencyName: '',
         businessRegistrationNumber: '',
         fullAddress: '',
-        commissionRate: '',
-        region: ''
+        region: '',
+        accountManagerId: 'none'
       });
     }
   }, [open, agent, reset]);
 
   const onSubmit = async (data) => {
+    // A new agent needs credentials; when editing, blank means "leave unchanged"
+    if (!isEditing) {
+      let missing = false;
+      if (!data.userId) { setError('userId', { message: 'User ID is required' }); missing = true; }
+      if (!data.password) { setError('password', { message: 'Password is required' }); missing = true; }
+      if (missing) return;
+    }
+
     // Check for duplicate userId (excluding current agent if editing)
     const existingAgent = agents.find(a =>
       (a.userId || '').toLowerCase() === (data.userId || '').toLowerCase() &&
@@ -148,6 +177,12 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
         description: 'Please use a different email address.'
       });
       return;
+    }
+
+    if (canAssignManager) {
+      data.accountManagerId = data.accountManagerId && data.accountManagerId !== 'none' ? data.accountManagerId : null;
+    } else {
+      delete data.accountManagerId;
     }
 
     if (isEditing) {
@@ -250,7 +285,7 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
                       id="password"
                       type={viewMode ? 'password' : 'text'}
                       {...register('password')}
-                      placeholder="••••••"
+                      placeholder={isEditing ? 'Leave blank to keep current' : '••••••'}
                       disabled={viewMode}
                       data-testid="agent-password-input"
                     />
@@ -299,6 +334,27 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
                       <p className="text-sm text-destructive">{errors.status.message}</p>
                     )}
                   </div>
+
+                  {canAssignManager && (
+                    <div className="space-y-2">
+                      <Label htmlFor="accountManagerId">Account Manager</Label>
+                      <Select
+                        value={accountManagerId || 'none'}
+                        onValueChange={(value) => setValue('accountManagerId', value)}
+                        disabled={viewMode}
+                      >
+                        <SelectTrigger data-testid="agent-account-manager-select">
+                          <SelectValue placeholder="Unassigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Unassigned</SelectItem>
+                          {accountManagers.map(m => (
+                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4 pt-2 border-t mt-4">
@@ -341,25 +397,6 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
                       placeholder="123 Education Lane, NY"
                       disabled={viewMode}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="commissionRate">Commission Rate (%)</Label>
-                    <Input
-                      id="commissionRate"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      {...register('commissionRate')}
-                      placeholder="e.g. 10"
-                      disabled={viewMode}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Default rate applied to this agent's invoices. Only admins can set it.
-                    </p>
-                    {errors.commissionRate && (
-                      <p className="text-xs text-destructive">{errors.commissionRate.message}</p>
-                    )}
                   </div>
                 </div>
 
@@ -422,27 +459,19 @@ const AgentModal = ({ open, onOpenChange, agent, viewMode = false }) => {
                         <ShieldAlert className="w-6 h-6 text-amber-600" />
                       )}
                       <div>
-                        <p className="font-semibold text-sm">Status: {agent.isVerified ? 'Verified' : 'Not Verified'}</p>
+                        <p className="font-semibold text-sm">Status: {getOnboardingStatus(agent).label}</p>
                         <p className="text-xs text-muted-foreground">
                           {agent.isVerified ? 'This agent is fully compliant' : 'Pending identity/business verification'}
                         </p>
                       </div>
                     </div>
-                    {!viewMode && (
-                      <Button
-                        size="sm"
-                        variant={agent.isVerified ? "outline" : "default"}
-                        onClick={async () => {
-                          try {
-                            await verifyAgent(agent.id, { isVerified: !agent.isVerified });
-                            toast.success(`Agent ${!agent.isVerified ? 'verified' : 'unverified'}`);
-                          } catch (e) { }
-                        }}
-                      >
-                        {agent.isVerified ? 'Revoke' : 'Verify Agent'}
-                      </Button>
-                    )}
+                    <Badge className={`border-none ${getOnboardingStatus(agent).style}`}>
+                      {getOnboardingStatus(agent).label}
+                    </Badge>
                   </div>
+                  <p className="text-xs text-muted-foreground -mt-4">
+                    Approve, reject or return the application from the agent details panel (Head of Recruitment).
+                  </p>
 
                   {/* Documents Section */}
                   <div className="space-y-3">

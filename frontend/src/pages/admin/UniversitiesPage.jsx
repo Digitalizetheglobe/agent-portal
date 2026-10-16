@@ -20,6 +20,8 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { hasStaffRole } from '../../utils/staffRoles';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
@@ -57,6 +59,9 @@ import { toast } from 'sonner';
 const UniversitiesPage = () => {
   const navigate = useNavigate();
   const { deleteUniversity, updateUniversityStatus } = useData();
+  const { user } = useAuth();
+  // University information is maintained by the Head of Admission
+  const canManage = hasStaffRole(user, 'head_admission');
 
   const [universities, setUniversities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -202,15 +207,17 @@ const UniversitiesPage = () => {
             Manage partner institutions, requirements, and affiliated student applications
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setSelectedUniversity(null);
-            setModalOpen(true);
-          }}
-          className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-sm gap-2"
-        >
-          <Plus className="w-4 h-4" /> Add University
-        </Button>
+        {canManage && (
+          <Button
+            onClick={() => {
+              setSelectedUniversity(null);
+              setModalOpen(true);
+            }}
+            className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-sm gap-2"
+          >
+            <Plus className="w-4 h-4" /> Add University
+          </Button>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -316,6 +323,7 @@ const UniversitiesPage = () => {
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Code</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Location</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Contact</TableHead>
+              <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Commission</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-center">Status</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-right">Actions</TableHead>
             </TableRow>
@@ -323,14 +331,14 @@ const UniversitiesPage = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-16">
+                <TableCell colSpan={7} className="text-center py-16">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#042C53] mx-auto"></div>
                   <p className="text-xs text-gray-500 mt-3 font-medium">Loading universities...</p>
                 </TableCell>
               </TableRow>
             ) : universities.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-16 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-16 text-gray-500">
                   <Building2 size={40} className="mx-auto mb-3 opacity-20" />
                   <p className="font-semibold text-sm text-gray-700">No universities found</p>
                   <p className="text-xs text-gray-400 mt-1">Try adjusting your filters or search keywords</p>
@@ -419,6 +427,11 @@ const UniversitiesPage = () => {
                     )}
                   </TableCell>
 
+                  {/* Commission */}
+                  <TableCell className="px-6 py-4 text-xs font-semibold text-gray-900 tabular-nums">
+                    {uni.commissionRate != null ? `${uni.commissionRate}%` : <span className="text-gray-400 font-normal">Not set</span>}
+                  </TableCell>
+
                   {/* Status */}
                   <TableCell className="px-6 py-4 text-center">
                     {uni.status === 'active' ? (
@@ -444,6 +457,7 @@ const UniversitiesPage = () => {
                       >
                         <Eye size={15} />
                       </Button>
+                      {canManage && <>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -478,6 +492,7 @@ const UniversitiesPage = () => {
                       >
                         <Trash2 size={15} />
                       </Button>
+                      </>}
                     </div>
                   </TableCell>
                 </TableRow>

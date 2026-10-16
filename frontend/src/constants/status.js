@@ -9,12 +9,6 @@ export const APPLICATION_STATUS = {
   DRAFT: 'Draft',
   SUBMITTED: 'Submitted',
   UNDER_REVIEW: 'UnderReview',
-  VISIT_SCHEDULED: 'VisitScheduled',
-  VISIT_COMPLETED: 'VisitCompleted',
-  OFFER_RECEIVED: 'OfferReceived',
-  CONDITIONAL_OFFER: 'ConditionalOffer',
-  ADMISSION_CONFIRMED: 'AdmissionConfirmed',
-  ENROLLED: 'Enrolled',
   REJECTED: 'Rejected',
   WITHDRAWN: 'Withdrawn'
 };
@@ -25,12 +19,6 @@ export const APPLICATION_STATUS_LABELS = {
   [APPLICATION_STATUS.DRAFT]: 'Draft',
   [APPLICATION_STATUS.SUBMITTED]: 'Submitted',
   [APPLICATION_STATUS.UNDER_REVIEW]: 'Under Review',
-  [APPLICATION_STATUS.VISIT_SCHEDULED]: 'Visit Scheduled',
-  [APPLICATION_STATUS.VISIT_COMPLETED]: 'Visit Completed',
-  [APPLICATION_STATUS.OFFER_RECEIVED]: 'Offer Received',
-  [APPLICATION_STATUS.CONDITIONAL_OFFER]: 'Conditional Offer',
-  [APPLICATION_STATUS.ADMISSION_CONFIRMED]: 'Admission Confirmed',
-  [APPLICATION_STATUS.ENROLLED]: 'Enrolled',
   [APPLICATION_STATUS.REJECTED]: 'Rejected',
   [APPLICATION_STATUS.WITHDRAWN]: 'Withdrawn'
 };
@@ -88,13 +76,3 @@ export const STUDENT_VERIFICATION_STATUS_LABELS = {
   [STUDENT_VERIFICATION_STATUS.REJECTED]: 'Rejected'
 };
 
-// Phase D: Student Pipeline Stages
-export const STUDENT_STAGE = {
-  REGISTERED: 'Registered',
-  CONTACTED: 'Contacted',
-  CONFIRMED: 'Confirmed',
-  ATTENDED: 'Attended',
-  CONVERTED: 'Converted'
-};
-
-export const STUDENT_STAGE_LIST = Object.values(STUDENT_STAGE);

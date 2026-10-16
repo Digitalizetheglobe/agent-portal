@@ -45,10 +45,9 @@ const DEFAULT_FORM_FIELDS = [
   { id: 'notes', label: 'Internal Notes', type: 'paragraph', required: false, order: 8, placeholder: 'Any background notes or remarks...' }
 ];
 
-const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
-  const { addStudent, getEventById, updateStudent, agents, universities, fetchUniversities, courses, fetchCourses } = useData();
+const DynamicStudentForm = ({ studentData, onSuccess }) => {
+  const { addStudent, updateStudent, agents, universities, fetchUniversities, courses, fetchCourses } = useData();
   const { user, isAdmin } = useAuth();
-  const [event, setEvent] = useState(null);
   const [formSchema, setFormSchema] = useState(null);
   const isEditMode = !!studentData;
 
@@ -70,43 +69,7 @@ const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
     }
   }, [courses, fetchCourses]);
 
-  // Determine active form fields (custom fields if defined on event, else standard default fields)
-  const activeFields = useMemo(() => {
-    if (event?.formFields && Array.isArray(event.formFields) && event.formFields.length > 0) {
-      let fields = [...event.formFields];
-      // Check if event already has university field
-      const hasUni = fields.some(f => f.id === 'universityId' || f.label?.toLowerCase().includes('university'));
-      if (!hasUni) {
-        fields.push({ id: 'universityId', label: 'Target University', type: 'university', required: true, order: 98 });
-      }
-      // Check if event already has course field
-      const hasCourse = fields.some(f => f.id === 'courseInterested' || f.type === 'course' || f.label?.toLowerCase().includes('course'));
-      if (!hasCourse) {
-        fields.push({ id: 'courseInterested', label: 'Target Course', type: 'course', required: false, order: 99 });
-      }
-
-      return fields.map(f => {
-        if (f.id === 'universityId' || f.label?.toLowerCase().includes('university')) {
-          return { ...f, type: 'university', required: true };
-        }
-        if (f.id === 'courseInterested' || f.label?.toLowerCase().includes('course')) {
-          return { ...f, type: 'course' };
-        }
-        return f;
-      });
-    }
-    return DEFAULT_FORM_FIELDS;
-  }, [event]);
-
-  // Get event data
-  useEffect(() => {
-    if (eventId) {
-      const eventData = getEventById(eventId);
-      setEvent(eventData || null);
-    } else {
-      setEvent(null);
-    }
-  }, [eventId, getEventById]);
+  const activeFields = DEFAULT_FORM_FIELDS;
 
   // Generate dynamic Zod schema based on active fields
   useEffect(() => {
@@ -275,7 +238,6 @@ const DynamicStudentForm = ({ eventId, studentData, onSuccess }) => {
         : user?.id;
 
       const studentPayload = {
-        eventId: eventId || null,
         agentId: effectiveAgentId,
         customFields: { ...data }
       };

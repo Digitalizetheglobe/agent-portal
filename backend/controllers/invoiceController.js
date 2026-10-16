@@ -1,6 +1,6 @@
 const invoiceService = require('../services/invoiceService');
 
-// @desc    Create new invoice (supports both applicationIds and legacy studentIds)
+// @desc    Create new invoice for applications (applicationIds)
 // @route   POST /api/invoices
 // @access  Private (Agent or Admin)
 exports.createInvoice = async (req, res) => {

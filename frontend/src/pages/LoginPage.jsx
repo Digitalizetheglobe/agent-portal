@@ -190,21 +190,6 @@ const LoginPage = () => {
               </button>
             </div>
           </form>
-
-          {/* Demo credentials - smaller and less prominent */}
-          <div className="mt-8 p-4 bg-muted rounded-lg border border-border">
-            <p className="text-xs text-center text-muted-foreground mb-2 font-medium">
-              Demo Credentials
-            </p>
-            <div className="text-center space-y-1">
-              <div className="text-xs bg-background px-2 py-1 rounded border border-input font-mono">
-                admin@example.com / admin123
-              </div>
-              <div className="text-xs bg-background px-2 py-1 rounded border border-input font-mono">
-                john.smith@example.com / agent123
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

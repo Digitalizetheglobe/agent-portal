@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { hasStaffRole } from '../../utils/staffRoles';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
@@ -29,18 +31,31 @@ import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import { Label } from '../../components/ui/label';
 import PayoffSettlementModal from '../../components/modals/PayoffSettlementModal';
+import { UniversityPaymentDialog, PaymentExceptionDialog } from '../../components/modals/PayoffPaymentDialogs';
+import { getPayoffPaymentState, PAYOFF_PAYMENT_STATE_INFO, currencyLabel } from '../../utils/invoiceStage';
 import { payoffAPI, invoiceReviewAPI, formatApiError } from '../../utils/api';
 import { FinancialStatusBadge } from '../../components/common/FinancialStatusBadge';
 import { formatCurrency, formatFinancialDate } from '../../utils/financialFormatters';
 import { toast } from 'sonner';
 
 const AdminPayoffsPage = () => {
-  const { payoffs, fetchPayoffs, cancelPayoff, loading } = useData();
+  const { payoffs, fetchPayoffs, cancelPayoff, viewPayoffSlip, loading } = useData();
+  const { user } = useAuth();
+  // Recording payment belongs to Accounts
+  const canSettle = hasStaffRole(user, 'accounts');
+  // The agent is paid only after the university has paid QStudy. Accounts or the Head of Admission record
+  // that payment; only the Head of Admission may allow an exception, with a note.
+  const canRecordUniversityPayment = hasStaffRole(user, 'accounts', 'head_admission');
+  const canAuthorizeException = hasStaffRole(user, 'head_admission');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPayoff, setSelectedPayoff] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   
+  // University payment / exception dialogs
+  const [universityPaymentPayoff, setUniversityPaymentPayoff] = useState(null);
+  const [exceptionPayoff, setExceptionPayoff] = useState(null);
+
   // Settle modal state
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [payoffToSettle, setPayoffToSettle] = useState(null);
@@ -209,6 +224,11 @@ const AdminPayoffsPage = () => {
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
                     {getPayoffBadge(payoff.status)}
+                    {isPending && (
+                      <span className={`mt-1.5 flex w-fit mx-auto items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(payoff)].style}`}>
+                        {PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(payoff)].label}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center">
                     {payoff.status === 'SETTLED' ? (
@@ -222,11 +242,33 @@ const AdminPayoffsPage = () => {
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
                     <div className="flex items-center justify-center gap-1.5">
-                      {isPending && (
+                      {isPending && canRecordUniversityPayment && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="btn-financial-action text-[#042C53] border-[#C7D2FE] hover:bg-[#E6F1FB]"
+                          onClick={() => setUniversityPaymentPayoff(payoff)}
+                        >
+                          {payoff.universityPaid ? 'Edit university payment' : 'University paid'}
+                        </Button>
+                      )}
+                      {isPending && canAuthorizeException && payoff.paymentBlocked && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="btn-financial-action text-[#3C3489] border-[#D5D2F7] hover:bg-[#EEEDFE]"
+                          onClick={() => setExceptionPayoff(payoff)}
+                        >
+                          Allow exception
+                        </Button>
+                      )}
+                      {isPending && canSettle && (
                         <>
                           <Button
                             size="sm"
-                            className="btn-financial-action text-white bg-[#27500A] hover:bg-[#1E3D07]"
+                            className="btn-financial-action text-white bg-[#27500A] hover:bg-[#1E3D07] disabled:opacity-50"
+                            disabled={payoff.paymentBlocked}
+                            title={payoff.paymentBlocked ? 'The university has not paid QStudy yet. Record the university payment first.' : undefined}
                             onClick={() => handleOpenSettlement(payoff)}
                           >
                             <CreditCard className="w-3.5 h-3.5 mr-1" /> Settle
@@ -353,6 +395,17 @@ const AdminPayoffsPage = () => {
           <PayoffTable list={filteredPayoffs} />
         </TabsContent>
       </Tabs>
+
+      <UniversityPaymentDialog
+        open={!!universityPaymentPayoff}
+        onOpenChange={(open) => !open && setUniversityPaymentPayoff(null)}
+        payoff={universityPaymentPayoff}
+      />
+      <PaymentExceptionDialog
+        open={!!exceptionPayoff}
+        onOpenChange={(open) => !open && setExceptionPayoff(null)}
+        payoff={exceptionPayoff}
+      />
 
       {/* Payoff Settlement Execution Modal */}
       <PayoffSettlementModal
@@ -484,6 +537,29 @@ const AdminPayoffsPage = () => {
                     </div>
                   </div>
 
+                  {/* University payment: the agent is paid only after the university paid QStudy */}
+                  <div>
+                    <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">University payment</h3>
+                    {p.universityPaid ? (
+                      <div className="rounded-xl border border-blue-200 bg-blue-50/40 px-4">
+                        <Row label="Amount received"><span className="font-semibold">{currencyLabel(p.currency)} {Number(p.universityPaidAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></Row>
+                        <Row label="Date received">{p.universityPaidAt ? format(new Date(p.universityPaidAt), 'dd MMM yyyy') : 'N/A'}</Row>
+                        <Row label="Reference"><span className="font-mono">{p.universityPaymentReference || 'N/A'}</span></Row>
+                        {p.universityPaymentNotes && <Row label="Notes">{p.universityPaymentNotes}</Row>}
+                      </div>
+                    ) : p.blockBypassed ? (
+                      <div className="rounded-xl border border-[#D5D2F7] bg-[#EEEDFE]/50 px-4 py-3 text-xs text-[#3C3489]">
+                        <span className="font-bold block mb-0.5">The university has not paid. Exception authorized.</span>
+                        {p.blockBypassNote}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs text-amber-900">
+                        Waiting for the university to pay QStudy. The agent cannot be paid until this is recorded
+                        {p.status === 'PENDING' ? ', unless the Head of Admission authorizes an exception.' : '.'}
+                      </p>
+                    )}
+                  </div>
+
                   {/* Payment record */}
                   {p.status === 'SETTLED' && (
                     <div>
@@ -493,6 +569,13 @@ const AdminPayoffsPage = () => {
                         <Row label="Date paid">{p.settledAt ? format(new Date(p.settledAt), 'dd MMM yyyy') : 'N/A'}</Row>
                         {p.batchReference && <Row label="Batch reference"><span className="font-mono">{p.batchReference}</span></Row>}
                         {p.settler?.name && <Row label="Recorded by">{p.settler.name}</Row>}
+                        {p.paymentSlip && (
+                          <Row label="Payment slip">
+                            <button type="button" className="text-[#042C53] font-semibold hover:underline" onClick={() => viewPayoffSlip(p.id)}>
+                              {p.paymentSlip.fileName || 'View slip'}
+                            </button>
+                          </Row>
+                        )}
                         {p.settlementNotes && <Row label="Notes">{p.settlementNotes}</Row>}
                       </div>
                     </div>
@@ -587,7 +670,27 @@ const AdminPayoffsPage = () => {
                   <Button size="sm" variant="outline" onClick={() => setIsViewOpen(false)} className="h-9 px-5 text-xs font-bold">
                     Close
                   </Button>
-                  {p.status === 'PENDING' && (
+                  {p.status === 'PENDING' && canRecordUniversityPayment && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 px-4 text-xs font-bold text-[#042C53] border-[#C7D2FE]"
+                      onClick={() => { setIsViewOpen(false); setUniversityPaymentPayoff(selectedPayoff); }}
+                    >
+                      {p.universityPaid ? 'Edit university payment' : 'University paid'}
+                    </Button>
+                  )}
+                  {p.status === 'PENDING' && canAuthorizeException && p.paymentBlocked && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 px-4 text-xs font-bold text-[#3C3489] border-[#D5D2F7]"
+                      onClick={() => { setIsViewOpen(false); setExceptionPayoff(selectedPayoff); }}
+                    >
+                      Allow exception
+                    </Button>
+                  )}
+                  {p.status === 'PENDING' && canSettle && (
                     <>
                       <Button
                         size="sm"
@@ -599,7 +702,9 @@ const AdminPayoffsPage = () => {
                       </Button>
                       <Button
                         size="sm"
-                        className="h-9 px-4 text-xs font-bold text-white bg-[#27500A] hover:bg-[#1E3D07]"
+                        className="h-9 px-4 text-xs font-bold text-white bg-[#27500A] hover:bg-[#1E3D07] disabled:opacity-50"
+                        disabled={p.paymentBlocked}
+                        title={p.paymentBlocked ? 'The university has not paid QStudy yet. Record the university payment first.' : undefined}
                         onClick={() => {
                           setIsViewOpen(false);
                           handleOpenSettlement(selectedPayoff);

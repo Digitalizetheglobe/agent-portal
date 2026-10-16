@@ -3,12 +3,6 @@ import axios from 'axios';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Check if there's a token in the environment variables (for dev/testing)
-const ENV_TOKEN = process.env.REACT_APP_JWT_TOKEN;
-if (ENV_TOKEN && !localStorage.getItem('access_token')) {
-  localStorage.setItem('access_token', ENV_TOKEN);
-}
-
 // Create axios instance with credentials
 const api = axios.create({
   baseURL: API,
@@ -62,6 +56,19 @@ api.interceptors.response.use(
 
     // If error is 401 and we haven't tried refreshing yet
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthRequest) {
+      const isPublicRoute = /^\/(login|register)/.test(window.location.pathname);
+      const refreshToken = localStorage.getItem('refresh_token');
+
+      // If on a public route and there is no refresh token (e.g. unauthenticated visitor on /register/:token),
+      // do not attempt refresh or redirect to login.
+      if (!refreshToken) {
+        localStorage.removeItem('access_token');
+        if (!isPublicRoute) {
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+
       if (isRefreshing) {
         // If already refreshing, add this request to the queue
         return new Promise((resolve, reject) => {
@@ -78,7 +85,6 @@ api.interceptors.response.use(
 
       try {
         // Attempt to refresh the token
-        const refreshToken = localStorage.getItem('refresh_token');
         const response = await api.post('/auth/refresh', { refreshToken });
         
         const { accessToken } = response.data;
@@ -99,8 +105,8 @@ api.interceptors.response.use(
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         
-        // If refresh fails, redirect to login
-        if (window.location.pathname !== '/login') {
+        // If refresh fails, only redirect to login if not already on a public route
+        if (!isPublicRoute) {
           window.location.href = '/login';
         }
         
@@ -157,12 +163,45 @@ export const authAPI = {
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token, newPassword) => api.post('/auth/reset-password', { token, new_password: newPassword }),
   updateProfile: (data) => api.put('/auth/update-profile', data),
-  updatePassword: (current_password, new_password) => api.put('/auth/update-password', { current_password, new_password })
+  // Changing the password ends every older session; the server answers with a fresh pair for this one
+  updatePassword: async (current_password, new_password) => {
+    const response = await api.put('/auth/update-password', { current_password, new_password });
+    if (response.data.accessToken) {
+      localStorage.setItem('access_token', response.data.accessToken);
+    }
+    if (response.data.refreshToken) {
+      localStorage.setItem('refresh_token', response.data.refreshToken);
+    }
+    return response;
+  }
+};
+
+// Onboarding APIs (invite links)
+export const onboardingAPI = {
+  createInvite: (data) => api.post('/onboarding/invites', data),
+  getInvites: () => api.get('/onboarding/invites'),
+  revokeInvite: (id) => api.patch(`/onboarding/invites/${id}/revoke`),
+  getInvite: (token) => api.get(`/onboarding/${token}`),
+  register: async (token, data) => {
+    const response = await api.post(`/onboarding/${token}/register`, data);
+    if (response.data.accessToken) {
+      localStorage.setItem('access_token', response.data.accessToken);
+    }
+    if (response.data.refreshToken) {
+      localStorage.setItem('refresh_token', response.data.refreshToken);
+    }
+    return response;
+  }
 };
 
 // Agent APIs
 export const agentAPI = {
   getAll: () => api.get('/agents'),
+  getAccountManagers: () => api.get('/agents/account-managers'),
+  getMe: () => api.get('/agents/me'),
+  submitOnboarding: () => api.post('/agents/me/onboarding/submit'),
+  acceptDeclaration: (data) => api.post('/agents/me/declaration', data),
+  reviewOnboarding: (id, action, data = {}) => api.patch(`/agents/${id}/onboarding/${action}`, data),
   getById: (id) => api.get(`/agents/${id}`),
   create: (data) => api.post('/agents', data),
   createAdmin: (data) => api.post('/agents/admin', data),
@@ -181,20 +220,51 @@ export const agentAPI = {
   downloadDocument: (agentId, docId, params = {}) => api.get(`/agents/${agentId}/documents/${docId}`, {
     params,
     responseType: 'blob'
+  }),
+  // Contract + E-Certificate (after approval)
+  issueContract: (id, file, expiresAt) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (expiresAt) formData.append('expiresAt', expiresAt);
+    return api.post(`/agents/${id}/contract/issue`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  uploadOwnSignedContract: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/agents/me/contract/signed', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  uploadSignedContract: (id, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/agents/${id}/contract/signed`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  issueCertificate: (id, file) => {
+    const formData = new FormData();
+    if (file) formData.append('file', file);
+    return api.post(`/agents/${id}/certificate`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  // docId is a contract document id, or 'certificate' for the E-Certificate file
+  downloadContractFile: (agentId, docId, params = {}) => api.get(`/agents/${agentId}/contract/${docId}`, {
+    params,
+    responseType: 'blob'
   })
 };
 
-// Event APIs
-export const eventAPI = {
-  getAll: () => api.get('/events'),
-  getById: (id) => api.get(`/events/${id}`),
-  create: (data) => api.post('/events', data),
-  update: (id, data) => api.put(`/events/${id}`, data),
-  delete: (id) => api.delete(`/events/${id}`),
-  notifyAgents: (id, message) => api.post(`/events/${id}/notify`, { message })
+// News & Updates APIs
+export const newsAPI = {
+  getAll: (params = {}) => api.get('/news', { params }),
+  getById: (id) => api.get(`/news/${id}`),
+  uploadMedia: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post('/news/media', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return `${BACKEND_URL}${res.data.path}`;
+  },
+  create: (data) => api.post('/news', data),
+  update: (id, data) => api.put(`/news/${id}`, data),
+  delete: (id) => api.delete(`/news/${id}`)
 };
 
-// Student APIs
 export const studentAPI = {
   getAll: (params = {}) => api.get('/students', { params }),
   getById: (id) => api.get(`/students/${id}`),
@@ -204,7 +274,6 @@ export const studentAPI = {
     console.log('Update data:', data);
     return api.put(`/students/${id}`, data);
   },
-  updateStatus: (id, status) => api.patch(`/students/${id}/status`, { status }),
   delete: (id) => api.delete(`/students/${id}`),
   uploadDocument: (studentId, file, category) => {
     const formData = new FormData();
@@ -233,6 +302,26 @@ export const universityAPI = {
   getAll: (params = {}) => api.get('/universities', { params }),
   getById: (id) => api.get(`/universities/${id}`),
   getApplications: (id) => api.get(`/universities/${id}/applications`),
+  // Fees, brochures and news / scholarship updates (published by the Head of Admission, read by everyone)
+  getCourses: (id) => api.get(`/universities/${id}/courses`),
+  uploadBrochure: (id, file, title) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (title) formData.append('title', title);
+    return api.post(`/universities/${id}/brochures`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  deleteBrochure: (id, brochureId) => api.delete(`/universities/${id}/brochures/${brochureId}`),
+  downloadBrochure: (id, brochureId, params = {}) => api.get(`/universities/${id}/brochures/${brochureId}`, { params, responseType: 'blob' }),
+  getUpdates: (id) => api.get(`/universities/${id}/updates`),
+  createUpdate: (id, data) => api.post(`/universities/${id}/updates`, data),
+  editUpdate: (id, updateId, data) => api.put(`/universities/${id}/updates/${updateId}`, data),
+  deleteUpdate: (id, updateId) => api.delete(`/universities/${id}/updates/${updateId}`),
+  uploadLogo: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post('/universities/logo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return `${BACKEND_URL}${res.data.path}`;
+  },
   create: (data) => api.post('/universities', data),
   update: (id, data) => api.put(`/universities/${id}`, data),
   updateStatus: (id, status) => {
@@ -273,21 +362,22 @@ export const applicationAPI = {
   getByStudent: (studentId) => api.get(`/applications/student/${studentId}`),
   getByUniversity: (universityId) => api.get(`/applications/university/${universityId}`),
   getByAgent: (agentId) => api.get(`/applications/agent/${agentId}`),
-  getTracking: (id) => api.get(`/applications/${id}/tracking`),
-  getHistory: (id, params = {}) => api.get(`/applications/${id}/history`, { params })
+  getHistory: (id, params = {}) => api.get(`/applications/${id}/history`, { params }),
+  // Visa pipeline (Head of Admission moves stages and reviews the proof; the agent uploads it)
+  updatePipeline: (id, data) => api.patch(`/applications/${id}/pipeline`, data),
+  submitFeeProof: (id, file, note) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (note) formData.append('note', note);
+    return api.post(`/applications/${id}/fee-proof`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  reviewFeeProof: (id, data) => api.patch(`/applications/${id}/fee-proof/review`, data),
+  downloadFeeProof: (id, params = {}) => api.get(`/applications/${id}/fee-proof/file`, { params, responseType: 'blob' })
 };
 
-// Admission Tracking APIs (Phase E)
+// Application review status and history (submit, start review, reject, withdraw)
 export const admissionTrackingAPI = {
   updateWorkflowStatus: (id, data) => api.patch(`/applications/${id}/workflow/status`, data),
-  scheduleVisit: (id, data) => api.post(`/applications/${id}/visit`, data),
-  completeVisit: (id, data) => api.patch(`/applications/${id}/visit/complete`, data),
-  createOffer: (id, data) => api.post(`/applications/${id}/offer`, data),
-  createConditionalOffer: (id, data) => api.post(`/applications/${id}/conditional-offer`, data),
-  confirmAdmission: (id, data) => api.post(`/applications/${id}/admission`, data),
-  enroll: (id, data) => api.post(`/applications/${id}/enrollment`, data),
-  updateDeposit: (id, data) => api.patch(`/applications/${id}/deposit`, data),
-  getTracking: (id) => api.get(`/applications/${id}/tracking`),
   getHistory: (id, params = {}) => api.get(`/applications/${id}/history`, { params })
 };
 
@@ -306,7 +396,6 @@ export const invoiceReviewAPI = {
   getAll: (params = {}) => api.get('/invoice-reviews', { params }),
   getByInvoiceId: (invoiceId) => api.get(`/invoice-reviews/${invoiceId}`),
   start: (invoiceId) => api.patch(`/invoice-reviews/${invoiceId}/start`),
-  setRate: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/rate`, data),
   approve: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/approve`, data),
   reject: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/reject`, data),
   correction: (invoiceId, data = {}) => api.patch(`/invoice-reviews/${invoiceId}/correction`, data),
@@ -318,8 +407,30 @@ export const invoiceReviewAPI = {
 export const payoffAPI = {
   getAll: (params = {}) => api.get('/payoffs', { params }),
   getById: (id) => api.get(`/payoffs/${id}`),
-  settle: (id, data = {}) => api.patch(`/payoffs/${id}/settle`, data),
-  cancel: (id, data = {}) => api.patch(`/payoffs/${id}/cancel`, data)
+  // Settling needs the payment slip, so it is sent as a form
+  settle: (id, data = {}, slip) => {
+    const formData = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') formData.append(key, value);
+    });
+    if (slip) formData.append('slip', slip);
+    return api.patch(`/payoffs/${id}/settle`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  cancel: (id, data = {}) => api.patch(`/payoffs/${id}/cancel`, data),
+  // The agent is paid only after the university has paid QStudy
+  recordUniversityPayment: (id, data = {}) => api.patch(`/payoffs/${id}/university-payment`, data),
+  authorizeBypass: (id, data = {}) => api.patch(`/payoffs/${id}/bypass-block`, data),
+  downloadSlip: (id, params = {}) => api.get(`/payoffs/${id}/slip`, { params, responseType: 'blob' })
+};
+
+// Global search (everyone; the server limits results to what the person may open)
+export const searchAPI = {
+  search: (q, params = {}) => api.get('/search', { params: { q, ...params } })
+};
+
+// Central audit log (Head of Admission, super admin)
+export const auditAPI = {
+  getAll: (params = {}) => api.get('/audit-logs', { params })
 };
 
 // Student Verification APIs (Phase H)
@@ -343,6 +454,25 @@ export const ticketAPI = {
   addResponse: (id, message) => api.post(`/tickets/${id}/responses`, { message }),
   updateStatus: (id, status) => api.patch(`/tickets/${id}/status`, { status }),
   delete: (id) => api.delete(`/tickets/${id}`)
+};
+
+// Team (staff) APIs: super admin only
+export const staffAPI = {
+  list: () => api.get('/staff'),
+  update: (id, data) => api.patch(`/staff/${id}`, data),
+  resetPassword: (id, password) => api.post(`/staff/${id}/reset-password`, { password })
+};
+
+// Live chat APIs
+export const chatAPI = {
+  config: () => api.get('/chat/config'),
+  getMine: (after) => api.get('/chat/me', { params: after ? { after } : {} }),
+  sendMine: (body) => api.post('/chat/me', { body }),
+  unreadMine: () => api.get('/chat/me/unread'),
+  conversations: () => api.get('/chat/conversations'),
+  agents: () => api.get('/chat/agents'),
+  getConversation: (agentId, after) => api.get(`/chat/conversations/${agentId}`, { params: after ? { after } : {} }),
+  reply: (agentId, body) => api.post(`/chat/conversations/${agentId}`, { body })
 };
 
 // Notification APIs

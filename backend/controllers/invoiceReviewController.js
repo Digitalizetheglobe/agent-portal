@@ -58,26 +58,6 @@ exports.startReview = async (req, res) => {
   }
 };
 
-// @desc    Set commission rate on invoice
-// @route   PATCH /api/invoice-reviews/:invoiceId/rate
-// @access  Private (Admin only)
-exports.setCommissionRate = async (req, res) => {
-  try {
-    const updated = await invoiceReviewService.setCommissionRate(
-      req.params.invoiceId,
-      req.body,
-      req.user
-    );
-    res.status(200).json(updated);
-  } catch (error) {
-    console.error('Set commission rate error:', error);
-    res.status(error.statusCode || 500).json({
-      success: false,
-      detail: error.message || 'Server error'
-    });
-  }
-};
-
 // @desc    Approve invoice review (creates snapshots & payoff)
 // @route   PATCH /api/invoice-reviews/:invoiceId/approve
 // @access  Private (Admin only)

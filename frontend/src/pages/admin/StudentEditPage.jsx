@@ -22,7 +22,7 @@ import { isCountryMatch } from '../../lib/countries';
 const StudentEditPage = () => {
   const { studentId: id } = useParams();
   const navigate = useNavigate();
-  const { students, events, agents, universities, courses, fetchCourses, updateStudent, getStudentById } = useData();
+  const { students, agents, universities, courses, fetchCourses, updateStudent, getStudentById } = useData();
 
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +37,6 @@ const StudentEditPage = () => {
     courseInterested: '',
     currentEducation: '',
     additionalInfo: '',
-    eventId: '',
     agentId: '',
   });
 
@@ -84,25 +83,9 @@ const StudentEditPage = () => {
         if (foundStudent) {
           setStudent(foundStudent);
 
-          const event = events.find(e => e.id === foundStudent.eventId || e._id === foundStudent.eventId);
-
           const getField = (fieldKey, fallbackKey = null) => {
             if (fallbackKey && foundStudent[fallbackKey]) return foundStudent[fallbackKey];
             if (foundStudent[fieldKey]) return foundStudent[fieldKey];
-
-            if (event?.formFields) {
-              const field = event.formFields.find(f =>
-                f.label.toLowerCase().trim() === fieldKey.toLowerCase().trim() ||
-                (fallbackKey && f.label.toLowerCase().trim() === fallbackKey.toLowerCase().trim()) ||
-                f.label.toLowerCase().includes(fieldKey.toLowerCase())
-              );
-
-              if (field && foundStudent.customFields) {
-                const cleanFieldId = String(field.id).replace(/^field_/, '');
-                if (foundStudent.customFields[cleanFieldId] !== undefined) return foundStudent.customFields[cleanFieldId];
-                if (foundStudent.customFields[`field_${cleanFieldId}`] !== undefined) return foundStudent.customFields[`field_${cleanFieldId}`];
-              }
-            }
 
             if (foundStudent.customFields && foundStudent.customFields[fieldKey]) {
               return foundStudent.customFields[fieldKey];
@@ -132,7 +115,6 @@ const StudentEditPage = () => {
             courseInterested: getField('courseInterested', 'Target Course'),
             currentEducation: getField('currentEducation', 'Education Level') || getField('education', 'Highest Qualification'),
             additionalInfo: getField('additionalInfo', 'Internal Notes') || getField('notes'),
-            eventId: foundStudent.eventId || '',
             agentId: foundStudent.agentId || '',
           });
         } else {
@@ -486,29 +468,10 @@ const StudentEditPage = () => {
               <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
                 <CardTitle className="text-base font-semibold font-['Outfit'] text-[#111827]">Assignments</CardTitle>
                 <CardDescription className="text-xs font-medium">
-                  Campaign and Agency mapping
+                  Agency mapping
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="eventId" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Target Event *</Label>
-                  <Select
-                    value={formData.eventId}
-                    onValueChange={(value) => handleInputChange('eventId', value)}
-                    data-testid="event-select"
-                  >
-                    <SelectTrigger className="h-11 border-[#E5E7EB]">
-                      <SelectValue placeholder="Select an event" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {events.map(event => (
-                        <SelectItem key={event.id} value={event.id}>
-                          {event.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="agentId" className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Originating Agent *</Label>
                   <Select

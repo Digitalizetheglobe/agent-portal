@@ -10,7 +10,6 @@ const {
   getStudentApplications,
   uploadDocument, 
   downloadDocument,
-  updateStudentStatus,
   verifyStudentDocument,
   requestDocument
 } = require('../controllers/studentController');
@@ -22,7 +21,7 @@ const {
   rejectStudent,
   getVerificationHistory
 } = require('../controllers/studentVerificationController');
-const { protect } = require('../middleware/auth');
+const { protect, allowStaff, restrictToStaffRole, requireActivatedAgent } = require('../middleware/auth');
 
 // Configure multer for file uploads (memory storage)
 const upload = multer({
@@ -56,11 +55,11 @@ router.use(protect);
 
 // Student routes
 router.get('/', getStudents);
-router.post('/', createStudent);
+router.post('/', requireActivatedAgent, createStudent);
 
 // ─── Phase H: Verification queue (MUST be before /:id to avoid capture) ──────
 // GET /api/students/verification/queue  — admin only, enforced in service
-router.get('/verification/queue', getVerificationQueue);
+router.get('/verification/queue', restrictToStaffRole('head_admission'), getVerificationQueue);
 
 // Student applications route (mounted before /:id)
 router.get('/:studentId/applications', getStudentApplications);
@@ -68,16 +67,15 @@ router.get('/:id/applications', getStudentApplications);
 
 router.get('/:id', getStudent);
 router.put('/:id', updateStudent);
-router.patch('/:id/status', updateStudentStatus);
 router.delete('/:id', deleteStudent);
 
 // Document routes (must come after student routes to avoid conflicts)
 router.post('/:id/documents', upload.single('file'), uploadDocument);
 router.post('/:id/documents/:docId/resubmit', upload.single('file'), uploadDocument);
-router.post('/:id/documents/request', requestDocument);
+router.post('/:id/documents/request', allowStaff('head_admission'), requestDocument);
 router.get('/:id/documents/:docId', downloadDocument);
-router.patch('/:id/documents/:docId/verify', verifyStudentDocument);
-router.patch('/:id/documents/:docId/review', verifyStudentDocument);
+router.patch('/:id/documents/:docId/verify', allowStaff('head_admission'), verifyStudentDocument);
+router.patch('/:id/documents/:docId/review', allowStaff('head_admission'), verifyStudentDocument);
 
 // ─── Phase H: Per-student verification routes ─────────────────────────────────
 // GET /api/students/:id/verification
@@ -87,12 +85,12 @@ router.get('/:id/verification', getVerificationDetail);
 router.get('/:id/verification/history', getVerificationHistory);
 
 // PATCH /api/students/:id/verification/initiate
-router.patch('/:id/verification/initiate', initiateVerification);
+router.patch('/:id/verification/initiate', allowStaff('head_admission'), initiateVerification);
 
 // PATCH /api/students/:id/verification/verify
-router.patch('/:id/verification/verify', verifyStudent);
+router.patch('/:id/verification/verify', allowStaff('head_admission'), verifyStudent);
 
 // PATCH /api/students/:id/verification/reject
-router.patch('/:id/verification/reject', rejectStudent);
+router.patch('/:id/verification/reject', allowStaff('head_admission'), rejectStudent);
 
 module.exports = router;

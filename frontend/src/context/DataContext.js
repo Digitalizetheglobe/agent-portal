@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useAuth } from './AuthContext';
 import {
   agentAPI,
-  eventAPI,
+  newsAPI,
   studentAPI,
   statsAPI,
   invoiceAPI,
@@ -31,7 +31,7 @@ export const useData = () => {
 
 export const DataProvider = ({ children }) => {
   const [agents, setAgents] = useState([]);
-  const [events, setEvents] = useState([]);
+  const [news, setNews] = useState([]);
   const [students, setStudents] = useState([]);
   const [stats, setStats] = useState(null);
   const [invoices, setInvoices] = useState([]);
@@ -68,14 +68,14 @@ export const DataProvider = ({ children }) => {
     }
   }, [userRole]);
 
-  const fetchEvents = useCallback(async () => {
+  const fetchNews = useCallback(async () => {
     try {
-      const response = await eventAPI.getAll();
-      setEvents(response.data);
+      const response = await newsAPI.getAll();
+      setNews(response.data);
       return response.data;
     } catch (error) {
-      console.error('Error fetching events:', error);
-      setEvents([]);
+      console.error('Error fetching news:', error);
+      setNews([]);
       return [];
     }
   }, []);
@@ -115,18 +115,9 @@ export const DataProvider = ({ children }) => {
       const mockStats = {
         totalAgents: 3,
         activeAgents: 2,
-        totalEvents: 3,
-        upcomingEvents: 2,
         totalStudents: 15,
         convertedStudents: 3,
         conversionRate: 20.0,
-        statusBreakdown: [
-          { status: 'Registered', count: 5 },
-          { status: 'Contacted', count: 3 },
-          { status: 'Confirmed', count: 2 },
-          { status: 'Attended', count: 2 },
-          { status: 'Converted', count: 3 }
-        ],
         registrationTrend: [
           { month: 'Nov 2023', count: 2 },
           { month: 'Dec 2023', count: 4 },
@@ -134,11 +125,6 @@ export const DataProvider = ({ children }) => {
           { month: 'Feb 2024', count: 5 },
           { month: 'Mar 2024', count: 8 },
           { month: 'Apr 2024', count: 6 }
-        ],
-        eventBreakdown: [
-          { title: 'Tech Conference', count: 12 },
-          { title: 'Career Fair', count: 8 },
-          { title: 'Workshop', count: 5 }
         ],
         agentBreakdown: [
           { name: 'John Smith', count: 15 },
@@ -268,7 +254,7 @@ export const DataProvider = ({ children }) => {
     try {
       await Promise.all([
         fetchAgents(), 
-        fetchEvents(), 
+        fetchNews(), 
         fetchStudents(), 
         fetchStats(), 
         fetchInvoices(), 
@@ -285,12 +271,12 @@ export const DataProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [fetchAgents, fetchEvents, fetchStudents, fetchStats, fetchInvoices, fetchPayoffs, fetchTickets, fetchNotifications, fetchUniversities, fetchCourses, fetchApplications]);
+  }, [fetchAgents, fetchNews, fetchStudents, fetchStats, fetchInvoices, fetchPayoffs, fetchTickets, fetchNotifications, fetchUniversities, fetchCourses, fetchApplications]);
 
   // Clear all data - called on logout
   const clearData = useCallback(() => {
     setAgents([]);
-    setEvents([]);
+    setNews([]);
     setStudents([]);
     setStats(null);
     setInvoices([]);
@@ -362,6 +348,17 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  const reviewAgentOnboarding = async (id, action, data) => {
+    try {
+      const response = await agentAPI.reviewOnboarding(id, action, data);
+      setAgents(prev => prev.map(agent => agent.id === id ? { ...agent, ...response.data } : agent));
+      return response.data;
+    } catch (error) {
+      toast.error('Review action failed', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
   const uploadVerificationDocument = async (file, docType) => {
     try {
       const response = await agentAPI.uploadVerificationDocument(file, docType);
@@ -384,10 +381,31 @@ export const DataProvider = ({ children }) => {
     }
   };
 
-  const viewAgentDocument = async (agentId, docId) => {
+  // Runs a contract / E-Certificate action and merges the updated agent into state
+  const runAgentContractAction = async (id, request, failMessage) => {
+    try {
+      const response = await request();
+      setAgents(prev => prev.map(agent => agent.id === id ? { ...agent, ...response.data } : agent));
+      return response.data;
+    } catch (error) {
+      toast.error(failMessage, { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  const issueAgentContract = (id, file, expiresAt) =>
+    runAgentContractAction(id, () => agentAPI.issueContract(id, file, expiresAt), 'Failed to issue contract');
+
+  const uploadSignedAgentContract = (id, file) =>
+    runAgentContractAction(id, () => agentAPI.uploadSignedContract(id, file), 'Failed to upload signed contract');
+
+  const issueAgentCertificate = (id, file) =>
+    runAgentContractAction(id, () => agentAPI.issueCertificate(id, file), 'Failed to issue E-Certificate');
+
+  const viewAgentDocument = async (agentId, docId, download = agentAPI.downloadDocument) => {
     try {
       toast.loading('Opening document...');
-      const response = await agentAPI.downloadDocument(agentId, docId, { inline: true });
+      const response = await download(agentId, docId, { inline: true });
       
       // If response is not a blob (e.g. error JSON), it will still be in response.data as a blob
       // We check the content type to be sure
@@ -419,56 +437,45 @@ export const DataProvider = ({ children }) => {
     }
   };
 
-  // Event CRUD operations
-  const createEvent = async (eventData) => {
+  const viewPayoffSlip = (payoffId) =>
+    viewAgentDocument(payoffId, null, (id, _doc, params) => payoffAPI.downloadSlip(id, params));
+
+  const viewAgentContractFile = (agentId, docId) =>
+    viewAgentDocument(agentId, docId, agentAPI.downloadContractFile);
+
+  // News & updates operations
+  const createNews = async (newsData) => {
     try {
-      const response = await eventAPI.create(eventData);
-      setEvents(prev => [...prev, response.data]);
-      await fetchStats();
+      const response = await newsAPI.create(newsData);
+      setNews(prev => [response.data, ...prev]);
+      await fetchNews();
       return response.data;
     } catch (error) {
-      toast.error('Failed to create event', { description: formatApiError(error) });
+      toast.error('Failed to publish', { description: formatApiError(error) });
       throw error;
     }
   };
 
-  const updateEvent = async (id, eventData) => {
+  const updateNews = async (id, newsData) => {
     try {
-      const response = await eventAPI.update(id, eventData);
-      setEvents(prev => prev.map(event => event.id === id ? response.data : event));
+      const response = await newsAPI.update(id, newsData);
+      setNews(prev => prev.map(item => item.id === id ? { ...item, ...response.data } : item));
+      await fetchNews();
       return response.data;
     } catch (error) {
-      toast.error('Failed to update event', { description: formatApiError(error) });
+      toast.error('Failed to update', { description: formatApiError(error) });
       throw error;
     }
   };
 
-  const deleteEvent = async (id) => {
+  const deleteNews = async (id) => {
     try {
-      await eventAPI.delete(id);
-      setEvents(prev => prev.filter(event => event.id !== id));
-      setStudents(prev => prev.filter(student => student.eventId !== id));
-      await fetchStats();
+      await newsAPI.delete(id);
+      setNews(prev => prev.filter(item => item.id !== id));
     } catch (error) {
-      toast.error('Failed to delete event', { description: formatApiError(error) });
+      toast.error('Failed to delete', { description: formatApiError(error) });
       throw error;
     }
-  };
-
-  const notifyAgents = async (id, message) => {
-    try {
-      await eventAPI.notifyAgents(id, message);
-      toast.success('Notification broadcast sent to all assigned agents');
-    } catch (error) {
-      toast.error('Failed to send notifications', { description: formatApiError(error) });
-      throw error;
-    }
-  };
-
-  const getEventById = (id) => events.find(event => event.id === id);
-
-  const getEventsForAgent = (agentId) => {
-    return events.filter(event => event.assignedAgents?.includes(agentId));
   };
 
   // Student operations
@@ -484,22 +491,6 @@ export const DataProvider = ({ children }) => {
     } catch (error) {
       toast.error('Failed to register student', { description: formatApiError(error) });
       throw error;
-    }
-  };
-
-  const getStudentsByEvent = (eventId) => {
-    return students.filter(student => student.eventId === eventId);
-  };
-
-  // Refresh students for specific event
-  const fetchStudentsForEvent = async (eventId) => {
-    try {
-      const response = await studentAPI.getAll({ eventId });
-      setStudents(response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching students for event:', error);
-      return [];
     }
   };
 
@@ -534,17 +525,6 @@ export const DataProvider = ({ children }) => {
       return response.data;
     } catch (error) {
       toast.error('Failed to update student', { description: formatApiError(error) });
-      throw error;
-    }
-  }, []);
-
-  const updateStudentStatus = useCallback(async (id, status) => {
-    try {
-      const response = await studentAPI.updateStatus(id, status);
-      setStudents(prev => prev.map(student => student.id === id ? response.data : student));
-      return response.data;
-    } catch (error) {
-      toast.error('Failed to update student status', { description: formatApiError(error) });
       throw error;
     }
   }, []);
@@ -630,14 +610,11 @@ export const DataProvider = ({ children }) => {
   const getStats = () => stats || {
     totalAgents: agents.length,
     activeAgents: agents.filter(a => a.status === 'active').length,
-    totalEvents: events.length,
-    upcomingEvents: events.filter(e => new Date(e.date) >= new Date()).length,
     totalStudents: students.length,
-    convertedStudents: students.filter(s => s.status === 'Converted').length,
-    conversionRate: students.length > 0 ? ((students.filter(s => s.status === 'Converted').length / students.length) * 100).toFixed(1) : 0,
-    statusBreakdown: [],
+    // Students whose fees are confirmed (Visa 100% and fees accepted)
+    convertedStudents: students.filter(s => s.feesPaid).length,
+    conversionRate: students.length > 0 ? ((students.filter(s => s.feesPaid).length / students.length) * 100).toFixed(1) : 0,
     registrationTrend: [],
-    eventBreakdown: [],
     agentBreakdown: []
   };
 
@@ -678,14 +655,40 @@ export const DataProvider = ({ children }) => {
   };
 
   // Payoff operations (FA-2 & FA-3)
-  const settlePayoff = async (id, data) => {
+  const settlePayoff = async (id, data, slip) => {
     try {
-      const response = await payoffAPI.settle(id, data);
+      const response = await payoffAPI.settle(id, data, slip);
       await Promise.all([fetchPayoffs(), fetchInvoices()]);
       toast.success('Payoff settlement confirmed');
       return response.data;
     } catch (error) {
       toast.error('Failed to settle payoff', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Record that the university paid QStudy (unlocks paying the agent)
+  const recordUniversityPayment = async (id, data) => {
+    try {
+      const response = await payoffAPI.recordUniversityPayment(id, data);
+      await fetchPayoffs();
+      toast.success('University payment recorded');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to record the university payment', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
+  // Head of Admission: allow the agent to be paid before the university has paid (needs a note)
+  const authorizePaymentException = async (id, data) => {
+    try {
+      const response = await payoffAPI.authorizeBypass(id, data);
+      await fetchPayoffs();
+      toast.success('Exception authorized');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to authorize the exception', { description: formatApiError(error) });
       throw error;
     }
   };
@@ -928,91 +931,6 @@ export const DataProvider = ({ children }) => {
     }
   };
 
-  // Admission Tracking operations (Phase E)
-  const scheduleVisit = async (id, data) => {
-    try {
-      const response = await admissionTrackingAPI.scheduleVisit(id, data);
-      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
-      toast.success('Campus visit scheduled successfully');
-      return response.data;
-    } catch (error) {
-      toast.error('Failed to schedule visit', { description: formatApiError(error) });
-      throw error;
-    }
-  };
-
-  const completeVisit = async (id, data) => {
-    try {
-      const response = await admissionTrackingAPI.completeVisit(id, data);
-      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
-      toast.success('Campus visit marked as completed');
-      return response.data;
-    } catch (error) {
-      toast.error('Failed to complete visit', { description: formatApiError(error) });
-      throw error;
-    }
-  };
-
-  const recordOffer = async (id, data) => {
-    try {
-      const response = await admissionTrackingAPI.createOffer(id, data);
-      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
-      toast.success('University offer recorded successfully');
-      return response.data;
-    } catch (error) {
-      toast.error('Failed to record offer', { description: formatApiError(error) });
-      throw error;
-    }
-  };
-
-  const recordConditionalOffer = async (id, data) => {
-    try {
-      const response = await admissionTrackingAPI.createConditionalOffer(id, data);
-      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
-      toast.success('Conditional offer recorded successfully');
-      return response.data;
-    } catch (error) {
-      toast.error('Failed to record conditional offer', { description: formatApiError(error) });
-      throw error;
-    }
-  };
-
-  const confirmAdmission = async (id, data) => {
-    try {
-      const response = await admissionTrackingAPI.confirmAdmission(id, data);
-      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
-      toast.success('Student admission confirmed successfully');
-      return response.data;
-    } catch (error) {
-      toast.error('Failed to confirm admission', { description: formatApiError(error) });
-      throw error;
-    }
-  };
-
-  const recordEnrollment = async (id, data) => {
-    try {
-      const response = await admissionTrackingAPI.enroll(id, data);
-      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
-      toast.success('Student enrollment recorded successfully');
-      return response.data;
-    } catch (error) {
-      toast.error('Failed to record enrollment', { description: formatApiError(error) });
-      throw error;
-    }
-  };
-
-  const updateDeposit = async (id, data) => {
-    try {
-      const response = await admissionTrackingAPI.updateDeposit(id, data);
-      setApplications(prev => prev.map(app => app.id === id ? response.data : app));
-      toast.success('Deposit information updated successfully');
-      return response.data;
-    } catch (error) {
-      toast.error('Failed to update deposit', { description: formatApiError(error) });
-      throw error;
-    }
-  };
-
   // Finance Review operations (Phase G)
   const startInvoiceReview = async (invoiceId) => {
     try {
@@ -1095,7 +1013,7 @@ export const DataProvider = ({ children }) => {
 
   const value = {
     agents,
-    events,
+    news,
     students,
     invoices,
     tickets,
@@ -1114,31 +1032,34 @@ export const DataProvider = ({ children }) => {
     deleteAgent,
     getAgentById,
     verifyAgent,
+    reviewAgentOnboarding,
     uploadVerificationDocument,
     deleteVerificationDocument,
     viewAgentDocument,
-    // Event operations
-    createEvent,
-    updateEvent,
-    deleteEvent,
-    notifyAgents,
-    getEventById,
-    getEventsForAgent,
+    viewAgentContractFile,
+    viewPayoffSlip,
+    recordUniversityPayment,
+    authorizePaymentException,
+    issueAgentContract,
+    uploadSignedAgentContract,
+    issueAgentCertificate,
+    // News & updates operations
+    fetchNews,
+    createNews,
+    updateNews,
+    deleteNews,
     // Student operations
     fetchAgents,
     fetchStudents,
     addStudent,
-    getStudentsByEvent,
     getStudentsByAgent,
     deleteStudent,
     updateStudent,
-    updateStudentStatus,
     getStudentById,
     uploadStudentDocument,
     verifyStudentDocument,
     viewStudentDocument,
     requestStudentDocument,
-    fetchStudentsForEvent,
     // University operations
     universities,
     fetchUniversities,
@@ -1160,14 +1081,6 @@ export const DataProvider = ({ children }) => {
     updateApplicationStatus,
     updateWorkflowStatus,
     deleteApplication,
-    // Admission tracking operations
-    scheduleVisit,
-    completeVisit,
-    recordOffer,
-    recordConditionalOffer,
-    confirmAdmission,
-    recordEnrollment,
-    updateDeposit,
     // Invoice operations
     createInvoice,
     updateInvoiceStatus,

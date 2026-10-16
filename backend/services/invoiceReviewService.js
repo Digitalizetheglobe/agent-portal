@@ -3,6 +3,34 @@ const { sequelize } = require('../config/db');
 const { Invoice, Application, Student, University, User, CommissionSnapshot, Payoff } = require('../models');
 const { hasAuthoritativeTuition } = require('../utils/tuitionUtils');
 const payoffService = require('./payoffService');
+const { scopeWhereToAgents, assertCanAccessAgent } = require('../utils/agentScope');
+const { computeCommission, assertRatesSet, round2 } = require('../utils/commission');
+const { createNotification } = require('../controllers/notificationController');
+
+// Invoice events: the agent is told about every decision; the Head of Admission about resubmissions
+const notifyInvoiceAgent = (invoice, title, message, type = 'info') => createNotification({
+  recipient: invoice.agentId,
+  title,
+  message,
+  type,
+  relatedId: invoice.id,
+  relatedModel: 'Invoice'
+});
+
+const notifyHeadsOfAdmission = async (invoice, title, message) => {
+  const heads = await User.findAll({
+    where: { role: 'admin', status: 'active', staffRole: 'head_admission' },
+    attributes: ['id']
+  });
+  await Promise.all(heads.map(head => createNotification({
+    recipient: head.id,
+    title,
+    message,
+    type: 'info',
+    relatedId: invoice.id,
+    relatedModel: 'Invoice'
+  })));
+};
 
 const ALLOWED_REVIEW_STATUSES = [
   'PendingReview',
@@ -13,12 +41,6 @@ const ALLOWED_REVIEW_STATUSES = [
   'Rejected'
 ];
 const ALLOWED_INVOICE_STATUSES = ['Pending', 'Paid', 'Rejected'];
-
-// Admin-configured commission rate on the agent profile (null when not set)
-const getAgentDefaultRate = async (agentId) => {
-  const agent = await User.findByPk(agentId, { attributes: ['id', 'commissionRate'] });
-  return agent && agent.commissionRate ? parseFloat(agent.commissionRate) : null;
-};
 
 // Helper to format review record
 const formatReview = async (invoice) => {
@@ -99,6 +121,33 @@ const formatReview = async (invoice) => {
   });
   inv.commissionSnapshots = snapshots.map(s => s.toJSON());
 
+  // Commission per application. The rate comes from each application's university; once the
+  // invoice is approved the locked snapshots are the truth, before that it is calculated live.
+  if (inv.commissionSnapshots.length) {
+    const byApp = new Map((inv.applications || []).map(a => [String(a.id), a]));
+    const lines = inv.commissionSnapshots.map((snap) => {
+      const app = byApp.get(String(snap.applicationId)) || {};
+      return {
+        applicationId: snap.applicationId,
+        applicationNumber: app.applicationNumber || null,
+        universityId: app.universityId || null,
+        universityName: app.university ? app.university.name : null,
+        tuition: snap.contractualTuition,
+        rate: snap.commissionRate,
+        gross: snap.grossAmount
+      };
+    });
+    inv.commissionBreakdown = {
+      locked: true,
+      lines,
+      total: round2(lines.reduce((sum, l) => sum + l.gross, 0)),
+      blendedRate: inv.commissionRate,
+      missing: []
+    };
+  } else {
+    inv.commissionBreakdown = { locked: false, ...(await computeCommission(inv.applications || [])) };
+  }
+
   // Linked Payoff
   const payoff = await Payoff.findOne({
     where: { invoiceId: inv.id }
@@ -166,6 +215,8 @@ class InvoiceReviewService {
     if (agentId) {
       where.agentId = agentId;
     }
+    // Account Managers only see invoices of their own agents
+    await scopeWhereToAgents(where, currentUser);
 
     // 4. Search filter (invoiceNumber, remarks, agent agency)
     if (search && search.trim()) {
@@ -265,7 +316,7 @@ class InvoiceReviewService {
             {
               model: Student,
               as: 'student',
-              attributes: ['id', 'name', 'email', 'country', 'education', 'status', 'verificationStatus', 'documents']
+              attributes: ['id', 'name', 'email', 'country', 'education', 'verificationStatus', 'documents']
             },
             {
               model: University,
@@ -289,6 +340,7 @@ class InvoiceReviewService {
       err.statusCode = 403;
       throw err;
     }
+    await assertCanAccessAgent(currentUser, invoice.agentId);
 
     return await formatReview(invoice);
   }
@@ -363,81 +415,10 @@ class InvoiceReviewService {
   }
 
   /**
-   * Set commission rate on invoice (Admin only)
-   */
-  async setCommissionRate(invoiceId, { commissionRate }, currentUser) {
-    if (currentUser.role !== 'admin') {
-      const err = new Error('Access denied. Only admin can set commission rates.');
-      err.statusCode = 403;
-      throw err;
-    }
-
-    if (commissionRate === undefined || commissionRate === null || commissionRate === '') {
-      const err = new Error('Commission rate is required');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const parsedRate = parseFloat(commissionRate);
-    if (isNaN(parsedRate) || parsedRate < 0 || parsedRate > 100 || !isFinite(parsedRate)) {
-      const err = new Error('Commission rate must be a valid percentage between 0 and 100');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const invoice = await Invoice.findByPk(invoiceId);
-    if (!invoice) {
-      const err = new Error('Invoice not found');
-      err.statusCode = 404;
-      throw err;
-    }
-
-    if (invoice.status === 'Paid') {
-      const err = new Error('Cannot modify commission rate on a paid invoice');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    if (invoice.financeReviewStatus === 'Approved') {
-      const err = new Error('Cannot modify commission rate on an already approved invoice');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    const apps = await Application.findAll({
-      where: { invoiceId: invoice.id },
-      attributes: ['id', 'tuitionFee']
-    });
-
-    const totalTuition = apps.reduce((sum, a) => sum + (parseFloat(a.tuitionFee) || 0), 0);
-    const newAmount = Math.round((totalTuition * (parsedRate / 100)) * 100) / 100;
-
-    const agentRate = await getAgentDefaultRate(invoice.agentId);
-
-    invoice.commissionRate = parsedRate;
-    invoice.amount = newAmount;
-
-    const history = Array.isArray(invoice.financeReviewHistory) ? [...invoice.financeReviewHistory] : [];
-    history.push({
-      action: agentRate !== null && agentRate !== parsedRate ? 'RATE_OVERRIDDEN' : 'RATE_ESTABLISHED',
-      commissionRate: parsedRate,
-      agentDefaultRate: agentRate,
-      amount: newAmount,
-      changedBy: currentUser.id,
-      changedAt: new Date().toISOString()
-    });
-    invoice.financeReviewHistory = history;
-
-    await invoice.save();
-
-    return await formatReview(invoice);
-  }
-
-  /**
    * Approve invoice review (UnderReview -> Approved)
    * Transaction-safe: creates CommissionSnapshots + Payoff
    */
-  async approveInvoice(invoiceId, { notes, commissionRate }, currentUser) {
+  async approveInvoice(invoiceId, { notes }, currentUser) {
     if (currentUser.role !== 'admin') {
       const err = new Error('Access denied. Only admin can approve an invoice review.');
       err.statusCode = 403;
@@ -488,28 +469,6 @@ class InvoiceReviewService {
         throw err;
       }
 
-      // If Admin provides commissionRate at approval time, update it
-      if (commissionRate !== undefined && commissionRate !== null && commissionRate !== '') {
-        const parsedRate = parseFloat(commissionRate);
-        if (isNaN(parsedRate) || parsedRate < 0 || parsedRate > 100 || !isFinite(parsedRate)) {
-          const err = new Error('Commission rate must be a valid percentage between 0 and 100');
-          err.statusCode = 400;
-          throw err;
-        }
-        invoice.commissionRate = parsedRate;
-      } else if (!(parseFloat(invoice.commissionRate) > 0)) {
-        // No rate on the invoice: fall back to the agent's admin-configured rate
-        const agentRate = await getAgentDefaultRate(invoice.agentId);
-        if (agentRate !== null) invoice.commissionRate = agentRate;
-      }
-
-      // Invariant: An invoice cannot be approved without a verified positive commission rate
-      if (invoice.commissionRate <= 0) {
-        const err = new Error('Authoritative commission rate must be established by Admin before approving invoice.');
-        err.statusCode = 400;
-        throw err;
-      }
-
       // Fetch linked applications
       const apps = await Application.findAll({
         where: { invoiceId: invoice.id },
@@ -531,14 +490,21 @@ class InvoiceReviewService {
         }
       }
 
-      const activeRate = parseFloat(invoice.commissionRate);
+      // Commission is set per university: every application uses its own university's rate,
+      // read now and locked into the snapshot below. A university with no rate blocks approval.
+      const commission = await computeCommission(apps, { transaction: t });
+      assertRatesSet(commission);
+      const lineByApp = new Map(commission.lines.map(l => [String(l.applicationId), l]));
+      invoice.commissionRate = commission.blendedRate;
       let calculatedTotalGross = 0;
 
       // ─── CommissionSnapshot Generation ──────────────────────────────────────
       for (const app of apps) {
         const contractualTuition = parseFloat(app.tuitionFee);
         const commissionableTuition = contractualTuition;
-        const grossAmount = Math.round((commissionableTuition * (activeRate / 100)) * 100) / 100;
+        const line = lineByApp.get(String(app.id));
+        const activeRate = line.rate;
+        const grossAmount = line.gross;
         calculatedTotalGross += grossAmount;
 
         // Idempotent creation check
@@ -587,9 +553,23 @@ class InvoiceReviewService {
       await invoice.save({ transaction: t });
 
       // ─── Payoff Generation ────────────────────────────────────────────────
-      await payoffService.createPayoffForApprovedInvoice(invoice, calculatedTotalGross, currentUser, t);
+      // The payoff is in the applications' currency; the university payment must be recorded in it
+      const payoffCurrencies = new Set(apps.map(a => (a.currency || 'USD').toUpperCase()));
+      if (payoffCurrencies.size > 1) {
+        const err = new Error('This invoice mixes currencies, so it cannot be paid. Ask the agent to raise separate invoices.');
+        err.statusCode = 400;
+        throw err;
+      }
+      await payoffService.createPayoffForApprovedInvoice(invoice, calculatedTotalGross, currentUser, t, [...payoffCurrencies][0]);
 
       await t.commit();
+
+      await notifyInvoiceAgent(
+        invoice,
+        'Invoice approved',
+        `Invoice ${invoice.invoiceNumber} was approved and is now Processing. You will be paid once the university has paid QStudy.`,
+        'success'
+      );
 
       return await this.getInvoiceForReview(invoice.id, currentUser);
     } catch (error) {
@@ -672,6 +652,13 @@ class InvoiceReviewService {
       await invoice.save({ transaction: t });
       await t.commit();
 
+      await notifyInvoiceAgent(
+        invoice,
+        'Invoice needs changes',
+        `Invoice ${invoice.invoiceNumber} was returned for correction: ${note}`,
+        'warning'
+      );
+
       return await this.getInvoiceForReview(invoice.id, currentUser);
     } catch (error) {
       await t.rollback();
@@ -703,6 +690,7 @@ class InvoiceReviewService {
         err.statusCode = 403;
         throw err;
       }
+      await assertCanAccessAgent(currentUser, invoice.agentId);
 
       // Lifecycle check
       if (invoice.financeReviewStatus === 'Rejected') {
@@ -746,6 +734,12 @@ class InvoiceReviewService {
 
       await invoice.save({ transaction: t });
       await t.commit();
+
+      await notifyHeadsOfAdmission(
+        invoice,
+        'Invoice resubmitted',
+        `Invoice ${invoice.invoiceNumber} was corrected and resubmitted for review.`
+      );
 
       return await this.getInvoiceForReview(invoice.id, currentUser);
     } catch (error) {
@@ -830,6 +824,13 @@ class InvoiceReviewService {
 
       await invoice.save({ transaction: t });
       await t.commit();
+
+      await notifyInvoiceAgent(
+        invoice,
+        'Invoice rejected',
+        `Invoice ${invoice.invoiceNumber} was rejected: ${reason.trim()}`,
+        'error'
+      );
 
       return await this.getInvoiceForReview(invoice.id, currentUser);
     } catch (error) {

@@ -29,6 +29,8 @@ import { Label } from '../../components/ui/label';
 import InvoiceModal from '../../components/modals/InvoiceModal';
 import { invoiceReviewAPI } from '../../utils/api';
 import { FinancialStatusBadge, FinancialStateHierarchy } from '../../components/common/FinancialStatusBadge';
+import InvoiceStageSummary from '../../components/common/InvoiceStageSummary';
+import { getPayoffPaymentState, PAYOFF_PAYMENT_STATE_INFO } from '../../utils/invoiceStage';
 import {
   formatCurrency,
   formatFinancialDate,
@@ -240,6 +242,11 @@ const InvoicesPage = () => {
                       <div className="flex flex-col items-center gap-1">
                         <FinancialStatusBadge status={linkedPayoff.status} size="sm" />
                         <span className="text-[10px] text-gray-500 font-mono">{linkedPayoff.payoffNumber}</span>
+                        {linkedPayoff.status === 'PENDING' && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(linkedPayoff)].style}`}>
+                            {PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(linkedPayoff)].label}
+                          </span>
+                        )}
                         {linkedPayoff.status === 'SETTLED' && linkedPayoff.settledAt && (
                           <span className="text-[10px] text-[#27500A] font-semibold font-['Outfit'] tabular-nums">
                             Settled {formatFinancialDate(linkedPayoff.settledAt)}
@@ -293,6 +300,9 @@ const InvoicesPage = () => {
           </Button>
         </div>
       </div>
+
+      {/* Submitted / Processing / Paid: every invoice in exactly one stage */}
+      <InvoiceStageSummary invoices={invoices} />
 
       {/* True Financial Lifecycle KPI Cards (FA-4.3) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

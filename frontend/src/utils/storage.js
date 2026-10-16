@@ -4,7 +4,6 @@
 export const STORAGE_KEYS = {
   AUTH: 'admin_portal_auth',
   AGENTS: 'admin_portal_agents',
-  EVENTS: 'admin_portal_events',
   STUDENTS: 'admin_portal_students',
   THEME: 'admin_portal_theme'
 };

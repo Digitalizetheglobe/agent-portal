@@ -92,7 +92,7 @@ const AdminSupportPage = () => {
 
   const handleViewAgent = () => {
     if (selectedTicket?.agentId?._id || selectedTicket?.agentId?.id) {
-      navigate(`/admin/agents/${selectedTicket.agentId._id || selectedTicket.agentId.id}/report`);
+      navigate(`/admin/agents/${selectedTicket.agentId._id || selectedTicket.agentId.id}`);
     } else {
       toast.error('Agent details not found');
     }

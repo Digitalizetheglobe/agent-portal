@@ -1,4 +1,5 @@
 const { Ticket, User } = require('../models');
+const { createNotification } = require('./notificationController');
 
 // Helper to format ticket with populated agent and responses.senderId
 const formatTicket = async (ticket) => {
@@ -205,6 +206,17 @@ exports.addResponse = async (req, res) => {
 
     await ticket.save();
 
+    if (req.user.role === 'admin') {
+      await createNotification({
+        recipient: ticket.agentId,
+        title: 'Support replied to your ticket',
+        message: `There is a new reply on "${ticket.subject}".`,
+        type: 'info',
+        relatedId: ticket.id,
+        relatedModel: 'Ticket'
+      });
+    }
+
     const formatted = await formatTicket(ticket);
     res.status(201).json(formatted);
   } catch (error) {
@@ -247,6 +259,17 @@ exports.updateTicketStatus = async (req, res) => {
 
     ticket.status = status;
     await ticket.save();
+
+    if (req.user.role === 'admin') {
+      await createNotification({
+        recipient: ticket.agentId,
+        title: 'Support ticket updated',
+        message: `Your ticket "${ticket.subject}" is now ${status}.`,
+        type: status === 'Resolved' || status === 'Closed' ? 'success' : 'info',
+        relatedId: ticket.id,
+        relatedModel: 'Ticket'
+      });
+    }
 
     const formatted = await formatTicket(ticket);
     res.status(200).json(formatted);

@@ -8,7 +8,7 @@ const {
   updateCourseStatus,
   deleteCourse
 } = require('../controllers/courseController');
-const { protect, restrictTo } = require('../middleware/auth');
+const { protect, restrictTo, restrictToSuperAdminOr } = require('../middleware/auth');
 
 // All course routes require authentication
 router.use(protect);
@@ -18,9 +18,9 @@ router.get('/', getCourses);
 router.get('/:id', getCourseById);
 
 // Admin-only management endpoints
-router.post('/', restrictTo('admin'), createCourse);
-router.put('/:id', restrictTo('admin'), updateCourse);
-router.patch('/:id/status', restrictTo('admin'), updateCourseStatus);
-router.delete('/:id', restrictTo('admin'), deleteCourse);
+router.post('/', restrictToSuperAdminOr('head_admission'), createCourse);
+router.put('/:id', restrictToSuperAdminOr('head_admission'), updateCourse);
+router.patch('/:id/status', restrictToSuperAdminOr('head_admission'), updateCourseStatus);
+router.delete('/:id', restrictToSuperAdminOr('head_admission'), deleteCourse);
 
 module.exports = router;

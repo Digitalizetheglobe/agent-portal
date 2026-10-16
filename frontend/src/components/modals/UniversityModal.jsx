@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { universityAPI } from '../../utils/api';
 import { useData } from '../../context/DataContext';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { Building2, Globe, Mail, User, MapPin } from 'lucide-react';
+import { Building2, Globe, Mail, User, MapPin, Upload } from 'lucide-react';
 import { countries } from '../../lib/countries';
 import { toast } from 'sonner';
 
@@ -33,7 +34,9 @@ const initialFormState = {
   contactPerson: '',
   contactEmail: '',
   status: 'active',
-  description: ''
+  description: '',
+  commissionRate: '',
+  fees: []
 };
 
 const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) => {
@@ -43,6 +46,8 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
   const [formData, setFormData] = useState(initialFormState);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (university) {
@@ -56,7 +61,11 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
         contactPerson: university.contactPerson || '',
         contactEmail: university.contactEmail || '',
         status: university.status || 'active',
-        description: university.description || ''
+        description: university.description || '',
+        commissionRate: university.commissionRate != null ? String(university.commissionRate) : '',
+        fees: Array.isArray(university.fees)
+          ? university.fees.map((fee) => ({ id: fee.id, label: fee.label || '', amount: String(fee.amount ?? ''), currency: fee.currency || 'USD', note: fee.note || '' }))
+          : []
       });
     } else {
       setFormData(initialFormState);
@@ -68,6 +77,29 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: null }));
+    }
+  };
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Logo must be 2MB or smaller');
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const url = await universityAPI.uploadLogo(file);
+      handleChange('logoUrl', url);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -83,6 +115,19 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
         newErrors.contactEmail = 'Invalid contact email format';
       }
     }
+
+    if (formData.commissionRate !== '') {
+      const rate = parseFloat(formData.commissionRate);
+      if (isNaN(rate) || rate <= 0 || rate > 100) {
+        newErrors.commissionRate = 'Commission must be a percentage above 0 and at most 100';
+      }
+    }
+
+    formData.fees.forEach((fee, index) => {
+      if (!fee.label.trim()) newErrors.fees = `Fee ${index + 1}: a name is required`;
+      else if (fee.amount === '' || isNaN(parseFloat(fee.amount)) || parseFloat(fee.amount) < 0) newErrors.fees = `Fee ${index + 1} (${fee.label}): enter an amount, 0 or more`;
+      else if (!/^[A-Za-z]{3}$/.test(fee.currency.trim())) newErrors.fees = `Fee ${index + 1} (${fee.label}): the currency is a 3-letter code such as USD or MYR`;
+    });
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -104,7 +149,15 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
         contactPerson: formData.contactPerson.trim() || null,
         contactEmail: formData.contactEmail.trim() ? formData.contactEmail.trim().toLowerCase() : null,
         status: formData.status,
-        description: formData.description.trim() || null
+        description: formData.description.trim() || null,
+        commissionRate: formData.commissionRate === '' ? null : parseFloat(formData.commissionRate),
+        fees: formData.fees.map((fee) => ({
+          id: fee.id,
+          label: fee.label.trim(),
+          amount: parseFloat(fee.amount),
+          currency: fee.currency.trim().toUpperCase(),
+          note: fee.note.trim() || null
+        }))
       };
 
       if (isEditing) {
@@ -238,11 +291,40 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
                 <Label className="text-xs font-semibold text-gray-700">
                   Logo URL
                 </Label>
-                <Input
-                  value={formData.logoUrl}
-                  onChange={(e) => handleChange('logoUrl', e.target.value)}
-                  placeholder="https://example.com/logo.png"
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={formData.logoUrl}
+                    onChange={(e) => handleChange('logoUrl', e.target.value)}
+                    placeholder="https://example.com/logo.png"
+                  />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingLogo}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="shrink-0"
+                  >
+                    <Upload className="w-3.5 h-3.5 mr-1.5" />
+                    {uploadingLogo ? 'Uploading...' : 'Upload'}
+                  </Button>
+                </div>
+                {formData.logoUrl && (
+                  <img
+                    src={formData.logoUrl}
+                    alt="Logo preview"
+                    className="h-12 w-12 object-contain rounded border border-gray-200 bg-white mt-1"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    onLoad={(e) => { e.currentTarget.style.display = ''; }}
+                  />
+                )}
               </div>
             </div>
 
@@ -270,6 +352,88 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
                   {errors.contactEmail && <p className="text-[11px] text-red-500">{errors.contactEmail}</p>}
                 </div>
               </div>
+            </div>
+
+            {/* Commission */}
+            <div className="pt-3 border-t border-gray-200 space-y-1.5">
+              <Label className="text-xs font-semibold text-gray-700">Agent Commission (%)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={formData.commissionRate}
+                onChange={(e) => handleChange('commissionRate', e.target.value)}
+                placeholder="e.g. 10"
+                className={errors.commissionRate ? 'border-red-500' : ''}
+              />
+              {errors.commissionRate && <p className="text-[11px] text-red-500">{errors.commissionRate}</p>}
+              <p className="text-[11px] text-gray-500">
+                Percentage of the tuition fee paid to the agent for each admission to this university.
+                Invoices cannot be raised for a university until this is set.
+              </p>
+            </div>
+
+            {/* Fee structure */}
+            <div className="pt-3 border-t border-gray-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-gray-700">Fee structure</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setFormData(prev => ({ ...prev, fees: [...prev.fees, { id: undefined, label: '', amount: '', currency: 'USD', note: '' }] }))}
+                >
+                  Add fee
+                </Button>
+              </div>
+              <p className="text-[11px] text-gray-500">
+                What a student pays besides tuition, for example an application or registration fee. Tuition per course is set under Courses.
+              </p>
+              {formData.fees.map((fee, index) => (
+                <div key={index} className="grid grid-cols-12 gap-2 items-start">
+                  <Input
+                    className="col-span-4"
+                    placeholder="Name, e.g. Application fee"
+                    value={fee.label}
+                    onChange={(e) => setFormData(prev => ({ ...prev, fees: prev.fees.map((f, i) => i === index ? { ...f, label: e.target.value } : f) }))}
+                  />
+                  <Input
+                    className="col-span-2"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Amount"
+                    value={fee.amount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, fees: prev.fees.map((f, i) => i === index ? { ...f, amount: e.target.value } : f) }))}
+                  />
+                  <Input
+                    className="col-span-2 uppercase"
+                    maxLength={3}
+                    placeholder="USD"
+                    value={fee.currency}
+                    onChange={(e) => setFormData(prev => ({ ...prev, fees: prev.fees.map((f, i) => i === index ? { ...f, currency: e.target.value } : f) }))}
+                  />
+                  <Input
+                    className="col-span-3"
+                    placeholder="Note (optional)"
+                    value={fee.note}
+                    onChange={(e) => setFormData(prev => ({ ...prev, fees: prev.fees.map((f, i) => i === index ? { ...f, note: e.target.value } : f) }))}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="col-span-1 h-9 text-red-600 hover:bg-red-50"
+                    aria-label="Remove fee"
+                    onClick={() => setFormData(prev => ({ ...prev, fees: prev.fees.filter((_, i) => i !== index) }))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              {errors.fees && <p className="text-[11px] text-red-500">{errors.fees}</p>}
             </div>
 
             {/* Description */}

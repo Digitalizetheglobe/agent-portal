@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { hasStaffRole } from '../../utils/staffRoles';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
@@ -27,6 +29,8 @@ import InvoiceModal from '../../components/modals/InvoiceModal';
 import FinanceReviewModal from '../../components/modals/FinanceReviewModal';
 import { invoiceReviewAPI, formatApiError } from '../../utils/api';
 import { FinancialStatusBadge, FinancialStateHierarchy } from '../../components/common/FinancialStatusBadge';
+import InvoiceStageSummary from '../../components/common/InvoiceStageSummary';
+import { getPayoffPaymentState, PAYOFF_PAYMENT_STATE_INFO } from '../../utils/invoiceStage';
 import {
   formatCurrency,
   formatFinancialDate,
@@ -37,6 +41,9 @@ import { toast } from 'sonner';
 
 const AdminInvoicesPage = () => {
   const { invoices, fetchInvoices, payoffs, fetchPayoffs, loading } = useData();
+  const { user } = useAuth();
+  // Reviewing and approving invoices belongs to the Head of Admission
+  const canReview = hasStaffRole(user, 'head_admission');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -187,6 +194,11 @@ const AdminInvoicesPage = () => {
                       <div className="flex flex-col items-center gap-1">
                         <FinancialStatusBadge status={linkedPayoff.status} size="sm" />
                         <span className="text-[10px] text-gray-500 font-mono">{linkedPayoff.payoffNumber}</span>
+                        {linkedPayoff.status === 'PENDING' && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(linkedPayoff)].style}`}>
+                            {PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(linkedPayoff)].label}
+                          </span>
+                        )}
                         {linkedPayoff.status === 'SETTLED' && linkedPayoff.settledAt && (
                           <span className="text-[10px] text-[#27500A] font-medium tabular-nums">
                             Settled {formatFinancialDate(linkedPayoff.settledAt)}
@@ -202,14 +214,16 @@ const AdminInvoicesPage = () => {
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
                     <div className="flex justify-center items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-[11px] font-bold text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB] hover:text-[#042C53]"
-                        onClick={() => openReviewModal(invoice.id)}
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Review
-                      </Button>
+                      {canReview && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-[11px] font-bold text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB] hover:text-[#042C53]"
+                          onClick={() => openReviewModal(invoice.id)}
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Review
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -250,6 +264,9 @@ const AdminInvoicesPage = () => {
           </Button>
         </div>
       </div>
+
+      {/* Submitted / Processing / Paid: every invoice in exactly one stage */}
+      <InvoiceStageSummary invoices={invoices} />
 
       {/* True Operational Lifecycle KPIs (FA-4.4) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -518,16 +535,18 @@ const AdminInvoicesPage = () => {
                   This is an electronically generated institutional settlement document. QStudy Portal.
                 </div>
                 <div className="flex gap-3">
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setIsViewOpen(false);
-                      openReviewModal(selectedInvoice.id);
-                    }}
-                    className="h-9 px-4 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Review Actions
-                  </Button>
+                  {canReview && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setIsViewOpen(false);
+                        openReviewModal(selectedInvoice.id);
+                      }}
+                      className="h-9 px-4 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Review Actions
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"

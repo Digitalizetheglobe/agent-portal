@@ -53,6 +53,24 @@ const University = sequelize.define('University', {
   description: {
     type: DataTypes.TEXT,
     allowNull: true
+  },
+  // Commission percentage QStudy pays agents on the tuition fee of an admission to this university.
+  // Set by the Head of Admission / super admin. Null = not set yet (invoices cannot be raised).
+  commissionRate: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: true
+  },
+  // Fee structure the student pays besides tuition: [{ id, label, amount, currency, note }]
+  fees: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+    defaultValue: []
+  },
+  // Brochure files: [{ id, title, fileName, fileUrl, contentType, size, uploadedAt, uploadedBy }]
+  brochures: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+    defaultValue: []
   }
 }, {
   timestamps: true,
@@ -68,6 +86,9 @@ University.prototype.toJSON = function() {
   const values = { ...this.get() };
   values.id = values.id ? values.id.toString() : values.id;
   values._id = values.id;
+  if (values.commissionRate !== null && values.commissionRate !== undefined) {
+    values.commissionRate = parseFloat(values.commissionRate);
+  }
   return values;
 };
 

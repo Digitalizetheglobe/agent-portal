@@ -1,9 +1,11 @@
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/db');
-const { Student, User, Application, Event } = require('../models');
+const { Student, User, Application } = require('../models');
+const { scopeWhereToAgents, assertCanAccessAgent } = require('../utils/agentScope');
+const admissionTrackingService = require('./admissionTrackingService');
 
 const VERIFICATION_STATUSES = ['Pending', 'UnderReview', 'Verified', 'Rejected'];
-// No documents are mandatory unless an event's checklist marks them so
+// No documents are mandatory by default
 const DEFAULT_REQUIRED_CATEGORIES = [];
 const ALLOWED_TRANSITIONS = {
   Pending:     ['UnderReview'],
@@ -51,42 +53,33 @@ const formatVerification = (student) => {
   };
 };
 
-// Option B (verification only after enrollment) is off by default. Set
-// VERIFICATION_REQUIRES_ENROLLMENT=true in the backend env to enforce it.
+// Option B (verification only once the student has progressed in the visa pipeline) is off by default.
+// Set VERIFICATION_REQUIRES_ENROLLMENT=true in the backend env to enforce it.
+// "Progressed" = at least one application reached Registration (or Visa 100%).
+const READY_PIPELINE_STAGES = ['Registration', 'Visa100'];
 const VERIFICATION_REQUIRES_ENROLLMENT = process.env.VERIFICATION_REQUIRES_ENROLLMENT === 'true';
 
 /**
- * Student verification happens after enrollment. A student is ready when at least one of their
- * applications is Enrolled with a confirmed admission, an enrollment date and a verified deposit.
+ * Student verification happens once the student has progressed through the visa pipeline. A student is
+ * ready when at least one of their applications reached the Registration stage (or Visa 100%).
  */
 const getEnrollmentReadiness = async (studentId, transaction = null) => {
-  const enrolled = await Application.findAll({
-    where: { studentId, status: 'Enrolled' },
-    attributes: ['id', 'applicationNumber', 'courseName', 'status', 'admissionDate', 'enrollmentDate', 'depositStatus'],
+  const progressed = await Application.findAll({
+    where: { studentId, pipelineStage: { [Op.in]: READY_PIPELINE_STAGES } },
+    attributes: ['id', 'applicationNumber', 'courseName', 'status', 'pipelineStage'],
     transaction
   });
 
-  const checked = enrolled.map(app => {
-    const missing = [];
-    if (!app.admissionDate) missing.push('admission confirmation');
-    if (!app.enrollmentDate) missing.push('enrollment date');
-    if (app.depositStatus !== 'Verified') missing.push('verified deposit');
-    return {
-      id: app.id,
-      applicationNumber: app.applicationNumber,
-      courseName: app.courseName,
-      depositStatus: app.depositStatus,
-      missing
-    };
-  });
+  const checked = progressed.map(app => ({
+    id: app.id,
+    applicationNumber: app.applicationNumber,
+    courseName: app.courseName,
+    pipelineStage: app.pipelineStage,
+    missing: []
+  }));
 
-  const ready = checked.some(a => a.missing.length === 0);
-  const blockers = [];
-  if (enrolled.length === 0) {
-    blockers.push('The student has no enrolled application yet.');
-  } else if (!ready) {
-    checked.forEach(a => blockers.push(`Application ${a.applicationNumber} is missing: ${a.missing.join(', ')}.`));
-  }
+  const ready = checked.length > 0;
+  const blockers = ready ? [] : ['The student has not reached the Registration stage of the visa pipeline yet.'];
 
   return { ready, enforced: VERIFICATION_REQUIRES_ENROLLMENT, enrolledApplications: checked, blockers };
 };
@@ -95,8 +88,7 @@ const assertReadyForVerification = async (studentId, transaction = null) => {
   const readiness = await getEnrollmentReadiness(studentId, transaction);
   if (VERIFICATION_REQUIRES_ENROLLMENT && !readiness.ready) {
     const err = new Error(
-      `Student verification starts after enrollment. ${readiness.blockers.join(' ')} ` +
-      'Enroll the student (with a verified deposit) first.'
+      `Student verification starts once the student reaches Registration. ${readiness.blockers.join(' ')}`
     );
     err.statusCode = 400;
     throw err;
@@ -106,6 +98,15 @@ const assertReadyForVerification = async (studentId, transaction = null) => {
 
 class StudentVerificationService {
 
+  // Re-derives invoice eligibility for a student's non-invoiced applications from the visa pipeline
+  async _refreshInvoiceEligibility(studentId, t) {
+    const apps = await Application.findAll({ where: { studentId, isInvoiced: false }, transaction: t });
+    for (const app of apps) {
+      await admissionTrackingService.deriveInvoiceEligibility(app, t);
+      await app.save({ transaction: t });
+    }
+  }
+
   async getVerificationQueue(query, currentUser) {
     requireAdmin(currentUser);
     const { status, search, page = 1, limit = 20 } = query || {};
@@ -113,6 +114,7 @@ class StudentVerificationService {
     const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
     const offset = (parsedPage - 1) * parsedLimit;
     const where = {};
+    await scopeWhereToAgents(where, currentUser);
     if (status) {
       if (!VERIFICATION_STATUSES.includes(status)) {
         const err = new Error('Invalid status. Allowed: ' + VERIFICATION_STATUSES.join(', '));
@@ -134,10 +136,7 @@ class StudentVerificationService {
     const readyApps = rows.length === 0 ? [] : await Application.findAll({
       where: {
         studentId: { [Op.in]: rows.map(r => r.id) },
-        status: 'Enrolled',
-        depositStatus: 'Verified',
-        admissionDate: { [Op.ne]: null },
-        enrollmentDate: { [Op.ne]: null }
+        pipelineStage: { [Op.in]: READY_PIPELINE_STAGES }
       },
       attributes: ['studentId']
     });
@@ -154,6 +153,7 @@ class StudentVerificationService {
     const student = await Student.findByPk(studentId, { include: verificationIncludes });
     if (!student) { const err = new Error('Student not found'); err.statusCode = 404; throw err; }
     enforceOwnership(student, currentUser);
+    await assertCanAccessAgent(currentUser, student.agentId);
     const readiness = await getEnrollmentReadiness(student.id);
     return { ...formatVerification(student), readiness };
   }
@@ -200,24 +200,15 @@ class StudentVerificationService {
       });
       if (!student) { const err = new Error('Student not found'); err.statusCode = 404; throw err; }
 
-      // Verification is the final check after enrollment: admission, verified deposit and enrollment must hold
+      // When enforced, verification only starts once the student has progressed in the visa pipeline
       await assertReadyForVerification(studentId, t);
 
       // ─── Phase 8.1-C: Authoritative Document Checklist & Approval Gate ───────
       const docs = Array.isArray(student.documents) ? student.documents : [];
 
-      // 1. Determine authoritative required document checklist from Event if student is event-linked
-      // Without an event checklist nothing is mandatory; the admin can still request documents from the agent
-      let requiredCategories = DEFAULT_REQUIRED_CATEGORIES;
-      if (student.eventId) {
-        const event = await Event.findByPk(student.eventId, { transaction: t });
-        if (event && Array.isArray(event.requiredDocuments) && event.requiredDocuments.length > 0) {
-          requiredCategories = event.requiredDocuments
-            .filter(d => d.mandatory !== false)
-            .map(d => (d.value || d.category || d.name || d.label || '').trim())
-            .filter(Boolean);
-        }
-      }
+      // 1. Required document checklist: nothing beyond the defaults is mandatory;
+      // the admin can still request documents from the agent
+      const requiredCategories = DEFAULT_REQUIRED_CATEGORIES;
 
       // 2. Validate mandatory categories from authoritative checklist
       if (requiredCategories.length > 0) {
@@ -266,20 +257,8 @@ class StudentVerificationService {
         verificationHistory: history
       }, { transaction: t });
 
-      // Evaluate invoice eligibility for any enrolled applications belonging to this verified student
-      const eligibleApps = await Application.findAll({
-        where: {
-          studentId,
-          status: 'Enrolled',
-          depositStatus: 'Verified',
-          admissionDate: { [Op.ne]: null }
-        },
-        transaction: t
-      });
-      for (const app of eligibleApps) {
-        app.isInvoiceEligible = true;
-        await app.save({ transaction: t });
-      }
+      // Re-derive invoice eligibility (the visa pipeline decides; verification can no longer grant it)
+      await this._refreshInvoiceEligibility(studentId, t);
 
       await t.commit();
       return await this.getVerificationDetail(studentId, currentUser);
@@ -300,19 +279,8 @@ class StudentVerificationService {
         (from) => buildHistoryEntry('VERIFICATION_REJECTED', from, 'Rejected', trimmedReason, currentUser.id),
         currentUser, t);
 
-      // Invalidate invoice eligibility on non-invoiced applications belonging to this rejected student
-      const invalidApps = await Application.findAll({
-        where: {
-          studentId,
-          isInvoiceEligible: true,
-          isInvoiced: false
-        },
-        transaction: t
-      });
-      for (const app of invalidApps) {
-        app.isInvoiceEligible = false;
-        await app.save({ transaction: t });
-      }
+      // A rejected student is never eligible: re-derive on the non-invoiced applications
+      await this._refreshInvoiceEligibility(studentId, t);
 
       await t.commit();
       return await this.getVerificationDetail(studentId, currentUser);
@@ -325,6 +293,7 @@ class StudentVerificationService {
     });
     if (!student) { const err = new Error('Student not found'); err.statusCode = 404; throw err; }
     enforceOwnership(student, currentUser);
+    await assertCanAccessAgent(currentUser, student.agentId);
     const history = Array.isArray(student.verificationHistory) ? student.verificationHistory : [];
     return { studentId: student.id, history, total: history.length };
   }

@@ -1,10 +1,11 @@
 const { Op } = require('sequelize');
-const { Student, Event, User } = require('../models');
+const { Student, User } = require('../models');
 const { sendEmail, templates } = require('../utils/email');
 const { putObject, getObject, deleteObject, generateStoragePath } = require('../utils/storage');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID: uuidv4 } = require('crypto');
 const { createNotification } = require('./notificationController');
 const studentService = require('../services/studentService');
+const { canAccessAgent } = require('../utils/agentScope');
 
 // @desc    Get all students (with search, filter, pagination)
 // @route   GET /api/students
@@ -82,6 +83,13 @@ exports.uploadDocument = async (req, res) => {
 
     // Check access: Agents can only upload to their own student
     if (req.user.role === 'agent' && student.agentId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        detail: 'Access denied'
+      });
+    }
+
+    if (!(await canAccessAgent(req.user, student.agentId))) {
       return res.status(403).json({
         success: false,
         detail: 'Access denied'
@@ -278,6 +286,13 @@ exports.downloadDocument = async (req, res) => {
       });
     }
 
+    if (!(await canAccessAgent(req.user, student.agentId))) {
+      return res.status(403).json({
+        success: false,
+        detail: 'Access denied'
+      });
+    }
+
     const docs = Array.isArray(student.documents) ? student.documents : [];
     const doc = docs.find(d => d.id === req.params.docId || d._id === req.params.docId);
 
@@ -296,60 +311,6 @@ exports.downloadDocument = async (req, res) => {
     res.send(Buffer.from(data));
   } catch (error) {
     console.error('Download document error:', error);
-    res.status(500).json({
-      success: false,
-      detail: error.message || 'Server error'
-    });
-  }
-};
-
-// @desc    Update student status
-// @route   PATCH /api/students/:id/status
-// @access  Private
-exports.updateStudentStatus = async (req, res) => {
-  try {
-    const { status } = req.body;
-    const allowedStatuses = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
-
-    if (!status || !allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        detail: 'Invalid status provided'
-      });
-    }
-
-    const student = await Student.findByPk(req.params.id);
-
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        detail: 'Student not found'
-      });
-    }
-
-    if (req.user.role === 'agent' && student.agentId.toString() !== req.user.id.toString()) {
-      return res.status(403).json({
-        success: false,
-        detail: 'Access denied'
-      });
-    }
-
-    student.status = status;
-    await student.save();
-
-    // Create notification for agent
-    await createNotification({
-      recipient: student.agentId,
-      title: 'Student Status Updated',
-      message: `The status of ${student.name || 'your student'} has been updated to ${status}.`,
-      type: 'info',
-      relatedId: student.id,
-      relatedModel: 'Student'
-    });
-
-    res.status(200).json(student.toJSON());
-  } catch (error) {
-    console.error('Update student status error:', error);
     res.status(500).json({
       success: false,
       detail: error.message || 'Server error'
@@ -405,6 +366,13 @@ exports.verifyStudentDocument = async (req, res) => {
       return res.status(404).json({
         success: false,
         detail: 'Student not found'
+      });
+    }
+
+    if (!(await canAccessAgent(req.user, student.agentId))) {
+      return res.status(403).json({
+        success: false,
+        detail: 'Access denied'
       });
     }
 
@@ -502,7 +470,13 @@ exports.requestDocument = async (req, res) => {
       });
     }
 
-    const event = student.eventId ? await Event.findByPk(student.eventId) : null;
+    if (!(await canAccessAgent(req.user, student.agentId))) {
+      return res.status(403).json({
+        success: false,
+        detail: 'Access denied'
+      });
+    }
+
     const course = student.courseInterested || student.customFields?.courseInterested || 'N/A';
     const categoryKey = String(category).trim();
     const displayName = (label && String(label).trim()) || categoryKey;
@@ -523,7 +497,7 @@ exports.requestDocument = async (req, res) => {
     await createNotification({
       recipient: student.agentId,
       title: 'Action Required: Missing Document',
-      message: `Admin has requested the "${displayName}" document for student "${student.name || 'N/A'}"${event ? ` registered for "${event.title}"` : ''} (Course: ${course}).`,
+      message: `Admin has requested the "${displayName}" document for student "${student.name || 'N/A'}"(Course: ${course}).`,
       type: 'warning',
       relatedId: student.id,
       relatedModel: 'Student'

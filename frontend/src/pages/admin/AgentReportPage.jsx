@@ -3,13 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Printer,
-  Mail,
-  Phone,
   Users,
-  FileText,
-  Calendar,
   Wallet,
-  Eye
+  UserRound
 } from 'lucide-react';
 import {
   LineChart,
@@ -27,6 +23,7 @@ import {
   Legend
 } from 'recharts';
 import { useData } from '../../context/DataContext';
+import { getFunnelLabel, getStudentStageInfo, hasFeesPaid, isBeyondApplication } from '../../utils/studentProgress';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -98,13 +95,13 @@ const EmptyRow = ({ icon: Icon, text }) => (
 const AgentReportPage = () => {
   const { agentId } = useParams();
   const navigate = useNavigate();
-  const { agents, students, events, invoices, fetchAgents, viewAgentDocument } = useData();
+  const { agents, students, invoices, fetchAgents } = useData();
 
   const [tab, setTab] = useState('overview');
-  const [pages, setPages] = useState({ students: 1, events: 1, invoices: 1, docs: 1 });
+  const [pages, setPages] = useState({ students: 1, invoices: 1 });
   const setPage = (key) => (n) => setPages(p => ({ ...p, [key]: n }));
 
-  // Agents upload verification documents after the admin's list was loaded, so refresh on open
+  // Keep the agent list fresh when the report is opened directly
   useEffect(() => {
     fetchAgents();
   }, [fetchAgents]);
@@ -116,11 +113,12 @@ const AgentReportPage = () => {
 
     const agentStudents = students.filter(s => s.agentId === agent.id);
     const registrations = agentStudents.length;
-    const confirmed = agentStudents.filter(s => ['Confirmed', 'Attended', 'Converted'].includes(s.status)).length;
-    const converted = agentStudents.filter(s => s.status === 'Converted').length;
+    // Past the application review (in the visa process or beyond), and with the fees paid
+    const confirmed = agentStudents.filter(isBeyondApplication).length;
+    const converted = agentStudents.filter(hasFeesPaid).length;
 
     const statusCounts = agentStudents.reduce((acc, s) => {
-      const key = s.status || 'New';
+      const key = getFunnelLabel(s);
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
@@ -132,29 +130,20 @@ const AgentReportPage = () => {
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       acc[key] = acc[key] || { key, month: d.toLocaleString('en-IN', { month: 'short', year: '2-digit' }), count: 0, converted: 0 };
       acc[key].count += 1;
-      if (st.status === 'Converted') acc[key].converted += 1;
+      if (hasFeesPaid(st)) acc[key].converted += 1;
       return acc;
     }, {});
     const monthlyData = Object.values(monthMap).sort((a, b) => a.key.localeCompare(b.key));
 
-    const agentEvents = events.filter(e => e.assignedAgents?.includes(agent.id));
     const agentInvoices = invoices.filter(inv => inv.agentId === agent.id);
     const st = (inv) => (inv.status || '').toLowerCase();
     const sum = (list) => list.reduce((t, inv) => t + (Number(inv.amount) || 0), 0);
 
     const funnelData = [
       { stage: 'Registered', value: registrations, fill: '#042C53' },
-      { stage: 'Confirmed', value: confirmed, fill: '#0EA5E9' },
-      { stage: 'Converted', value: converted, fill: '#10B981' },
+      { stage: 'In visa process', value: confirmed, fill: '#0EA5E9' },
+      { stage: 'Fees paid', value: converted, fill: '#10B981' },
     ];
-
-    const eventData = agentEvents
-      .map(ev => ({
-        name: ev.title.length > 22 ? `${ev.title.slice(0, 22)}…` : ev.title,
-        registrations: agentStudents.filter(s => s.eventId === ev.id || s.eventId === ev._id).length,
-      }))
-      .sort((a, b) => b.registrations - a.registrations)
-      .slice(0, 8);
 
     const invoiceByStatus = Object.values(agentInvoices.reduce((acc, inv) => {
       const key = (inv.status || 'submitted').toLowerCase();
@@ -166,7 +155,6 @@ const AgentReportPage = () => {
 
     return {
       funnelData,
-      eventData,
       invoiceByStatus,
       agentStudents,
       registrations,
@@ -175,13 +163,11 @@ const AgentReportPage = () => {
       convRate: registrations > 0 ? ((converted / registrations) * 100).toFixed(1) : '0.0',
       pieData,
       monthlyData,
-      agentEvents,
       agentInvoices,
       paidAmount: sum(agentInvoices.filter(i => st(i) === 'paid')),
       pendingAmount: sum(agentInvoices.filter(i => st(i) !== 'paid' && st(i) !== 'rejected')),
-      docs: agent.verificationDocuments || [],
     };
-  }, [agent, students, events, invoices]);
+  }, [agent, students, invoices]);
 
   if (!agent || !report) {
     return (
@@ -202,29 +188,17 @@ const AgentReportPage = () => {
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'students', label: 'Students', count: report.registrations },
-    { id: 'events', label: 'Events', count: report.agentEvents.length },
     { id: 'invoices', label: 'Invoices', count: report.agentInvoices.length },
-    { id: 'docs', label: 'Documents', count: report.docs.length },
   ];
   // On screen only the active tab shows; when printing, every section is included
   const show = (id) => (tab === id ? 'block' : 'hidden print:block');
 
   const kpis = [
     { label: 'Registrations', val: report.registrations, sub: 'Students registered by this agent', color: 'text-[#111827]' },
-    { label: 'Confirmed', val: report.confirmed, sub: 'Confirmed, attended or converted', color: 'text-[#0C447C]' },
-    { label: 'Converted', val: report.converted, sub: `${report.convRate}% conversion rate`, color: 'text-[#27500A]' },
+    { label: 'In visa process', val: report.confirmed, sub: 'Past the application review', color: 'text-[#0C447C]' },
+    { label: 'Fees paid', val: report.converted, sub: `${report.convRate}% of students`, color: 'text-[#27500A]' },
     { label: 'Invoiced · paid', val: formatINR(report.paidAmount), sub: 'Invoices already settled', color: 'text-[#27500A]' },
     { label: 'Invoiced · outstanding', val: formatINR(report.pendingAmount), sub: 'Awaiting payment or review', color: 'text-[#633806]' },
-  ];
-
-  const profile = [
-    ['User ID', agent.userId],
-    ['Agency', agent.agencyName],
-    ['Registration #', agent.businessRegistrationNumber],
-    ['Region', agent.region],
-    ['Commission rate', agent.commissionRate != null ? `${agent.commissionRate}%` : null],
-    ['Joined', agent.createdAt ? formatDate(agent.createdAt) : null],
-    ['Address', agent.fullAddress],
   ];
 
   return (
@@ -253,9 +227,14 @@ const AgentReportPage = () => {
             Performance report · {agent.agencyName || 'Independent agent'}{agent.region ? ` · ${agent.region}` : ''} · generated {formatDate(new Date())}
           </p>
         </div>
-        <Button variant="outline" onClick={() => window.print()} className="h-10 px-4 text-xs font-semibold border-slate-200 bg-white print:hidden">
-          <Printer className="w-4 h-4 mr-2" /> Print report
-        </Button>
+        <div className="flex gap-2 print:hidden">
+          <Button variant="outline" onClick={() => navigate(`/admin/agents/${agent.id}`)} className="h-10 px-4 text-xs font-semibold border-slate-200 bg-white">
+            <UserRound className="w-4 h-4 mr-2" /> Agent details
+          </Button>
+          <Button variant="outline" onClick={() => window.print()} className="h-10 px-4 text-xs font-semibold border-slate-200 bg-white">
+            <Printer className="w-4 h-4 mr-2" /> Print report
+          </Button>
+        </div>
       </div>
 
       {/* KPI Row */}
@@ -290,24 +269,8 @@ const AgentReportPage = () => {
 
       {/* OVERVIEW */}
       <div className={cn('space-y-6', show('overview'))}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="border-[#E5E7EB] shadow-none overflow-hidden bg-white">
-            <SectionHeader title="Agent profile" />
-            <div className="p-4 space-y-3">
-              <p className="text-sm text-[#111827] flex items-center gap-2 break-all"><Mail className="w-4 h-4 text-[#9CA3AF] shrink-0" /> {agent.email}</p>
-              <p className="text-sm text-[#111827] flex items-center gap-2"><Phone className="w-4 h-4 text-[#9CA3AF] shrink-0" /> {agent.phone || 'No phone provided'}</p>
-              <dl className="pt-3 border-t border-[#F3F4F6] space-y-2.5">
-                {profile.map(([label, val]) => (
-                  <div key={label} className="flex justify-between gap-4 text-sm">
-                    <dt className="text-[#6B7280] shrink-0">{label}</dt>
-                    <dd className="text-[#111827] font-medium text-right break-words min-w-0">{val || <span className="text-[#9CA3AF] font-normal">Not provided</span>}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          </Card>
-
-          <Card className="lg:col-span-2 border-[#E5E7EB] shadow-none overflow-hidden bg-white">
+        <div>
+          <Card className=" border-[#E5E7EB] shadow-none overflow-hidden bg-white">
             <SectionHeader title="Registrations per month" hint="Students registered each month, and how many of them converted" />
             <div className="h-[260px] p-4">
               {report.monthlyData.length === 0 ? (
@@ -322,7 +285,7 @@ const AgentReportPage = () => {
                     <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                     <Line type="monotone" dataKey="count" name="Registrations" stroke="#042C53" strokeWidth={3}
                       dot={{ r: 4, fill: '#042C53', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                    <Line type="monotone" dataKey="converted" name="Converted" stroke="#10B981" strokeWidth={2}
+                    <Line type="monotone" dataKey="converted" name="Fees paid" stroke="#10B981" strokeWidth={2}
                       dot={{ r: 3, fill: '#10B981', strokeWidth: 2, stroke: '#fff' }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -331,9 +294,9 @@ const AgentReportPage = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           <Card className="border-[#E5E7EB] shadow-none overflow-hidden bg-white">
-            <SectionHeader title="Conversion funnel" hint={`${report.convRate}% of registered students converted`} />
+            <SectionHeader title="Student funnel" hint={`${report.convRate}% of registered students have their fees paid`} />
             <div className="h-[240px] p-4">
               {report.registrations === 0 ? (
                 <EmptyRow icon={Users} text="No registrations yet." />
@@ -347,25 +310,6 @@ const AgentReportPage = () => {
                     <Bar dataKey="value" name="Students" radius={[0, 6, 6, 0]} barSize={28} label={{ position: 'right', fontSize: 12, fill: '#111827' }}>
                       {report.funnelData.map((d, i) => <Cell key={i} fill={d.fill} />)}
                     </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </Card>
-
-          <Card className="border-[#E5E7EB] shadow-none overflow-hidden bg-white">
-            <SectionHeader title="Registrations by event" hint="Which events this agent brings the most students to" />
-            <div className="h-[240px] p-4">
-              {report.eventData.length === 0 ? (
-                <EmptyRow icon={Calendar} text="No events assigned yet." />
-              ) : (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <BarChart data={report.eventData} layout="vertical" margin={{ left: 10, right: 24 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
-                    <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF' }} />
-                    <YAxis type="category" dataKey="name" width={130} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#4B5563' }} />
-                    <Tooltip cursor={{ fill: '#F9FAFB' }} contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', fontSize: 12 }} />
-                    <Bar dataKey="registrations" name="Registrations" fill="#0EA5E9" radius={[0, 6, 6, 0]} barSize={18} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -440,16 +384,14 @@ const AgentReportPage = () => {
                 <TableRow className="bg-[#F9FAFB] hover:bg-[#F9FAFB]">
                   <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 pl-6">Student</TableHead>
                   <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3">Contact</TableHead>
-                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 text-center">Status</TableHead>
+                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 text-center">Progress</TableHead>
                   <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3">Registered</TableHead>
-                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 pr-6">Event</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {report.agentStudents.length === 0 ? (
-                  <TableRow><TableCell colSpan={5}><EmptyRow icon={Users} text="No students registered yet." /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={4}><EmptyRow icon={Users} text="No students registered yet." /></TableCell></TableRow>
                 ) : slice(report.agentStudents, 'students').map((stu) => {
-                  const ev = events.find(e => e.id === stu.eventId || e._id === stu.eventId);
                   return (
                     <TableRow key={stu.id || stu._id} className="cursor-pointer hover:bg-[#F9FAFB]"
                       onClick={() => navigate(`/admin/students/${stu.id || stu._id}`)}>
@@ -459,13 +401,9 @@ const AgentReportPage = () => {
                         <p className="text-[11px] text-[#6B7280]">{stu.phone || 'No phone'}</p>
                       </TableCell>
                       <TableCell className="py-3 text-center">
-                        <Badge className={cn('border-none text-[10px] font-medium h-5', statusBadge(stu.status))}>{stu.status || 'New'}</Badge>
+                        <Badge className={cn('border-none text-[10px] font-medium h-5', getStudentStageInfo(stu).style)}>{getStudentStageInfo(stu).label}</Badge>
                       </TableCell>
                       <TableCell className="py-3 text-[13px] text-[#4B5563] whitespace-nowrap">{formatDate(stu.createdAt)}</TableCell>
-                      <TableCell className="py-3 pr-6">
-                        <p className="text-[13px] text-[#111827]">{ev?.title || 'Unknown event'}</p>
-                        <p className="text-[11px] text-[#6B7280]">{ev?.location || 'General'}</p>
-                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -473,32 +411,6 @@ const AgentReportPage = () => {
             </Table>
           </div>
           <Pager page={pages.students} setPage={setPage('students')} total={report.agentStudents.length} label="students" />
-        </Card>
-      </div>
-
-      {/* EVENTS */}
-      <div className={cn('mt-6', show('events'))}>
-        <Card className="border-[#E5E7EB] shadow-none overflow-hidden bg-white">
-          <SectionHeader title="Events assigned to this agent" />
-          {report.agentEvents.length === 0 ? (
-            <EmptyRow icon={Calendar} text="No events assigned to this agent." />
-          ) : (
-            <div className="divide-y divide-[#F3F4F6]">
-              {slice(report.agentEvents, 'events').map((ev) => {
-                const count = report.agentStudents.filter(s => s.eventId === ev.id || s.eventId === ev._id).length;
-                return (
-                  <div key={ev.id || ev._id} className="flex items-center justify-between px-6 py-3 gap-4">
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-[#111827] truncate">{ev.title}</p>
-                      <p className="text-[11px] text-[#6B7280] truncate">{formatDate(ev.date)}{ev.location ? ` · ${ev.location}` : ''}</p>
-                    </div>
-                    <span className="text-xs font-semibold text-[#042C53] whitespace-nowrap">{count} registration{count === 1 ? '' : 's'}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <Pager page={pages.events} setPage={setPage('events')} total={report.agentEvents.length} label="events" />
         </Card>
       </div>
 
@@ -522,42 +434,6 @@ const AgentReportPage = () => {
             </div>
           )}
           <Pager page={pages.invoices} setPage={setPage('invoices')} total={report.agentInvoices.length} label="invoices" />
-        </Card>
-      </div>
-
-      {/* DOCUMENTS */}
-      <div className={cn('mt-6', show('docs'))}>
-        <Card className="border-[#E5E7EB] shadow-none overflow-hidden bg-white">
-          <SectionHeader title="Verification documents" hint="Identity and business documents the agent uploaded" />
-          {report.docs.length === 0 ? (
-            <EmptyRow icon={FileText} text="This agent hasn't uploaded any documents yet." />
-          ) : (
-            <div className="divide-y divide-[#F3F4F6]">
-              {slice(report.docs, 'docs').map((doc, i) => (
-                <div key={doc.id || doc._id || i} className="px-6 py-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center shrink-0">
-                        <FileText className="w-4 h-4 text-[#6B7280]" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-[#111827]">{doc.docType}</p>
-                        <p className="text-[11px] text-[#6B7280] truncate">{doc.fileName}{doc.uploadedAt ? ` · Uploaded ${formatDate(doc.uploadedAt)}` : ''}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <Badge className={cn('border-none text-[10px] font-medium h-5 capitalize', statusBadge(doc.status))}>{doc.status}</Badge>
-                      <Button variant="outline" size="sm" className="h-7 text-xs print:hidden" onClick={() => viewAgentDocument(agent.id, doc.id || doc._id)}>
-                        <Eye className="w-3.5 h-3.5 mr-1.5" /> View
-                      </Button>
-                    </div>
-                  </div>
-                  {doc.remarks && <p className="text-[11px] text-[#6B7280] bg-[#F9FAFB] rounded p-2 mt-2"><strong>Remarks:</strong> {doc.remarks}</p>}
-                </div>
-              ))}
-            </div>
-          )}
-          <Pager page={pages.docs} setPage={setPage('docs')} total={report.docs.length} label="documents" />
         </Card>
       </div>
 

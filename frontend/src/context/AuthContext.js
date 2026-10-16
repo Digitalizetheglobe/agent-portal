@@ -96,6 +96,14 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
   }, []);
 
+  // Sign in with a session the server already created (e.g. after invite registration)
+  const startSession = (userData) => {
+    setUser(userData);
+    if (onLoginCallback) {
+      onLoginCallback();
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -104,6 +112,7 @@ export const AuthProvider = ({ children }) => {
     isAdmin,
     isAgent,
     updateUser,
+    startSession,
     updateProfile,
     updatePassword,
     isAuthenticated: !!user && user !== false,

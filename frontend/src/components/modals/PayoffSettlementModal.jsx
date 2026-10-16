@@ -28,6 +28,7 @@ import { FinancialStatusBadge } from '../common/FinancialStatusBadge';
 import { formatCurrency } from '../../utils/financialFormatters';
 import { useData } from '../../context/DataContext';
 import { toast } from 'sonner';
+import { currencyLabel } from '../../utils/invoiceStage';
 
 /**
  * PayoffSettlementModal allows Admin to record official offline payment settlement
@@ -40,12 +41,13 @@ const PayoffSettlementModal = ({
   invoice,
   onSuccess
 }) => {
-  const { settlePayoff, updateInvoiceStatus, fetchInvoices, fetchPayoffs } = useData();
+  const { settlePayoff, fetchInvoices, fetchPayoffs } = useData();
 
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
   const [batchReference, setBatchReference] = useState('');
   const [settlementNotes, setSettlementNotes] = useState('');
+  const [slipFile, setSlipFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -60,8 +62,19 @@ const PayoffSettlementModal = ({
       setPaymentDate(new Date().toISOString().slice(0, 10));
       setBatchReference('');
       setSettlementNotes('Bank wire transfer settlement confirmed.');
+      setSlipFile(null);
     }
   }, [open]);
+
+  const pickSlip = (e) => {
+    const file = e.target.files[0];
+    if (file && file.size > 10 * 1024 * 1024) {
+      toast.error('File size exceeds 10MB limit');
+      e.target.value = '';
+      return;
+    }
+    setSlipFile(file || null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -71,41 +84,29 @@ const PayoffSettlementModal = ({
       setFormError('Settlement reference / UTR is required.');
       return;
     }
+    if (isBlocked) {
+      setFormError('The university has not paid QStudy yet. Record the university payment first.');
+      return;
+    }
+    if (!slipFile) {
+      setFormError('Please upload the payment slip.');
+      return;
+    }
 
     setSubmitting(true);
     try {
-      if (activePayoff?.id) {
-        // Direct authoritative Payoff settlement
-        await settlePayoff(activePayoff.id, {
-          settlementReference: paymentReference.trim(),
-          settledAt: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
-          settlementNotes: settlementNotes.trim() || undefined,
-          batchReference: batchReference.trim() || undefined
-        });
+      if (!activePayoff?.id) throw new Error('No payoff provided to settle.');
 
-        toast.success('Offline settlement recorded successfully', {
-          description: `Payoff ${activePayoff.payoffNumber || ''} marked as Settled.`
-        });
-      } else if (activeInvoice?.id) {
-        // Fallback to legacy invoice settlement which auto-settles associated payoff via backend
-        const combinedRemarks = [
-          paymentReference.trim() ? `Ref: ${paymentReference.trim()}` : '',
-          paymentDate ? `Date: ${paymentDate}` : '',
-          batchReference.trim() ? `Batch: ${batchReference.trim()}` : '',
-          settlementNotes.trim() ? `Notes: ${settlementNotes.trim()}` : ''
-        ].filter(Boolean).join(' | ');
+      await settlePayoff(activePayoff.id, {
+        settlementReference: paymentReference.trim(),
+        settledAt: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
+        settlementNotes: settlementNotes.trim() || undefined,
+        batchReference: batchReference.trim() || undefined
+      }, slipFile);
 
-        await updateInvoiceStatus(activeInvoice.id, {
-          status: 'Paid',
-          remarks: combinedRemarks
-        });
-
-        toast.success('Payoff settlement recorded successfully', {
-          description: `Invoice ${activeInvoice.invoiceNumber} settlement recorded.`
-        });
-      } else {
-        throw new Error('No payoff or invoice provided to settle.');
-      }
+      toast.success('Payment recorded as cleared', {
+        description: `Payoff ${activePayoff.payoffNumber || ''} marked as paid. The agent is notified.`
+      });
 
       if (fetchPayoffs) await fetchPayoffs();
       if (fetchInvoices) await fetchInvoices();
@@ -126,6 +127,8 @@ const PayoffSettlementModal = ({
   const payeeAgent = activePayoff?.agentId || activeInvoice?.agentId;
   const payoffAmount = activePayoff?.netAmount || activePayoff?.grossCommission || activeInvoice?.amount || 0;
   const isTerminal = activePayoff?.status === 'SETTLED' || activePayoff?.status === 'CANCELLED';
+  // The agent is paid only after the university paid QStudy (or the Head of Admission allowed an exception)
+  const isBlocked = Boolean(activePayoff?.paymentBlocked);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -155,6 +158,22 @@ const PayoffSettlementModal = ({
               </div>
             )}
 
+            {isBlocked && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900" data-testid="payment-blocked-notice">
+                <span className="font-bold block mb-0.5">Waiting for the university</span>
+                <span className="text-[11px]">
+                  The agent is paid only after the university has paid QStudy. Record the university payment first.
+                  If the agent must be paid earlier, the Head of Admission can authorize an exception.
+                </span>
+              </div>
+            )}
+            {activePayoff?.blockBypassed && !activePayoff?.universityPaid && (
+              <div className="p-3 bg-[#EEEDFE] border border-[#D5D2F7] rounded-xl text-xs text-[#3C3489]">
+                <span className="font-bold block mb-0.5">Exception authorized</span>
+                <span className="text-[11px]">{activePayoff.blockBypassNote}</span>
+              </div>
+            )}
+
             {/* Offline Settlement Notice */}
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
               <span className="font-bold block mb-0.5">Offline Bank Transfer Confirmation</span>
@@ -176,6 +195,7 @@ const PayoffSettlementModal = ({
                   <span className="text-2xl font-bold text-[#042C53] font-['Outfit'] block mt-0.5 tabular-nums">
                     {formatCurrency(payoffAmount, activePayoff?.currency)}
                   </span>
+                  <span className="text-[10px] text-gray-500 block">Paid in {currencyLabel(activePayoff?.currency)}</span>
                   <div className="mt-1 flex justify-end">
                     <FinancialStatusBadge status={activePayoff?.status || 'PENDING'} size="sm" />
                   </div>
@@ -186,7 +206,7 @@ const PayoffSettlementModal = ({
               {apps.length > 0 && (
                 <div className="pt-2 border-t border-gray-100 text-xs text-gray-600">
                   <span className="text-[11px] font-semibold text-gray-700 block mb-1">
-                    Associated {apps.length} student {apps.length === 1 ? 'enrollment' : 'enrollments'}:
+                    Associated {apps.length} student {apps.length === 1 ? 'application' : 'applications'}:
                   </span>
                   <div className="space-y-1">
                     {apps.slice(0, 3).map((a, i) => (
@@ -250,6 +270,22 @@ const PayoffSettlementModal = ({
               />
             </div>
 
+            {/* Payment slip */}
+            <div className="space-y-1.5">
+              <Label htmlFor="paymentSlip" className="text-xs font-semibold text-gray-700">
+                Payment slip <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="paymentSlip"
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={pickSlip}
+                disabled={isTerminal}
+                className="text-xs bg-white"
+              />
+              <p className="text-[11px] text-gray-500">PDF, JPG or PNG, up to 10MB. Kept with the payoff and shown to the agent.</p>
+            </div>
+
             {/* Settlement Remarks */}
             <div className="space-y-1.5">
               <Label htmlFor="settlementNotes" className="text-xs font-semibold text-gray-700">
@@ -281,7 +317,7 @@ const PayoffSettlementModal = ({
             <Button
               type="submit"
               size="sm"
-              disabled={submitting || isTerminal || !paymentReference.trim()}
+              disabled={submitting || isTerminal || isBlocked || !paymentReference.trim() || !slipFile}
               className="text-xs h-9 px-5 bg-[#27500A] hover:bg-[#1E3D07] text-white font-semibold"
             >
               <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />

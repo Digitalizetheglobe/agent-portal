@@ -1,5 +1,8 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import PipelineSummary from '../../components/application/PipelineSummary';
+import { getDisplayStage } from '../../utils/pipeline';
+import { getFunnelLabel } from '../../utils/studentProgress';
 import {
   Users,
   GraduationCap,
@@ -65,9 +68,8 @@ const AdminDashboard = () => {
     !['completed', 'rejected', 'withdrawn', 'cancelled'].includes(app.status?.toLowerCase())
   ).length;
 
-  const admissions = applications.filter(app =>
-    ['admitted', 'enrolled', 'completed'].includes(app.status?.toLowerCase())
-  ).length;
+  // Students whose fees are confirmed (Visa 100% and fees paid)
+  const admissions = applications.filter(app => getDisplayStage(app) === 'FeesPaid').length;
 
   // ═══ FINANCE KPIs ═══
   const invoicesUnderReview = invoices.filter(inv => {
@@ -127,9 +129,9 @@ const AdminDashboard = () => {
   // ═══ CHART DATA ═══
   const studentTrend = bucketByMonth(
     students, s => s.createdAt,
-    [{ key: 'registered' }, { key: 'converted', filter: s => s.status === 'Converted' }]
+    [{ key: 'registered' }, { key: 'converted', filter: s => s.feesPaid }]
   );
-  const studentStatusData = countBy(students, s => s.status || 'New');
+  const studentStatusData = countBy(students, s => getFunnelLabel(s));
   const applicationStatusData = countBy(applications, a => prettyStatus(a.status));
   const invoiceStatusData = countBy(invoices, inv => prettyStatus(inv.financeReviewStatus || inv.status || 'Submitted'));
   const payoffTrend = bucketByMonth(
@@ -296,6 +298,11 @@ const AdminDashboard = () => {
 
         <div className="h-[0.5px] bg-slate-200 my-5" />
 
+        {/* Visa progress: every live application in exactly one stage */}
+        <div className="mb-6">
+          <PipelineSummary applications={applications} to="/admin/applications" />
+        </div>
+
         {/* ═══ OPERATIONS KPIs ═══ */}
         <div className="mb-2">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operations</span>
@@ -313,7 +320,7 @@ const AdminDashboard = () => {
           <KpiCard
             title="Total Students"
             value={totalStudents.toLocaleString()}
-            subtitle={`${students.filter(s => s.status === 'Converted').length} converted`}
+            subtitle={`${students.filter(s => s.feesPaid).length} with fees paid`}
             icon={GraduationCap}
             color="#185FA5"
             bgColor="#E6F1FB"
@@ -329,9 +336,9 @@ const AdminDashboard = () => {
             link="/admin/applications"
           />
           <KpiCard
-            title="Admissions"
+            title="Fees Paid"
             value={admissions}
-            subtitle={applications.length > 0 ? `${((admissions / applications.length) * 100).toFixed(0)}% admission rate` : 'No data yet'}
+            subtitle={applications.length > 0 ? `${((admissions / applications.length) * 100).toFixed(0)}% of applications` : 'No data yet'}
             icon={BadgeCheck}
             color="#047857"
             bgColor="#ECFDF5"
@@ -424,13 +431,13 @@ const AdminDashboard = () => {
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Trends</span>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          <ChartCard className="lg:col-span-2" title="Student registrations" hint="New students and conversions over the last 6 months">
+          <ChartCard className="lg:col-span-2" title="Student registrations" hint="New students and students whose fees were paid, last 6 months">
             <TrendChart data={studentTrend} series={[
               { key: 'registered', name: 'Registered', color: '#042C53' },
-              { key: 'converted', name: 'Converted', color: '#10B981' },
+              { key: 'converted', name: 'Fees paid', color: '#10B981' },
             ]} />
           </ChartCard>
-          <ChartCard title="Students by status" hint="Where all students are in the pipeline">
+          <ChartCard title="Students by progress" hint="Where all students are in the visa process">
             <DonutChart data={studentStatusData} />
           </ChartCard>
         </div>

@@ -2,6 +2,9 @@ const { Op } = require('sequelize');
 const { sequelize } = require('../config/db');
 const { Invoice, Application, Student, University, User } = require('../models');
 const { hasAuthoritativeTuition } = require('../utils/tuitionUtils');
+const { scopeWhereToAgents, assertCanAccessAgent } = require('../utils/agentScope');
+const { computeCommission, assertRatesSet } = require('../utils/commission');
+const { createNotification } = require('../controllers/notificationController');
 
 const ALLOWED_STATUSES = ['Pending', 'Paid', 'Rejected'];
 
@@ -68,7 +71,7 @@ const formatInvoice = async (invoice) => {
     if (stringIds.length > 0) {
       const students = await Student.findAll({
         where: { id: { [Op.in]: stringIds } },
-        attributes: ['id', 'name', 'email', 'status']
+        attributes: ['id', 'name', 'email']
       });
       inv.studentIds = students.map(s => s.toJSON());
     }
@@ -109,12 +112,11 @@ const formatInvoice = async (invoice) => {
 
 class InvoiceService {
   /**
-   * Create an invoice (supports both modern Application-based and legacy Student-based flows)
+   * Create an invoice for applications whose student reached Visa 100% with the fees confirmed
    */
   async createInvoice(data, currentUser) {
     const {
       applicationIds,
-      studentIds,
       amount,
       commissionRate,
       remarks,
@@ -128,15 +130,6 @@ class InvoiceService {
       throw err;
     }
 
-    // 1. Detect ambiguity: cannot supply both applicationIds and studentIds
-    if (applicationIds && studentIds) {
-      const err = new Error('Ambiguous request: cannot specify both applicationIds and studentIds');
-      err.statusCode = 400;
-      throw err;
-    }
-
-
-    // 3. APPLICATION-BASED INVOICING (Preferred flow)
     if (applicationIds) {
       if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
         const err = new Error('Please provide at least one application ID');
@@ -171,10 +164,11 @@ class InvoiceService {
           err.statusCode = 403;
           throw err;
         }
+        await assertCanAccessAgent(currentUser, app.agentId);
 
-        // Lifecycle check: Application must be in Enrolled status
-        if (app.status !== 'Enrolled') {
-          const err = new Error(`Application ${app.applicationNumber || app.id} is not in required Enrolled lifecycle state (current: ${app.status})`);
+        // Lifecycle check: the visa pipeline must be complete (Visa 100% and fees accepted)
+        if (app.pipelineStage !== 'Visa100' || app.feeStatus !== 'Accepted') {
+          const err = new Error(`Application ${app.applicationNumber || app.id} cannot be invoiced yet: the student must reach Visa 100% and the fees must be confirmed (Pending Fees).`);
           err.statusCode = 400;
           throw err;
         }
@@ -186,16 +180,9 @@ class InvoiceService {
           throw err;
         }
 
-        // Institutional 4-pillar gate verification
-        if (app.depositStatus !== 'Verified' || !app.admissionDate) {
-          const err = new Error(`Application ${app.applicationNumber || app.id} lacks verified deposit or admission confirmation`);
-          err.statusCode = 400;
-          throw err;
-        }
-
         const student = await Student.findByPk(app.studentId);
-        if (!student || student.verificationStatus !== 'Verified') {
-          const err = new Error(`Student associated with application ${app.applicationNumber || app.id} is not verified`);
+        if (!student || student.verificationStatus === 'Rejected') {
+          const err = new Error(`The student of application ${app.applicationNumber || app.id} was rejected in verification, so it cannot be invoiced`);
           err.statusCode = 400;
           throw err;
         }
@@ -215,58 +202,45 @@ class InvoiceService {
         }
       }
 
-      // Commission Authority Enforcement
-      let effectiveCommissionRate = 0;
-      let serverCalculatedAmount = 0;
+      // One university and one currency per invoice: each university pays QStudy separately (and
+      // the agent is paid in the currency the university paid), so mixed invoices cannot be settled.
+      const universityIds = new Set(applications.map(a => String(a.universityId)));
+      if (universityIds.size > 1) {
+        const err = new Error('An invoice can only include applications for one university. Raise a separate invoice for each university.');
+        err.statusCode = 400;
+        throw err;
+      }
+      const currencies = new Set(applications.map(a => (a.currency || 'USD').toUpperCase()));
+      if (currencies.size > 1) {
+        const err = new Error('An invoice can only include applications in one currency. Raise a separate invoice for each currency.');
+        err.statusCode = 400;
+        throw err;
+      }
 
-      if (currentUser.role === 'agent') {
-        // Agents must NEVER submit commissionRate or amount
-        if (commissionRate !== undefined && commissionRate !== null && commissionRate !== '') {
-          const err = new Error('Access denied. Agents cannot establish or alter commission rate.');
-          err.statusCode = 403;
-          throw err;
-        }
-        if (amount !== undefined && amount !== null && amount !== '') {
+      // Commission is set per university by the Head of Admission (see utils/commission.js).
+      // Nobody enters a rate or an amount on an invoice: the server calculates both.
+      if (commissionRate !== undefined && commissionRate !== null && commissionRate !== '') {
+        const err = new Error('Commission is set per university and cannot be entered on an invoice.');
+        err.statusCode = currentUser.role === 'agent' ? 403 : 400;
+        throw err;
+      }
+      const commission = await computeCommission(applications);
+      assertRatesSet(commission);
+      const effectiveCommissionRate = commission.blendedRate; // blended % across universities, for display
+      const serverCalculatedAmount = commission.total;
+
+      if (amount !== undefined && amount !== null && amount !== '') {
+        if (currentUser.role === 'agent') {
           const err = new Error('Access denied. Invoice amounts are server-calculated.');
           err.statusCode = 400;
           throw err;
         }
-        // Rate defaults to the admin-configured rate on the agent profile (0 if none yet);
-        // Finance confirms or overrides it during review.
-        const agentUser = await User.findByPk(currentUser.id, { attributes: ['id', 'commissionRate'] });
-        effectiveCommissionRate = agentUser && agentUser.commissionRate ? parseFloat(agentUser.commissionRate) : 0;
-        const totalTuition = applications.reduce((sum, app) => sum + (parseFloat(app.tuitionFee) || 0), 0);
-        serverCalculatedAmount = Math.round((totalTuition * (effectiveCommissionRate / 100)) * 100) / 100;
-      } else if (currentUser.role === 'admin') {
-        // Admin supplies the rate, or it defaults to the agent's configured rate
-        let rawRate = commissionRate;
-        if (rawRate === undefined || rawRate === null || rawRate === '') {
-          const rateOwner = await User.findByPk(data.agentId || applications[0].agentId, { attributes: ['id', 'commissionRate'] });
-          rawRate = rateOwner ? rateOwner.commissionRate : null;
-        }
-        if (rawRate === undefined || rawRate === null || rawRate === '') {
-          const err = new Error('Commission rate is required for Admin invoice creation: set one on the agent profile or provide it (percentage between 0 and 100)');
+        // If an admin passes an amount, it must match the server calculation
+        const submittedAmount = parseFloat(amount);
+        if (isNaN(submittedAmount) || Math.abs(submittedAmount - serverCalculatedAmount) > 0.05) {
+          const err = new Error(`Invoice amount manipulation detected. Authoritative calculated amount is $${serverCalculatedAmount.toFixed(2)}.`);
           err.statusCode = 400;
           throw err;
-        }
-        const parsedRate = parseFloat(rawRate);
-        if (isNaN(parsedRate) || parsedRate < 0 || parsedRate > 100 || !isFinite(parsedRate)) {
-          const err = new Error('Commission rate must be a valid percentage between 0 and 100');
-          err.statusCode = 400;
-          throw err;
-        }
-        effectiveCommissionRate = parsedRate;
-        const totalTuition = applications.reduce((sum, app) => sum + parseFloat(app.tuitionFee), 0);
-        serverCalculatedAmount = Math.round((totalTuition * (effectiveCommissionRate / 100)) * 100) / 100;
-
-        // If amount was passed by Admin, ensure it matches server calculation
-        if (amount !== undefined && amount !== null && amount !== '') {
-          const submittedAmount = parseFloat(amount);
-          if (isNaN(submittedAmount) || Math.abs(submittedAmount - serverCalculatedAmount) > 0.05) {
-            const err = new Error(`Invoice amount manipulation detected. Authoritative calculated amount is $${serverCalculatedAmount.toFixed(2)}.`);
-            err.statusCode = 400;
-            throw err;
-          }
         }
       }
 
@@ -310,71 +284,21 @@ class InvoiceService {
 
         await t.commit();
 
-        return await this.getInvoiceById(invoice.id, currentUser);
-      } catch (error) {
-        await t.rollback();
-        throw error;
-      }
-    }
-
-    // 4. LEGACY STUDENT-BASED INVOICING
-    if (studentIds) {
-      if (!Array.isArray(studentIds) || studentIds.length === 0) {
-        const err = new Error('Please provide at least one student ID');
-        err.statusCode = 400;
-        throw err;
-      }
-
-      // Verify students belong to agent and have status Converted
-      const studentWhere = {
-        id: { [Op.in]: studentIds },
-        status: 'Converted'
-      };
-      if (currentUser.role === 'agent') {
-        studentWhere.agentId = currentUser.id;
-      }
-
-      const students = await Student.findAll({ where: studentWhere });
-
-      if (students.length !== studentIds.length) {
-        const err = new Error('One or more students are not eligible for invoicing (must be Converted and belong to you)');
-        err.statusCode = 400;
-        throw err;
-      }
-
-      // 2. Validate amount for legacy student-based flow
-      if (amount === undefined || amount === null || amount === '') {
-        const err = new Error('Invoice amount is required');
-        err.statusCode = 400;
-        throw err;
-      }
-      const numericAmount = parseFloat(amount);
-      if (isNaN(numericAmount) || numericAmount < 0 || !isFinite(numericAmount)) {
-        const err = new Error('Invoice amount must be a valid non-negative number');
-        err.statusCode = 400;
-        throw err;
-      }
-
-      const effectiveAgentId = currentUser.role === 'agent'
-        ? currentUser.id
-        : (data.agentId || students[0].agentId);
-
-      const t = await sequelize.transaction();
-      try {
-        const invoiceNumber = await generateInvoiceNumber();
-
-        const invoice = await Invoice.create({
-          agentId: effectiveAgentId,
-          studentIds,
-          invoiceNumber,
-          amount: numericAmount,
-          commissionRate: commissionRate !== undefined && commissionRate !== null ? parseFloat(commissionRate) : 0,
-          remarks: remarks || null,
-          invoiceUrl: invoiceUrl || null,
-          status: 'Pending'
-        }, { transaction: t });
-
-        await t.commit();
+        // Tell the Head of Admission there is a new invoice to review
+        if (currentUser.role === 'agent') {
+          const heads = await User.findAll({
+            where: { role: 'admin', status: 'active', staffRole: 'head_admission' },
+            attributes: ['id']
+          });
+          await Promise.all(heads.map(head => createNotification({
+            recipient: head.id,
+            title: 'New invoice to review',
+            message: `${currentUser.name || 'An agent'} raised invoice ${invoice.invoiceNumber} for review.`,
+            type: 'info',
+            relatedId: invoice.id,
+            relatedModel: 'Invoice'
+          })));
+        }
 
         return await this.getInvoiceById(invoice.id, currentUser);
       } catch (error) {
@@ -383,8 +307,8 @@ class InvoiceService {
       }
     }
 
-    // 5. If neither applicationIds nor studentIds provided
-    const err = new Error('Either applicationIds or studentIds must be provided');
+    // No applications were provided
+    const err = new Error('Please provide the applications to invoice (applicationIds)');
     err.statusCode = 400;
     throw err;
   }
@@ -413,6 +337,8 @@ class InvoiceService {
     } else if (agentId) {
       where.agentId = agentId;
     }
+    // Account Managers only see invoices of their own agents
+    await scopeWhereToAgents(where, currentUser);
 
     // 2. Status filter
     if (status) {
@@ -540,6 +466,7 @@ class InvoiceService {
       err.statusCode = 403;
       throw err;
     }
+    await assertCanAccessAgent(currentUser, invoice.agentId);
 
     return await formatInvoice(invoice);
   }
@@ -561,7 +488,8 @@ class InvoiceService {
 
     const where = {
       isInvoiceEligible: true,
-      status: 'Enrolled',
+      pipelineStage: 'Visa100',
+      feeStatus: 'Accepted',
       isInvoiced: false,
       invoiceId: null
     };
@@ -572,6 +500,7 @@ class InvoiceService {
     } else if (query.agentId) {
       where.agentId = query.agentId;
     }
+    await scopeWhereToAgents(where, currentUser);
 
     if (universityId) {
       where.universityId = universityId;
@@ -596,7 +525,7 @@ class InvoiceService {
         {
           model: University,
           as: 'university',
-          attributes: ['id', 'name', 'code', 'country', 'city']
+          attributes: ['id', 'name', 'code', 'country', 'city', 'commissionRate']
         },
         {
           model: User,
@@ -659,6 +588,15 @@ class InvoiceService {
       err.statusCode = 404;
       throw err;
     }
+    await assertCanAccessAgent(currentUser, invoice.agentId);
+
+    // Payment to the agent is recorded on the payoff (university payment first, then the payment
+    // slip). Marking an invoice Paid here would skip those steps.
+    if (status === 'Paid') {
+      const err = new Error('An invoice becomes Paid when Accounts settles its payoff, with the payment slip. Use the Payoffs page.');
+      err.statusCode = 400;
+      throw err;
+    }
 
     invoice.status = status;
     if (status === 'Paid') {
@@ -719,6 +657,7 @@ class InvoiceService {
       err.statusCode = 403;
       throw err;
     }
+    await assertCanAccessAgent(currentUser, invoice.agentId);
 
     if (invoice.status === 'Paid') {
       const err = new Error('Cannot delete a paid invoice');

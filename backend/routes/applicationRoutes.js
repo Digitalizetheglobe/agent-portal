@@ -11,7 +11,20 @@ const {
   getApplicationsByUniversity,
   getApplicationsByAgent
 } = require('../controllers/applicationController');
-const { protect } = require('../middleware/auth');
+const multer = require('multer');
+const { updateStage, submitFeeProof, reviewFeeProof, downloadFeeProof } = require('../controllers/visaPipelineController');
+const { protect, allowStaff, requireActivatedAgent, restrictTo, restrictToStaffRole } = require('../middleware/auth');
+
+// Proof of fee payment: a scan or photo, up to 10MB
+const proofUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Invalid file type. Upload a PDF, JPG or PNG.'), false);
+  }
+});
 
 const admissionTrackingRoutes = require('./admissionTrackingRoutes');
 
@@ -26,12 +39,18 @@ router.get('/agent/:agentId', getApplicationsByAgent);
 // Admission tracking workflow routes
 router.use('/', admissionTrackingRoutes);
 
+// Visa pipeline: the Head of Admission moves stages and checks the fee proof; the agent uploads it
+router.patch('/:id/pipeline', restrictToStaffRole('head_admission'), updateStage);
+router.post('/:id/fee-proof', restrictTo('agent'), proofUpload.single('file'), submitFeeProof);
+router.patch('/:id/fee-proof/review', restrictToStaffRole('head_admission'), reviewFeeProof);
+router.get('/:id/fee-proof/file', downloadFeeProof);
+
 // Core CRUD routes
-router.post('/', createApplication);
+router.post('/', requireActivatedAgent, createApplication);
 router.get('/', getApplications);
 router.get('/:id', getApplicationById);
-router.put('/:id', updateApplication);
-router.patch('/:id/status', updateApplicationStatus);
-router.delete('/:id', deleteApplication);
+router.put('/:id', allowStaff('head_admission'), updateApplication);
+router.patch('/:id/status', allowStaff('head_admission'), updateApplicationStatus);
+router.delete('/:id', allowStaff('head_admission'), deleteApplication);
 
 module.exports = router;

@@ -45,10 +45,6 @@ const Student = sequelize.define('Student', {
     type: DataTypes.TEXT,
     defaultValue: ''
   },
-  eventId: {
-    type: DataTypes.UUID,
-    allowNull: true
-  },
   agentId: {
     type: DataTypes.UUID,
     allowNull: false
@@ -66,11 +62,6 @@ const Student = sequelize.define('Student', {
     type: DataTypes.JSONB,
     defaultValue: {}
   },
-  status: {
-    type: DataTypes.ENUM('Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'),
-    defaultValue: 'Registered'
-  },
-
   // --- Phase H: Student Verification ---
   verificationStatus: {
     type: DataTypes.ENUM('Pending', 'UnderReview', 'Verified', 'Rejected'),
@@ -98,7 +89,6 @@ const Student = sequelize.define('Student', {
   timestamps: true,
   tableName: 'Students',
   indexes: [
-    { fields: ['eventId'] },
     { fields: ['agentId'] },
     { fields: ['email'] },
     { fields: ['verificationStatus'] }
@@ -110,7 +100,6 @@ Student.prototype.toJSON = function() {
   const values = { ...this.get() };
   values.id = values.id ? values.id.toString() : values.id;
   values._id = values.id;
-  values.eventId = values.eventId ? values.eventId.toString() : values.eventId;
   values.agentId = values.agentId ? values.agentId.toString() : values.agentId;
   values.submittedAt = values.createdAt;
   

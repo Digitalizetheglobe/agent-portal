@@ -13,6 +13,7 @@ import StudentRegistrationModal from '../../components/modals/StudentRegistratio
 import DocumentReviewDialog from '../../components/modals/DocumentReviewDialog';
 import { cn } from '@/lib/utils';
 import { studentVerificationAPI, formatApiError } from '../../utils/api';
+import { getStudentStageInfo, getStudentJourneyIndex, getStageLabel, STUDENT_JOURNEY } from '../../utils/studentProgress';
 import {
   STUDENT_VERIFICATION_STATUS,
   STUDENT_VERIFICATION_STATUS_LABELS
@@ -23,14 +24,6 @@ const DOC_STATUS_LABELS = {
   UnderReview: 'Under Review'
 };
 
-const STAGES = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
-const STAGE_PILLS = {
-  'Registered': 'bg-[#E6F1FB] text-[#0C447C]',
-  'Contacted': 'bg-[#FAEEDA] text-[#633806]',
-  'Confirmed': 'bg-[#EEEDFE] text-[#3C3489]',
-  'Attended': 'bg-[#EAF3DE] text-[#27500A]',
-  'Converted': 'bg-[#E1F5EE] text-[#085041]'
-};
 
 const DEFAULT_DOC_CATEGORIES = [
   { label: 'Passport', value: 'Passport', mandatory: false },
@@ -41,12 +34,10 @@ const DEFAULT_DOC_CATEGORIES = [
 const StudentsPage = () => {
   const {
     students,
-    events,
     agents,
     universities,
     deleteStudent,
     fetchStudents,
-    updateStudentStatus,
     verifyStudentDocument,
     viewStudentDocument,
     requestStudentDocument,
@@ -58,12 +49,10 @@ const StudentsPage = () => {
   const [activeTab, setActiveTab] = useState('all');
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [eventFilter, setEventFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
   const [universityFilter, setUniversityFilter] = useState('all');
   const [docFilter, setDocFilter] = useState('all');
   const [verificationFilter, setVerificationFilter] = useState('all');
-  const [curStage, setCurStage] = useState('all');
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [displayMode, setDisplayMode] = useState('table');
@@ -143,8 +132,7 @@ const StudentsPage = () => {
   const getDocStatus = useCallback((student) => {
     if (!student) return 'missing';
 
-    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
-    const required = event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
+    const required = DEFAULT_DOC_CATEGORIES;
 
     if (required.length === 0) return 'complete';
 
@@ -162,7 +150,7 @@ const StudentsPage = () => {
     if (hasUnapproved) return 'pending';
 
     return 'complete';
-  }, [events]);
+  }, []);
 
   const getStudentName = (s) => {
     if (!s) return 'N/A';
@@ -246,7 +234,6 @@ const StudentsPage = () => {
       const q = searchQuery.toLowerCase();
 
       if (searchQuery && !name.includes(q) && !email.includes(q) && !phone.includes(q) && !country.includes(q)) return false;
-      if (eventFilter !== 'all' && (s.eventId !== eventFilter && s._id !== eventFilter)) return false;
       if (countryFilter !== 'all' && (s.country || cf.country) !== countryFilter) return false;
       if (universityFilter !== 'all') {
         const uId = s.universityId || cf.universityId || (cf instanceof Map ? cf.get('universityId') : null);
@@ -258,12 +245,9 @@ const StudentsPage = () => {
 
       return true;
     });
-  }, [students, searchQuery, eventFilter, countryFilter, universityFilter, docFilter, verificationFilter, getDocStatus, getUniversityName]);
+  }, [students, searchQuery, countryFilter, universityFilter, docFilter, verificationFilter, getDocStatus, getUniversityName]);
 
-  const filteredStudents = useMemo(() => {
-    if (curStage === 'all') return baseFilteredStudents;
-    return baseFilteredStudents.filter(s => s.status === curStage);
-  }, [baseFilteredStudents, curStage]);
+  const filteredStudents = baseFilteredStudents;
 
   const totalPages = Math.max(1, Math.ceil(filteredStudents.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -274,7 +258,7 @@ const StudentsPage = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, eventFilter, countryFilter, universityFilter, docFilter, verificationFilter, curStage]);
+  }, [searchQuery, countryFilter, universityFilter, docFilter, verificationFilter]);
 
   const kpis = useMemo(() => {
     const total = baseFilteredStudents.length;
@@ -303,11 +287,6 @@ const StudentsPage = () => {
     return Array.from(countries);
   }, [students]);
 
-  const getEventName = (eventId) => {
-    const event = events.find(e => e.id === eventId || e._id === eventId);
-    return event?.title || 'Unknown Event';
-  };
-
   const getStudentValue = (student, key, fallbackLabel) => {
     if (!student) return 'N/A';
     if (student[key] && student[key] !== 'Not specified') return student[key];
@@ -318,18 +297,6 @@ const StudentsPage = () => {
 
     if (cf[key]) return cf[key];
 
-    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
-    if (event?.formFields) {
-      const field = event.formFields.find(f =>
-        f.label.toLowerCase().trim() === fallbackLabel.toLowerCase().trim() ||
-        f.label.toLowerCase().includes(fallbackLabel.toLowerCase()) ||
-        f.label.toLowerCase().includes(key.toLowerCase())
-      );
-      if (field) {
-        const cleanId = String(field.id).replace(/^field_/, '');
-        return cf[cleanId] || cf[`field_${cleanId}`] || 'N/A';
-      }
-    }
     return 'N/A';
   };
 
@@ -343,16 +310,6 @@ const StudentsPage = () => {
   const getInitials = (name) => {
     if (!name || name === 'N/A') return '??';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
-
-  const handleStatusChange = async (studentId, newStatus) => {
-    try {
-      await updateStudentStatus(studentId, newStatus);
-      toast.success(`Pipeline status updated to ${newStatus}`);
-    } catch (error) {
-      console.error('Error updating status:', error);
-      toast.error('Failed to update status');
-    }
   };
 
   // Review actions that need remarks (More Information Required / Rejected) open a dialog first
@@ -381,11 +338,7 @@ const StudentsPage = () => {
     return students.find(s => (s.id === selectedStudentId || s._id === selectedStudentId));
   }, [students, selectedStudentId]);
 
-  const requiredDocs = useMemo(() => {
-    if (!selectedStudent) return [];
-    const event = events.find(e => e.id === selectedStudent.eventId || e._id === selectedStudent.eventId);
-    return event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
-  }, [selectedStudent, events]);
+  const requiredDocs = DEFAULT_DOC_CATEGORIES;
 
   if (loading && students.length === 0) {
     return (
@@ -402,7 +355,7 @@ const StudentsPage = () => {
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Student Management</h1>
           <p className="text-sm text-[#6B7280] mt-0.5">
-            {baseFilteredStudents.length.toLocaleString()} students across all events and verification states
+            {baseFilteredStudents.length.toLocaleString()} students across all verification states
           </p>
         </div>
         <div className="flex gap-2">
@@ -486,16 +439,6 @@ const StudentsPage = () => {
               />
             </div>
             <select
-              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[140px] outline-none"
-              value={eventFilter}
-              onChange={(e) => setEventFilter(e.target.value)}
-            >
-              <option value="all">All Events</option>
-              {events.map(ev => (
-                <option key={ev.id || ev._id} value={ev.id || ev._id}>{ev.title}</option>
-              ))}
-            </select>
-            <select
               className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
               value={universityFilter}
               onChange={(e) => setUniversityFilter(e.target.value)}
@@ -569,7 +512,6 @@ const StudentsPage = () => {
                   <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                     <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[20%]">Student</th>
                     <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">University</th>
-                    <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Event</th>
                     <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[10%]">Country</th>
                     <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[11%]">Pipeline</th>
                     <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 text-left uppercase tracking-wider w-[12%]">Verification</th>
@@ -582,7 +524,7 @@ const StudentsPage = () => {
                 <tbody>
                   {filteredStudents.length === 0 ? (
                     <tr>
-                      <td colSpan="10" className="text-center py-16 text-[#6B7280]">
+                      <td colSpan="9" className="text-center py-16 text-[#6B7280]">
                         <User size={48} className="mx-auto mb-4 opacity-20" />
                         <p className="font-semibold text-sm">No students match the current filters</p>
                       </td>
@@ -611,11 +553,10 @@ const StudentsPage = () => {
                           <td className="px-4 py-3.5 text-xs truncate max-w-[130px] font-medium text-slate-700" title={getUniversityName(s)}>
                             {getUniversityName(s)}
                           </td>
-                          <td className="px-4 py-3.5 text-xs truncate max-w-[120px]">{getEventName(s.eventId)}</td>
                           <td className="px-4 py-3.5 text-xs">{getStudentValue(s, 'country', 'Country of Interest')}</td>
                           <td className="px-4 py-3.5">
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
-                              {s.status}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider ${getStudentStageInfo(s).style}`}>
+                              {getStudentStageInfo(s).label}
                             </span>
                           </td>
                           <td className="px-4 py-3.5">
@@ -669,8 +610,8 @@ const StudentsPage = () => {
                           {getInitials(getStudentName(s))}
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
-                            {s.status}
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${getStudentStageInfo(s).style}`}>
+                            {getStudentStageInfo(s).label}
                           </span>
                           {getVerificationBadge(verStatus)}
                         </div>
@@ -689,10 +630,6 @@ const StudentsPage = () => {
                         <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
                           <Flag size={12} className="text-[#9CA3AF]" />
                           <span>{getStudentValue(s, 'country', 'Country') || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
-                          <FileText size={12} className="text-[#9CA3AF]" />
-                          <span className="truncate">{getEventName(s.eventId)}</span>
                         </div>
                         <div className="flex items-center gap-2 text-[11px] text-[#4B5563] font-medium">
                           <User size={12} className="text-[#9CA3AF]" />
@@ -857,7 +794,7 @@ const StudentsPage = () => {
                           {vStatus === 'Pending' && (
                             <button
                               disabled={queueActionLoading || qs.readyForVerification === false}
-                              title={qs.readyForVerification === false ? 'Verification starts after the student is enrolled with a verified deposit' : undefined}
+                              title={qs.readyForVerification === false ? 'Verification starts once the student reaches Registration in the visa pipeline' : undefined}
                               onClick={() => handleQuickInitiate(qs.id || qs._id)}
                               className="px-2.5 py-1 text-xs font-bold rounded-lg bg-[#042C53] text-white hover:bg-[#0C447C] transition-all shadow-sm disabled:opacity-50"
                             >
@@ -875,7 +812,7 @@ const StudentsPage = () => {
                           {vStatus === 'Rejected' && (
                             <button
                               disabled={queueActionLoading || qs.readyForVerification === false}
-                              title={qs.readyForVerification === false ? 'Verification starts after the student is enrolled with a verified deposit' : undefined}
+                              title={qs.readyForVerification === false ? 'Verification starts once the student reaches Registration in the visa pipeline' : undefined}
                               onClick={() => handleQuickInitiate(qs.id || qs._id)}
                               className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition-all shadow-sm disabled:opacity-50"
                             >
@@ -945,8 +882,8 @@ const StudentsPage = () => {
                 </div>
               </div>
               <div className="flex gap-2 items-center">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${STAGE_PILLS[selectedStudent.status]}`}>
-                  {selectedStudent.status}
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${getStudentStageInfo(selectedStudent).style}`}>
+                  {getStudentStageInfo(selectedStudent).label}
                 </span>
                 <button className="p-1.5 rounded-lg hover:bg-gray-100 text-[#6B7280]" onClick={() => setSelectedStudentId(null)}><X size={18} /></button>
               </div>
@@ -969,14 +906,14 @@ const StudentsPage = () => {
             {getDocStatus(selectedStudent) === 'missing' && (
               <div className="flex items-center gap-3 px-4 py-3 bg-[#FEF3C7] border-l-4 border-[#F59E0B] rounded-lg mb-6 text-sm text-[#92400E] font-medium">
                 <AlertCircle size={16} />
-                <span>Documents missing or rejected — follow up required before event date.</span>
+                <span>Documents missing or rejected — follow up required.</span>
               </div>
             )}
 
             <div className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-4 font-['Outfit']">Journey Progress</div>
             <div className="flex items-center mb-6">
-              {STAGES.map((stage, idx) => {
-                const currentIdx = STAGES.indexOf(selectedStudent.status);
+              {STUDENT_JOURNEY.map((stage, idx) => {
+                const currentIdx = getStudentJourneyIndex(selectedStudent);
                 const isDone = idx < currentIdx;
                 const isActive = idx === currentIdx;
                 return (
@@ -985,9 +922,9 @@ const StudentsPage = () => {
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold border transition-all ${isDone ? 'bg-[#EAF3DE] border-[#C0DD97] text-[#27500A]' : isActive ? 'bg-[#E6F1FB] border-[#85B7EB] text-[#0C447C] ring-4 ring-[#042C53]/5' : 'bg-gray-50 border-[#E5E7EB] text-[#6B7280]'}`}>
                         {isDone ? <CheckCircle2 size={14} /> : idx + 1}
                       </div>
-                      <div className={`text-[10px] mt-2 font-semibold text-center ${isDone ? 'text-[#27500A]' : isActive ? 'text-[#0C447C] font-bold' : 'text-[#6B7280]'}`}>{stage}</div>
+                      <div className={`text-[10px] mt-2 font-semibold text-center ${isDone ? 'text-[#27500A]' : isActive ? 'text-[#0C447C] font-bold' : 'text-[#6B7280]'}`}>{getStageLabel(stage)}</div>
                     </div>
-                    {idx < STAGES.length - 1 && (
+                    {idx < STUDENT_JOURNEY.length - 1 && (
                       <div className={`flex-1 h-0.5 mt-[-18px] ${isDone ? 'bg-[#97C459]' : 'bg-[#F3F4F6]'}`}></div>
                     )}
                   </React.Fragment>
@@ -1001,7 +938,6 @@ const StudentsPage = () => {
                 { label: 'Preferred Country', val: getStudentValue(selectedStudent, 'country', 'Country of Interest') },
                 { label: 'Course Interest', val: getStudentValue(selectedStudent, 'courseInterested', 'Target Course') },
                 { label: 'Education', val: (() => { const val = getStudentValue(selectedStudent, 'education', 'Highest Qualification'); return val !== 'N/A' ? val : getStudentValue(selectedStudent, 'education', 'Education Level'); })() },
-                { label: 'Event', val: getEventName(selectedStudent.eventId) },
                 { label: 'Assigned Agent', val: getAgentName(selectedStudent.agentId) },
                 { label: 'Registered On', val: new Date(selectedStudent.createdAt || selectedStudent.submittedAt).toLocaleDateString() }
               ].map((item, i) => (
@@ -1010,16 +946,6 @@ const StudentsPage = () => {
                   <div className="text-[13px] font-semibold text-[#111827]">{item.val || 'N/A'}</div>
                 </div>
               ))}
-              <div className="col-span-2">
-                <div className="text-[10px] text-[#6B7280] font-bold uppercase mb-1">Update Status</div>
-                <select
-                  className="w-full text-xs font-semibold px-2 py-2 rounded-lg border border-[#D1D5DB] bg-white outline-none"
-                  value={selectedStudent.status}
-                  onChange={(e) => handleStatusChange(selectedStudent.id || selectedStudent._id, e.target.value)}
-                >
-                  {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
             </div>
 
             <div className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-4 font-['Outfit']">Documents</div>

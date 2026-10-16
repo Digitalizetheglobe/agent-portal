@@ -1,6 +1,9 @@
 const { DataTypes, Op } = require('sequelize');
 const { sequelize } = require('../config/db');
 const bcrypt = require('bcryptjs');
+const { assertStrongPassword } = require('../utils/security');
+
+const BCRYPT_ROUNDS = 12;
 
 const User = sequelize.define('User', {
   id: {
@@ -38,6 +41,11 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  // Set whenever the password changes; tokens issued earlier are rejected
+  passwordChangedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
   phone: {
     type: DataTypes.STRING,
     allowNull: true
@@ -45,6 +53,16 @@ const User = sequelize.define('User', {
   role: {
     type: DataTypes.ENUM('admin', 'agent'),
     defaultValue: 'agent'
+  },
+  // Staff position for role 'admin' users. null = super admin (full access).
+  staffRole: {
+    type: DataTypes.ENUM('account_manager', 'head_recruitment', 'head_admission', 'accounts'),
+    allowNull: true
+  },
+  // For agents: the Account Manager (staffRole account_manager) who owns this agent.
+  accountManagerId: {
+    type: DataTypes.UUID,
+    allowNull: true
   },
   status: {
     type: DataTypes.ENUM('active', 'inactive'),
@@ -70,11 +88,71 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  // Admin-configured commission percentage (0-100). Agents cannot change it.
-  commissionRate: {
-    type: DataTypes.DECIMAL(5, 2),
+  // ── Onboarding review: Account Manager recommends → Head of Recruitment verifies → Head of Admission approves ──
+  onboardingStatus: {
+    type: DataTypes.ENUM('draft', 'submitted', 'under_review', 'recommended', 'verified', 'correction_required', 'approved', 'rejected'),
+    allowNull: false,
+    defaultValue: 'draft'
+  },
+  onboardingSubmittedAt: { type: DataTypes.DATE, allowNull: true },
+  // "Account Manager": recommended the application
+  onboardingRecommendedBy: { type: DataTypes.UUID, allowNull: true },
+  onboardingRecommendedAt: { type: DataTypes.DATE, allowNull: true },
+  // "Verified by": Head of Recruitment who verified it
+  onboardingReviewedBy: { type: DataTypes.UUID, allowNull: true },
+  onboardingReviewedAt: { type: DataTypes.DATE, allowNull: true },
+  // "Approved by": Head of Admission who approved (or whoever rejected) it
+  onboardingDecidedBy: { type: DataTypes.UUID, allowNull: true },
+  onboardingDecidedAt: { type: DataTypes.DATE, allowNull: true },
+  onboardingHistory: { type: DataTypes.JSONB, defaultValue: [] },
+
+  // ── Agent contract + E-Certificate (after approval) ──
+  // not_issued → issued (QStudy uploads the contract) → signed (QStudy uploads the signed copy)
+  contractStatus: {
+    type: DataTypes.ENUM('not_issued', 'issued', 'signed'),
+    allowNull: false,
+    defaultValue: 'not_issued'
+  },
+  contractIssuedAt: { type: DataTypes.DATE, allowNull: true },
+  contractSignedAt: { type: DataTypes.DATE, allowNull: true },
+  contractExpiresAt: { type: DataTypes.DATE, allowNull: true },
+  // Every contract file ever uploaded: { id, kind: 'issued' | 'signed', fileUrl, fileName, uploadedAt, uploadedBy, uploadedByName }
+  contractDocuments: { type: DataTypes.JSONB, defaultValue: [] },
+  eCertificateNumber: { type: DataTypes.STRING, allowNull: true },
+  eCertificateIssuedAt: { type: DataTypes.DATE, allowNull: true },
+  eCertificateIssuedBy: { type: DataTypes.UUID, allowNull: true },
+  // Optional uploaded certificate file: { id, fileUrl, fileName, uploadedAt }
+  eCertificateFile: { type: DataTypes.JSONB, allowNull: true },
+  // Activated = contract signed + E-Certificate issued. Only activated agents can submit students.
+  isActivated: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  activatedAt: { type: DataTypes.DATE, allowNull: true },
+
+  // ── Agent application (QStudy agent application form) ──
+  agentType: {
+    type: DataTypes.ENUM('company', 'individual'),
     allowNull: true
   },
+  // NRIC / passport number (individual agents)
+  idNumber: { type: DataTypes.STRING, allowNull: true },
+  contactPerson: { type: DataTypes.STRING, allowNull: true },
+  contactDesignation: { type: DataTypes.STRING, allowNull: true },
+  signatoryName: { type: DataTypes.STRING, allowNull: true },
+  signatoryDesignation: { type: DataTypes.STRING, allowNull: true },
+  natureOfBusiness: { type: DataTypes.TEXT, allowNull: true },
+  website: { type: DataTypes.STRING, allowNull: true },
+  fax: { type: DataTypes.STRING, allowNull: true },
+  isRelativeOfEmployee: { type: DataTypes.BOOLEAN, defaultValue: false },
+  relativeName: { type: DataTypes.STRING, allowNull: true },
+  // Bank details for commission payouts
+  bankBeneficiaryName: { type: DataTypes.STRING, allowNull: true },
+  bankName: { type: DataTypes.STRING, allowNull: true },
+  bankAccountNumber: { type: DataTypes.STRING, allowNull: true },
+  bankSwiftCode: { type: DataTypes.STRING, allowNull: true },
+  bankAddress: { type: DataTypes.TEXT, allowNull: true },
+  // Declaration signed on the application
+  declarationName: { type: DataTypes.STRING, allowNull: true },
+  declarationIdNumber: { type: DataTypes.STRING, allowNull: true },
+  declarationAcceptedAt: { type: DataTypes.DATE, allowNull: true },
   isVerified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
@@ -102,14 +180,17 @@ const User = sequelize.define('User', {
   hooks: {
     beforeCreate: async (user) => {
       if (user.password) {
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(user.password, salt);
+        assertStrongPassword(user.password);
+        user.password = await bcrypt.hash(user.password, BCRYPT_ROUNDS);
+        user.passwordChangedAt = new Date();
       }
     },
     beforeUpdate: async (user) => {
       if (user.changed('password')) {
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(user.password, salt);
+        assertStrongPassword(user.password);
+        user.password = await bcrypt.hash(user.password, BCRYPT_ROUNDS);
+        // Sessions issued before this moment stop working (see middleware/auth.js)
+        user.passwordChangedAt = new Date();
       }
     }
   }
@@ -117,8 +198,13 @@ const User = sequelize.define('User', {
 
 // Instance method to compare password
 User.prototype.comparePassword = async function(candidatePassword) {
+  if (typeof candidatePassword !== 'string' || !candidatePassword) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
+
+// Hash compared against when the account does not exist, so a login for an unknown email takes as
+// long as one for a real account (no account enumeration through response time).
+User.DUMMY_HASH = bcrypt.hashSync('not-a-real-password-' + Date.now(), BCRYPT_ROUNDS);
 
 // Instance method to JSON transform
 User.prototype.toJSON = function() {
@@ -126,9 +212,6 @@ User.prototype.toJSON = function() {
   values.id = values.id ? values.id.toString() : values.id;
   values._id = values.id;
   delete values.password;
-  if (values.commissionRate !== null && values.commissionRate !== undefined) {
-    values.commissionRate = parseFloat(values.commissionRate);
-  }
   return values;
 };
 

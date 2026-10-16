@@ -86,3 +86,28 @@ frontend/scratch/
 
 # Mobile development
 android-sdk/frontend/node_modules/.cache/default-development/2.pack
+
+# Local secrets (never commit)
+.env.local
+.env.*.local
+
+# Environment files hold secrets: never commit them (use the .env.example files as a template)
+backend/.env
+frontend/.env
+.env
+
+# ── Secrets and private data: never commit ──
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+!**/.env.production
+*.key
+*.p12
+*.pfx
+*.sql
+*.sqlite
+*.sqlite3
+*.dump
+**/uploads/
+memory/test_credentials.md

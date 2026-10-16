@@ -1,4 +1,5 @@
 const universityService = require('../services/universityService');
+const { putObject, generateStoragePath } = require('../utils/storage');
 
 // @desc    Create new university
 // @route   POST /api/universities
@@ -13,6 +14,24 @@ exports.createUniversity = async (req, res) => {
       success: false,
       detail: error.message || 'Server error'
     });
+  }
+};
+
+// @desc    Upload a university logo image
+// @route   POST /api/universities/logo
+// @access  Private (Admin only)
+exports.uploadLogo = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, detail: 'No file uploaded' });
+    }
+    const storagePath = generateStoragePath('university-logos', req.file.originalname);
+    await putObject(storagePath, req.file.buffer, req.file.mimetype);
+    const filename = storagePath.split('/').pop();
+    res.status(201).json({ path: `/uploads/university-logos/${filename}` });
+  } catch (error) {
+    console.error('Upload university logo error:', error);
+    res.status(500).json({ success: false, detail: error.message || 'Server error' });
   }
 };
 

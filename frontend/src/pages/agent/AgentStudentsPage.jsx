@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Download, GraduationCap, Mail, Phone,
   ChevronRight, FileText, CheckCircle2, AlertCircle,
   X, MessageSquare, LayoutGrid, List, Filter,
-  ArrowRight, User, Calendar, MapPin, Upload, ArrowUpRight,
+  ArrowRight, User, MapPin, Upload, ArrowUpRight,
   Eye,
   MessageCircle, Clock, XCircle, Shield
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
+import { STUDENT_FUNNEL, STUDENT_JOURNEY, getFunnelKey, getStageLabel, getStudentJourneyIndex, getStudentStageInfo } from '../../utils/studentProgress';
 import { toast } from 'sonner';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -23,21 +24,6 @@ const DOC_STATUS_LABELS = {
   UnderReview: 'Under Review'
 };
 
-const STAGES = ['Registered', 'Contacted', 'Confirmed', 'Attended', 'Converted'];
-const STAGE_PILLS = {
-  'Registered': 'bg-[#E6F1FB] text-[#0C447C]',
-  'Contacted': 'bg-[#FAEEDA] text-[#633806]',
-  'Confirmed': 'bg-[#EEEDFE] text-[#3C3489]',
-  'Attended': 'bg-[#EAF3DE] text-[#27500A]',
-  'Converted': 'bg-[#E1F5EE] text-[#085041]'
-};
-const STAGE_COLORS = {
-  'Registered': '#378ADD',
-  'Contacted': '#EF9F27',
-  'Confirmed': '#7F77DD',
-  'Attended': '#639922',
-  'Converted': '#1D9E75'
-};
 
 const DEFAULT_DOC_CATEGORIES = [
   { label: 'Passport', value: 'Passport', mandatory: false },
@@ -49,13 +35,10 @@ const AgentStudentsPage = () => {
   const { user } = useAuth();
   const {
     students,
-    events,
     universities,
     getStudentsByAgent,
     fetchStudents,
     addStudent,
-    updateStudentStatus,
-    getEventsForAgent,
     uploadStudentDocument,
     viewStudentDocument,
     loading
@@ -63,7 +46,6 @@ const AgentStudentsPage = () => {
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [eventFilter, setEventFilter] = useState('all');
   const [universityFilter, setUniversityFilter] = useState('all');
   const [docFilter, setDocFilter] = useState('all');
   const [curStage, setCurStage] = useState('all');
@@ -74,17 +56,7 @@ const AgentStudentsPage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCategory, setUploadCategory] = useState(null);
   const fileInputRef = useRef(null);
-  const [formData, setFormData] = useState({
-    eventId: '',
-  });
-
-  const location = useLocation();
-  
-  useEffect(() => {
-    if (location.state?.eventFilter) {
-      setEventFilter(location.state.eventFilter);
-    }
-  }, [location.state]);
+  const [formData, setFormData] = useState({});
 
   useEffect(() => {
     fetchStudents();
@@ -93,11 +65,6 @@ const AgentStudentsPage = () => {
   const myStudents = useMemo(() => {
     return getStudentsByAgent(user?.id);
   }, [students, user?.id, getStudentsByAgent]);
-
-  const assignedEvents = useMemo(() => {
-    return getEventsForAgent(user?.id);
-  }, [events, user?.id, getEventsForAgent]);
-
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -125,20 +92,6 @@ const AgentStudentsPage = () => {
     // Custom field by exact key
     if (student.customFields?.[key]) return student.customFields[key];
 
-    // Custom field by label lookup
-    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
-    if (event?.formFields) {
-      const field = event.formFields.find(f =>
-        f.label.toLowerCase().trim() === fallbackLabel.toLowerCase().trim() ||
-        f.label.toLowerCase().includes(fallbackLabel.toLowerCase()) ||
-        f.label.toLowerCase().includes(key.toLowerCase())
-      );
-      if (field) {
-        const val = student.customFields?.[field.id] || student.customFields?.[`field_${field.id}`] || student.customFields?.[String(field.id).replace(/^field_/, '')];
-        if (val) return val;
-      }
-    }
-
     return 'N/A';
   };
 
@@ -155,8 +108,7 @@ const AgentStudentsPage = () => {
   const getDocStatus = useCallback((student) => {
     if (!student) return 'missing';
 
-    const event = events.find(e => e.id === student.eventId || e._id === student.eventId);
-    const required = event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
+    const required = DEFAULT_DOC_CATEGORIES;
 
     if (required.length === 0) return 'complete';
 
@@ -176,13 +128,8 @@ const AgentStudentsPage = () => {
     if (hasUnapproved) return 'pending';
 
     return 'complete';
-  }, [events]);
+  }, []);
 
-
-  const getEventName = (eventId) => {
-    const event = events.find(e => e.id === eventId || e._id === eventId);
-    return event?.title || 'Unknown Event';
-  };
 
   const getUniversityName = useCallback((s) => {
     if (!s) return 'Not specified';
@@ -245,37 +192,27 @@ const AgentStudentsPage = () => {
       const q = searchQuery.toLowerCase();
 
       if (searchQuery && !name.includes(q) && !email.includes(q) && !phone.includes(q)) return false;
-      if (eventFilter !== 'all' && s.eventId !== eventFilter) return false;
       if (universityFilter !== 'all') {
         const uId = s.universityId || cf.universityId || (cf instanceof Map ? cf.get('universityId') : null);
         const uName = getUniversityName(s);
         if (String(uId) !== String(universityFilter) && uName !== universityFilter) return false;
       }
       if (docFilter !== 'all' && getDocStatus(s) !== docFilter) return false;
-      if (curStage !== 'all' && s.status !== curStage) return false;
+      if (curStage !== 'all' && getFunnelKey(s) !== curStage) return false;
       if (verificationFilter !== 'all' && (s.verificationStatus || 'Pending') !== verificationFilter) return false;
 
       return true;
     });
-  }, [myStudents, searchQuery, eventFilter, universityFilter, docFilter, curStage, verificationFilter, getUniversityName]);
+  }, [myStudents, searchQuery, universityFilter, docFilter, curStage, verificationFilter, getUniversityName]);
 
   const kpis = useMemo(() => {
     const total = myStudents.length;
     const counts = { all: total };
-    STAGES.forEach(stage => {
-      counts[stage] = myStudents.filter(s => s.status === stage).length;
+    STUDENT_FUNNEL.forEach(group => {
+      counts[group.key] = myStudents.filter(s => getFunnelKey(s) === group.key).length;
     });
     return counts;
   }, [myStudents]);
-
-  const handleStatusChange = async (studentId, newStatus) => {
-    try {
-      await updateStudentStatus(studentId, newStatus);
-      toast.success(`Status updated to ${newStatus}`);
-    } catch (error) {
-      toast.error('Failed to update status');
-    }
-  };
 
   const handleUploadClick = (category) => {
     setUploadCategory(category);
@@ -306,11 +243,7 @@ const AgentStudentsPage = () => {
     return myStudents.find(s => (s.id === selectedStudentId || s._id === selectedStudentId));
   }, [myStudents, selectedStudentId]);
 
-  const requiredDocs = useMemo(() => {
-    if (!selectedStudent) return [];
-    const event = events.find(e => e.id === selectedStudent.eventId || e._id === selectedStudent.eventId);
-    return event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
-  }, [selectedStudent, events]);
+  const requiredDocs = DEFAULT_DOC_CATEGORIES;
 
   if (loading && myStudents.length === 0) {
     return (
@@ -327,7 +260,7 @@ const AgentStudentsPage = () => {
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">My Students</h1>
           <p className="text-sm text-[#6B7280] font-medium mt-1">
-            {myStudents.length} students registered across all your events
+            {myStudents.length} students registered
           </p>
         </div>
         <div className="flex gap-3">
@@ -341,6 +274,8 @@ const AgentStudentsPage = () => {
           <Button
             className="h-10 text-xs font-bold bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10"
             onClick={() => setShowAddModal(true)}
+            disabled={!user?.isActivated}
+            title={user?.isActivated ? undefined : 'Available once your contract is signed and your E-Certificate is issued'}
           >
             <Plus size={14} className="mr-2" /> Register Student
           </Button>
@@ -360,23 +295,18 @@ const AgentStudentsPage = () => {
           <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpis.all}</div>
           <p className="text-[10px] text-gray-400 mt-1 font-medium">My registrations</p>
         </div>
-        {STAGES.map(stage => (
+        {STUDENT_FUNNEL.map(group => (
           <div
-            key={stage}
-            className={`cursor-pointer p-4 rounded-xl border transition-all ${curStage === stage ? 'bg-white border-[#378ADD] shadow-md ring-1 ring-[#378ADD]/20' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-            onClick={() => setCurStage(stage)}
+            key={group.key}
+            className={`cursor-pointer p-4 rounded-xl border transition-all ${curStage === group.key ? 'bg-white border-[#378ADD] shadow-md ring-1 ring-[#378ADD]/20' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+            onClick={() => setCurStage(group.key)}
           >
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: STAGE_COLORS[stage] }} />
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{stage}</span>
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: group.color }} />
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{group.label}</span>
             </div>
-            <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpis[stage] || 0}</div>
-            <p className="text-[10px] text-gray-400 mt-1 font-medium">
-              {stage === 'Registered' ? 'Awaiting contact' :
-                stage === 'Contacted' ? 'Follow up needed' :
-                  stage === 'Confirmed' ? 'Attended event' :
-                    stage === 'Converted' ? 'Applied to uni' : 'Pipeline progress'}
-            </p>
+            <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{kpis[group.key] || 0}</div>
+            <p className="text-[10px] text-gray-400 mt-1 font-medium">{group.hint}</p>
           </div>
         ))}
       </div>
@@ -394,16 +324,6 @@ const AgentStudentsPage = () => {
           />
         </div>
         <div className="flex items-center gap-3">
-          <select
-            className="text-xs font-bold px-3 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-[#042C53] transition-all"
-            value={eventFilter}
-            onChange={(e) => setEventFilter(e.target.value)}
-          >
-            <option value="all">All Events</option>
-            {assignedEvents.map(ev => (
-              <option key={ev.id || ev._id} value={ev.id || ev._id}>{ev.title}</option>
-            ))}
-          </select>
           <select
             className="text-xs font-bold px-3 py-2.5 rounded-xl border border-gray-200 bg-white outline-none focus:border-[#042C53] transition-all"
             value={universityFilter}
@@ -471,7 +391,6 @@ const AgentStudentsPage = () => {
                 <tr className="bg-[#F9FAFB] border-b border-gray-100">
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Student</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">University</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Event</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Country</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-wider">Verification</th>
@@ -504,14 +423,11 @@ const AgentStudentsPage = () => {
                         {getUniversityName(s)}
                       </td>
                       <td className="px-6 py-4 text-xs font-medium text-gray-600">
-                        {getEventName(s.eventId).split(' ').slice(0, 3).join(' ')}
-                      </td>
-                      <td className="px-6 py-4 text-xs font-medium text-gray-600">
                         {s.country || s.customFields?.country || 'N/A'}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100 text-gray-600'}`}>
-                          {s.status}
+                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider ${getStudentStageInfo(s).style}`}>
+                          {getStudentStageInfo(s).label}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -534,7 +450,7 @@ const AgentStudentsPage = () => {
                   );
                 }) : (
                   <tr>
-                    <td colSpan="9" className="px-6 py-20 text-center text-gray-400 italic">
+                    <td colSpan="8" className="px-6 py-20 text-center text-gray-400 italic">
                       <User size={48} className="mx-auto mb-3 opacity-20" />
                       No students match your current filters.
                     </td>
@@ -561,8 +477,8 @@ const AgentStudentsPage = () => {
                         {getInitials(getStudentName(s))}
                       </div>
                       <div className="flex flex-col items-end gap-1.5">
-                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${STAGE_PILLS[s.status] || 'bg-gray-100'}`}>
-                          {s.status}
+                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${getStudentStageInfo(s).style}`}>
+                          {getStudentStageInfo(s).label}
                         </span>
                         {getVerificationBadge(s.verificationStatus || 'Pending')}
                         {docStatus === 'missing' && <span className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase bg-[#FCEBEB] text-[#791F1F]">Doc Missing</span>}
@@ -576,10 +492,6 @@ const AgentStudentsPage = () => {
                       <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium">
                         <GraduationCap size={12} className="text-gray-400" />
                         <span className="truncate">{getUniversityName(s)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium">
-                        <Calendar size={12} className="text-gray-400" />
-                        <span className="truncate">{getEventName(s.eventId)}</span>
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium">
                         <MapPin size={12} className="text-gray-400" />
@@ -637,8 +549,8 @@ const AgentStudentsPage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge className={`px-3 py-1 font-bold uppercase tracking-wider ${STAGE_PILLS[selectedStudent.status]}`}>
-                    {selectedStudent.status}
+                  <Badge className={`px-3 py-1 font-bold uppercase tracking-wider ${getStudentStageInfo(selectedStudent).style}`}>
+                    {getStudentStageInfo(selectedStudent).label}
                   </Badge>
                   <button
                     className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
@@ -654,7 +566,7 @@ const AgentStudentsPage = () => {
                   <AlertCircle size={18} className="text-[#854F0B] mt-0.5" />
                   <div>
                     <p className="text-[13px] font-bold text-[#854F0B]">Action Required: Missing Documents</p>
-                    <p className="text-[11px] text-[#854F0B]/80 font-medium mt-0.5">Please request the passport and academic transcripts before the event date.</p>
+                    <p className="text-[11px] text-[#854F0B]/80 font-medium mt-0.5">Please request the passport and academic transcripts to avoid delays.</p>
                   </div>
                 </div>
               )}
@@ -681,8 +593,8 @@ const AgentStudentsPage = () => {
               <div>
                 <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-6">Student Journey Progress</h4>
                 <div className="flex items-center">
-                  {STAGES.map((stage, idx) => {
-                    const currentIdx = STAGES.indexOf(selectedStudent.status);
+                  {STUDENT_JOURNEY.map((stage, idx) => {
+                    const currentIdx = getStudentJourneyIndex(selectedStudent);
                     const isDone = idx < currentIdx;
                     const isActive = idx === currentIdx;
                     return (
@@ -698,10 +610,10 @@ const AgentStudentsPage = () => {
                             isActive ? 'text-[#0C447C]' :
                               'text-gray-300'
                             }`}>
-                            {stage}
+                            {getStageLabel(stage)}
                           </span>
                         </div>
-                        {idx < STAGES.length - 1 && (
+                        {idx < STUDENT_JOURNEY.length - 1 && (
                           <div className={`flex-1 h-0.5 mt-[-24px] ${isDone ? 'bg-[#97C459]' : 'bg-gray-100'}`} />
                         )}
                       </React.Fragment>
@@ -720,7 +632,6 @@ const AgentStudentsPage = () => {
                     { label: 'Course Interest', value: getStudentValue(selectedStudent, 'courseInterested', 'Course Interested') },
                     { label: 'Education Level', value: getStudentValue(selectedStudent, 'education', 'Highest Qualification') },
                     { label: 'Registered City', value: getStudentValue(selectedStudent, 'city', 'City') },
-                    { label: 'Assigned Event', value: getEventName(selectedStudent.eventId) },
                     { label: 'Onboarding Date', value: new Date(selectedStudent.createdAt || selectedStudent.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) }
                   ].map((item, i) => (
                     <div key={i} className="space-y-1">
@@ -864,13 +775,12 @@ const AgentStudentsPage = () => {
                     onClick={() => {
                       const name = getStudentName(selectedStudent);
                       const phone = getStudentValue(selectedStudent, 'phone', 'Phone Number');
-                      const event = getEventName(selectedStudent.eventId);
                       if (!phone || phone === 'N/A') {
                         toast.error('No phone number available for this student');
                         return;
                       }
                       const cleanPhone = phone.replace(/[^\d+]/g, '');
-                      const message = `Hi ${name}, I'm following up on your registration for ${event}. Do you have any questions?`;
+                      const message = `Hi ${name}, I'm following up on your registration. Do you have any questions?`;
                       window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                     }}
                   >
@@ -886,7 +796,7 @@ const AgentStudentsPage = () => {
                           prefill: { 
                             subject: `Student Issue: ${getStudentName(selectedStudent)}`,
                             category: 'Student-Related',
-                            description: `Support requested for student ${getStudentName(selectedStudent)} (ID: ${selectedStudent.id || selectedStudent._id}) registered for ${getEventName(selectedStudent.eventId)}.`
+                            description: `Support requested for student ${getStudentName(selectedStudent)} (ID: ${selectedStudent.id || selectedStudent._id}).`
                           } 
                         } 
                       });
@@ -895,20 +805,6 @@ const AgentStudentsPage = () => {
                     <AlertCircle size={14} className="mr-2" /> Raise Ticket
                   </Button>
                 </div>
-                {/* <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    className="h-11 text-xs font-bold bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] hover:bg-[#DCEFC0]"
-                    onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Confirmed')}
-                  >
-                    Mark Confirmed
-                  </Button>
-                  <Button
-                    className="h-11 text-xs font-bold bg-[#042C53] text-white hover:bg-[#0C447C]"
-                    onClick={() => handleStatusChange(selectedStudent.id || selectedStudent._id, 'Converted')}
-                  >
-                    Mark Converted <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
-                  </Button>
-                </div> */}
 
               </div>
             </div>

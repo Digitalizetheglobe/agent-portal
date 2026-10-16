@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Calendar, MapPin, Phone, Mail, User, BookOpen,
+  ArrowLeft, MapPin, Phone, Mail, User, BookOpen,
   Globe, Clock, Upload, FileText, Download, Check, X,
   Shield, AlertCircle, Edit, Eye, CheckCircle2, XCircle,
   History, Briefcase, RefreshCw, ChevronRight
@@ -16,6 +16,7 @@ import { Progress } from '../../components/ui/progress';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { studentAPI, studentVerificationAPI, formatApiError } from '../../utils/api';
+import { getStudentStageInfo } from '../../utils/studentProgress';
 import {
   STUDENT_VERIFICATION_STATUS,
   STUDENT_VERIFICATION_STATUS_LABELS
@@ -26,7 +27,7 @@ import DocumentReviewDialog from '../../components/modals/DocumentReviewDialog';
 const StudentDetailsPage = () => {
   const { studentId: id } = useParams();
   const navigate = useNavigate();
-  const { students, events, agents, universities, getStudentById, uploadStudentDocument, updateStudentStatus, verifyStudentDocument, requestStudentDocument } = useData();
+  const { students, agents, universities, getStudentById, uploadStudentDocument, verifyStudentDocument, requestStudentDocument } = useData();
   const { isAdmin, isAgent } = useAuth();
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -111,11 +112,6 @@ const StudentDetailsPage = () => {
     fetchStudentData();
   }, [fetchStudentData]);
 
-  const event = useMemo(() => {
-    if (!student?.eventId) return null;
-    return events.find(e => e.id === student.eventId || e._id === student.eventId);
-  }, [events, student?.eventId]);
-
   const agent = useMemo(() => {
     if (!student?.agentId) return null;
     return agents.find(a => a.id === student.agentId || a._id === student.agentId);
@@ -127,8 +123,8 @@ const StudentDetailsPage = () => {
       { label: 'Academic Transcripts', value: 'Transcript', mandatory: false },
       { label: 'Language Test', value: 'LanguageTest', mandatory: false }
     ];
-    return event?.requiredDocuments || DEFAULT_DOC_CATEGORIES;
-  }, [event]);
+    return DEFAULT_DOC_CATEGORIES;
+  }, []);
 
   // Checklist of required documents against what the agent has actually uploaded
   const documentChecklist = useMemo(() => {
@@ -151,7 +147,7 @@ const StudentDetailsPage = () => {
     [documentChecklist]
   );
 
-  // Verification is the final step after enrollment; the backend reports whether the student is ready
+  // When enforced, verification starts once the student reached Registration; the backend reports whether the student is ready
   const verificationReadiness = verificationDetail?.readiness;
   const notReadyForVerification = Boolean(verificationReadiness?.enforced) && !verificationReadiness.ready;
 
@@ -300,24 +296,6 @@ const StudentDetailsPage = () => {
       return student[fieldKey];
     }
 
-    if (event?.formFields) {
-      const field = event.formFields.find(f =>
-        f.label.toLowerCase().trim() === fieldKey.toLowerCase().trim() ||
-        (fallbackKey && f.label.toLowerCase().trim() === fallbackKey.toLowerCase().trim()) ||
-        f.label.toLowerCase().includes(fieldKey.toLowerCase())
-      );
-
-      if (field && student.customFields) {
-        const cleanFieldId = String(field.id).replace(/^field_/, '');
-        if (student.customFields[cleanFieldId] !== undefined) {
-          return student.customFields[cleanFieldId];
-        }
-        if (student.customFields[`field_${cleanFieldId}`] !== undefined) {
-          return student.customFields[`field_${cleanFieldId}`];
-        }
-      }
-    }
-
     if (student.customFields && student.customFields[fieldKey]) {
       return student.customFields[fieldKey];
     }
@@ -334,8 +312,7 @@ const StudentDetailsPage = () => {
     Object.entries(student.customFields).forEach(([key, value]) => {
       if (!value) return;
       const cleanKey = key.replace(/^field_/, '');
-      const formField = event?.formFields?.find(f => String(f.id).replace(/^field_/, '') === cleanKey);
-      const label = formField ? formField.label : key.replace(/^field_/, '').replace(/_/g, ' ');
+      const label = key.replace(/^field_/, '').replace(/_/g, ' ');
 
       const isStandardKey = standardFieldKeys.includes(key);
       const isStandardLabel = standardLabels.some(l =>
@@ -583,13 +560,9 @@ const StudentDetailsPage = () => {
               {/* Pipeline Stage Badge */}
               <Badge className={cn(
                 "text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border-none",
-                student.status === 'Registered' ? 'bg-blue-100 text-blue-700' :
-                  student.status === 'Contacted' ? 'bg-yellow-100 text-yellow-700' :
-                    student.status === 'Confirmed' ? 'bg-purple-100 text-purple-700' :
-                      student.status === 'Attended' ? 'bg-emerald-100 text-emerald-700' :
-                        'bg-pink-100 text-pink-700'
+                getStudentStageInfo(student).style
               )}>
-                Stage: {student.status || 'Registered'}
+                Stage: {getStudentStageInfo(student).label}
               </Badge>
 
               {/* Student Verification Badge */}
@@ -662,7 +635,7 @@ const StudentDetailsPage = () => {
                       <Button
                         size="sm"
                         disabled={actionLoading || notReadyForVerification}
-                        title={notReadyForVerification ? 'Enroll the student with a verified deposit first' : undefined}
+                        title={notReadyForVerification ? 'The student must reach Registration in the visa pipeline first' : undefined}
                         onClick={handleInitiateVerification}
                         className="bg-[#042C53] hover:bg-[#0C447C] text-white font-bold text-xs h-9 px-4 shadow-sm"
                       >
@@ -676,7 +649,7 @@ const StudentDetailsPage = () => {
                         <Button
                           size="sm"
                           disabled={actionLoading || missingMandatoryDocs.length > 0 || notReadyForVerification}
-                          title={notReadyForVerification ? 'Enroll the student with a verified deposit first' : missingMandatoryDocs.length > 0 ? 'Mandatory documents are missing' : undefined}
+                          title={notReadyForVerification ? 'The student must reach Registration in the visa pipeline first' : missingMandatoryDocs.length > 0 ? 'Mandatory documents are missing' : undefined}
                           onClick={handleVerifyStudent}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 shadow-sm"
                         >
@@ -701,7 +674,7 @@ const StudentDetailsPage = () => {
                       <Button
                         size="sm"
                         disabled={actionLoading || notReadyForVerification}
-                        title={notReadyForVerification ? 'Enroll the student with a verified deposit first' : undefined}
+                        title={notReadyForVerification ? 'The student must reach Registration in the visa pipeline first' : undefined}
                         onClick={handleInitiateVerification}
                         className="bg-[#042C53] hover:bg-[#0C447C] text-white font-bold text-xs h-9 px-4 shadow-sm"
                       >
@@ -719,11 +692,11 @@ const StudentDetailsPage = () => {
                 )}
               </div>
 
-              {/* Verification comes after enrollment: show what is still outstanding */}
+              {/* Verification comes after the student progressed in the visa pipeline: show what is still outstanding */}
               {isAdmin() && verificationReadiness?.enforced && currentVerificationStatus !== STUDENT_VERIFICATION_STATUS.VERIFIED && (
                 <div className={`p-4 rounded-xl border space-y-2 ${verificationReadiness.ready ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
                   <p className={`text-xs font-bold ${verificationReadiness.ready ? 'text-emerald-900' : 'text-amber-900'}`}>
-                    {verificationReadiness.ready ? 'Ready for verification: enrollment and deposit are confirmed' : 'Not ready for verification yet'}
+                    {verificationReadiness.ready ? 'Ready for verification: the student reached Registration in the visa pipeline' : 'Not ready for verification yet'}
                   </p>
                   {!verificationReadiness.ready && (
                     <ul className="text-xs text-amber-800 leading-relaxed list-disc pl-4 space-y-0.5">
@@ -733,7 +706,7 @@ const StudentDetailsPage = () => {
                   {verificationReadiness.ready && (
                     <ul className="text-xs text-emerald-800 space-y-0.5">
                       {verificationReadiness.enrolledApplications.filter(a => a.missing.length === 0).map(a => (
-                        <li key={a.id}>{a.applicationNumber}: {a.courseName}, enrolled, deposit verified</li>
+                        <li key={a.id}>{a.applicationNumber}: {a.courseName}, at {a.pipelineStage}</li>
                       ))}
                     </ul>
                   )}
@@ -1014,36 +987,10 @@ const StudentDetailsPage = () => {
 
         {/* Sidebar - 1 column */}
         <div className="space-y-8">
-          {/* Event & Agent Context */}
+          {/* Agent Context */}
           <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
             <div className="h-2 bg-[#042C53]" />
             <CardContent className="p-6 space-y-6">
-              {event && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-[#E6F1FB] flex items-center justify-center shrink-0">
-                      <Calendar className="w-5 h-5 text-[#042C53]" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Registered For</p>
-                      <p className="text-sm font-bold text-[#111827] leading-tight mt-0.5">{event.title}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 pl-13">
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] font-bold text-[#9CA3AF] uppercase">Event Date</p>
-                      <p className="text-xs font-semibold text-[#4B5563]">{formatDate(event.date)}</p>
-                    </div>
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] font-bold text-[#9CA3AF] uppercase">Location</p>
-                      <p className="text-xs font-semibold text-[#4B5563] truncate">{event.location || 'Online'}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <Separator className="bg-[#F3F4F6]" />
-
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-[#EEEDFE] flex items-center justify-center shrink-0">
                   <Shield className="w-5 h-5 text-[#3C3489]" />
@@ -1299,33 +1246,23 @@ const StudentDetailsPage = () => {
             </CardContent>
           </Card>
 
-          {/* Lifecycle Status */}
+          {/* Progress: follows the student's applications */}
           <Card className="border-[#E5E7EB] shadow-sm overflow-hidden">
             <CardHeader className="bg-[#F9FAFB] border-b border-[#F3F4F6] px-6 py-4">
-              <CardTitle className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Update Pipeline Status</CardTitle>
+              <CardTitle className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Progress</CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
-              <select
-                value={student.status || 'Registered'}
-                onChange={(e) => {
-                  updateStudentStatus(student.id, e.target.value).then(res => setStudent(res));
-                }}
-                className={cn(
-                  "w-full text-sm font-bold px-4 py-3 rounded-xl border appearance-none cursor-pointer focus:ring-2 focus:ring-[#042C53]/10 outline-none transition-all",
-                  student.status === 'Registered' ? 'bg-[#E6F1FB] text-[#0C447C] border-[#B5D4F4]' :
-                    student.status === 'Contacted' ? 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]' :
-                      student.status === 'Confirmed' ? 'bg-[#F5F3FF] text-[#5B21B6] border-[#DDD6FE]' :
-                        student.status === 'Attended' ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]' :
-                          'bg-[#FDF2F8] text-[#9D174D] border-[#FBCFE8]'
-                )}
-              >
-                <option value="Registered">Status: Registered</option>
-                <option value="Contacted">Status: Contacted</option>
-                <option value="Confirmed">Status: Confirmed</option>
-                <option value="Attended">Status: Attended</option>
-                <option value="Converted">Status: Converted</option>
-              </select>
-              <p className="text-[10px] text-[#9CA3AF] mt-3 px-1">
+            <CardContent className="p-6 space-y-3">
+              <span className={cn(
+                "inline-flex text-sm font-bold px-4 py-2 rounded-xl",
+                getStudentStageInfo(student).style
+              )}>
+                {getStudentStageInfo(student).label}
+              </span>
+              <p className="text-xs text-[#6B7280]">
+                A student's progress follows their applications: the furthest visa stage of any live application.
+                Move a student on from the application page.
+              </p>
+              <p className="text-[10px] text-[#9CA3AF] px-1">
                 Last activity: {formatDateTime(student.updatedAt || student.submittedAt)}
               </p>
             </CardContent>

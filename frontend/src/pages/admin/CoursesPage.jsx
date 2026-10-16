@@ -18,6 +18,8 @@ import {
   Globe
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { hasStaffRole } from '../../utils/staffRoles';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
@@ -62,6 +64,9 @@ const DEGREE_LEVELS = [
 
 const CoursesPage = () => {
   const { universities, deleteCourse, updateCourseStatus } = useData();
+  const { user } = useAuth();
+  // University and course information is maintained by the Head of Admission
+  const canManage = hasStaffRole(user, 'head_admission');
 
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -195,13 +200,15 @@ const CoursesPage = () => {
           </p>
         </div>
 
-        <Button
-          onClick={handleOpenAdd}
-          className="bg-[#042C53] hover:bg-[#042C53]/90 text-white font-semibold text-xs px-4 h-10 shadow-sm"
-          data-testid="add-course-btn"
-        >
-          <Plus className="w-4 h-4 mr-2" /> Add New Course
-        </Button>
+        {canManage && (
+          <Button
+            onClick={handleOpenAdd}
+            className="bg-[#042C53] hover:bg-[#042C53]/90 text-white font-semibold text-xs px-4 h-10 shadow-sm"
+            data-testid="add-course-btn"
+          >
+            <Plus className="w-4 h-4 mr-2" /> Add New Course
+          </Button>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -472,7 +479,7 @@ const CoursesPage = () => {
                     </TableCell>
 
                     <TableCell className="py-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
+                      {canManage && <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -500,7 +507,7 @@ const CoursesPage = () => {
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
-                      </div>
+                      </div>}
                     </TableCell>
                   </TableRow>
                 ))

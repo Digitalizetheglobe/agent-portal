@@ -1,30 +1,73 @@
 const { Op } = require('sequelize');
-const { User, Event } = require('../models');
+const { User } = require('../models');
 const { sendEmail, templates } = require('../utils/email');
 const { putObject, getObject, deleteObject, generateStoragePath } = require('../utils/storage');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID: uuidv4 } = require('crypto');
 const { createNotification } = require('./notificationController');
+const { STAFF_ROLES } = require('../middleware/auth');
+const { passwordProblem } = require('../utils/security');
+const { pickApplicationFields, validateApplication, BANK_KEYS, canSeeBankDetails, IN_REVIEW_STATUSES } = require('../utils/agentApplication');
+
+// Serialize an agent for a viewer; bank details are hidden from staff with no payout role.
+const serializeAgent = (agent, viewer) => {
+  const json = agent.toJSON();
+  if (!canSeeBankDetails(viewer)) BANK_KEYS.forEach(k => delete json[k]);
+  return json;
+};
 
 // @desc    Get all agents
 // @route   GET /api/agents
 // @access  Private
-// Parse an admin-supplied commission rate. Returns { value } (null = clear) or { error }.
-const parseCommissionRate = (raw) => {
+const accountManagerInclude = {
+  model: User,
+  as: 'accountManager',
+  attributes: ['id', 'name', 'email', 'phone'],
+  required: false
+};
+
+// Account Managers only work with the agents assigned to them.
+const isAccountManager = (user) => user.role === 'admin' && user.staffRole === 'account_manager';
+
+// Validate an Account Manager assignment. Returns { value } (null = unassign) or { error }.
+const resolveAccountManager = async (raw) => {
   if (raw === null || raw === '') return { value: null };
-  const rate = parseFloat(raw);
-  if (isNaN(rate) || !isFinite(rate) || rate <= 0 || rate > 100) {
-    return { error: 'Commission rate must be a percentage greater than 0 and at most 100' };
+  const manager = await User.findOne({
+    where: { id: raw, role: 'admin', staffRole: 'account_manager' },
+    attributes: ['id']
+  });
+  if (!manager) return { error: 'Selected Account Manager does not exist' };
+  return { value: manager.id };
+};
+
+const reloadWithManager = (id) => User.findByPk(id, { include: [accountManagerInclude] });
+
+// @desc    List Account Managers (for assignment dropdowns)
+// @route   GET /api/agents/account-managers
+// @access  Private (Admin)
+exports.getAccountManagers = async (req, res) => {
+  try {
+    const managers = await User.findAll({
+      where: { role: 'admin', staffRole: 'account_manager', status: 'active' },
+      attributes: ['id', 'name', 'email'],
+      order: [['name', 'ASC']]
+    });
+    res.status(200).json(managers.map(m => m.toJSON()));
+  } catch (error) {
+    console.error('Get account managers error:', error);
+    res.status(500).json({ success: false, detail: 'Server error' });
   }
-  return { value: Math.round(rate * 100) / 100 };
 };
 
 exports.getAgents = async (req, res) => {
   try {
+    const where = { role: 'agent' };
+    if (isAccountManager(req.user)) where.accountManagerId = req.user.id;
     const agents = await User.findAll({
-      where: { role: 'agent' },
+      where,
+      include: [accountManagerInclude],
       order: [['createdAt', 'DESC']]
     });
-    res.status(200).json(agents.map(agent => agent.toJSON()));
+    res.status(200).json(agents.map(agent => serializeAgent(agent, req.user)));
   } catch (error) {
     console.error('Get agents error:', error);
     res.status(500).json({
@@ -47,9 +90,10 @@ exports.getAgent = async (req, res) => {
       });
     }
 
-    const agent = await User.findOne({
-      where: { id: req.params.id, role: 'agent' }
-    });
+    const where = { id: req.params.id, role: 'agent' };
+    if (isAccountManager(req.user)) where.accountManagerId = req.user.id;
+
+    const agent = await User.findOne({ where, include: [accountManagerInclude] });
 
     if (!agent) {
       return res.status(404).json({
@@ -58,7 +102,7 @@ exports.getAgent = async (req, res) => {
       });
     }
 
-    res.status(200).json(agent.toJSON());
+    res.status(200).json(serializeAgent(agent, req.user));
   } catch (error) {
     console.error('Get agent error:', error);
     res.status(500).json({
@@ -73,14 +117,28 @@ exports.getAgent = async (req, res) => {
 // @access  Private (Admin only)
 exports.createAgent = async (req, res) => {
   try {
-    const { name, email, userId, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress, commissionRate } = req.body;
+    const { name, email, userId, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress, accountManagerId } = req.body;
 
-    let parsedCommissionRate = null;
-    if (commissionRate !== undefined) {
-      const parsed = parseCommissionRate(commissionRate);
-      if (parsed.error) return res.status(400).json({ success: false, detail: parsed.error });
-      parsedCommissionRate = parsed.value;
+    if (typeof email !== 'string' || !email.trim() || !name) {
+      return res.status(400).json({ success: false, detail: 'Name and email are required' });
     }
+    const weakPassword = passwordProblem(password);
+    if (weakPassword) return res.status(400).json({ success: false, detail: weakPassword });
+
+    // Account Managers own the agents they create; they cannot assign to others.
+    let assignedManagerId = null;
+    if (isAccountManager(req.user)) {
+      assignedManagerId = req.user.id;
+    } else if (accountManagerId) {
+      const resolved = await resolveAccountManager(accountManagerId);
+      if (resolved.error) return res.status(400).json({ success: false, detail: resolved.error });
+      assignedManagerId = resolved.value;
+    }
+
+    // Staff-created agents may carry the full application; mandatory checks apply on self-registration.
+    const { agencyName: _a, businessRegistrationNumber: _b, fullAddress: _f, region: _r, ...extraApplication } = pickApplicationFields(req.body);
+    const createErrors = validateApplication(extraApplication, { mode: 'update' });
+    if (createErrors.length) return res.status(400).json({ success: false, detail: createErrors.join('. ') });
 
     // Check if email or userId already exists
     const existingUser = await User.findOne({
@@ -114,7 +172,8 @@ exports.createAgent = async (req, res) => {
       agencyName,
       businessRegistrationNumber,
       fullAddress,
-      commissionRate: parsedCommissionRate,
+      ...extraApplication,
+      accountManagerId: assignedManagerId,
       verificationDocuments: []
     });
 
@@ -126,7 +185,7 @@ exports.createAgent = async (req, res) => {
       console.warn('Welcome email failed:', emailErr.message);
     }
 
-    res.status(201).json(agent.toJSON());
+    res.status(201).json(serializeAgent(await reloadWithManager(agent.id), req.user));
   } catch (error) {
     console.error('Create agent error:', error);
     if (error.name === 'SequelizeUniqueConstraintError') {
@@ -147,12 +206,24 @@ exports.createAgent = async (req, res) => {
 // @access  Private (Admin only)
 exports.createAdmin = async (req, res) => {
   try {
-    const { name, email, password, phone } = req.body;
+    const { name, email, password, phone, staffRole } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
         detail: 'Name, email, and password are required'
+      });
+    }
+
+    const weakAdminPassword = passwordProblem(password);
+    if (weakAdminPassword) {
+      return res.status(400).json({ success: false, detail: weakAdminPassword });
+    }
+
+    if (staffRole && !STAFF_ROLES.includes(staffRole)) {
+      return res.status(400).json({
+        success: false,
+        detail: `Invalid staff role. Allowed: ${STAFF_ROLES.join(', ')}`
       });
     }
 
@@ -173,6 +244,7 @@ exports.createAdmin = async (req, res) => {
       password,
       phone,
       role: 'admin',
+      staffRole: staffRole || null,
       status: 'active',
       isVerified: true,
       verificationStatus: 'approved'
@@ -193,11 +265,11 @@ exports.createAdmin = async (req, res) => {
 // @access  Private (Admin only)
 exports.updateAgent = async (req, res) => {
   try {
-    const { name, email, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress, commissionRate } = req.body;
+    const { name, email, password, phone, status, region, agencyName, businessRegistrationNumber, fullAddress, accountManagerId } = req.body;
 
-    const agent = await User.findOne({
-      where: { id: req.params.id, role: 'agent' }
-    });
+    const where = { id: req.params.id, role: 'agent' };
+    if (isAccountManager(req.user)) where.accountManagerId = req.user.id;
+    const agent = await User.findOne({ where });
 
     if (!agent) {
       return res.status(404).json({
@@ -224,20 +296,31 @@ exports.updateAgent = async (req, res) => {
     if (name) agent.name = name;
     if (phone) agent.phone = phone;
     if (status) agent.status = status;
-    if (password) agent.password = password;
+    if (password) {
+      const weak = passwordProblem(password);
+      if (weak) return res.status(400).json({ success: false, detail: weak });
+      agent.password = password;
+    }
     if (region !== undefined) agent.region = region;
     if (agencyName !== undefined) agent.agencyName = agencyName;
     if (businessRegistrationNumber !== undefined) agent.businessRegistrationNumber = businessRegistrationNumber;
     if (fullAddress !== undefined) agent.fullAddress = fullAddress;
-    if (commissionRate !== undefined) {
-      const parsed = parseCommissionRate(commissionRate);
-      if (parsed.error) return res.status(400).json({ success: false, detail: parsed.error });
-      agent.commissionRate = parsed.value;
+    // Remaining application-form fields (agentType, bank details, signatory, ...)
+    const { agencyName: _a, businessRegistrationNumber: _b, fullAddress: _f, region: _r, ...appPatch } = pickApplicationFields(req.body);
+    const appErrors = validateApplication(appPatch, { mode: 'update', existing: agent.toJSON() });
+    if (appErrors.length) return res.status(400).json({ success: false, detail: appErrors.join('. ') });
+    Object.assign(agent, appPatch);
+
+    // Agent ownership is not editable by Account Managers (commission is set per university, not per agent)
+    if (accountManagerId !== undefined && !isAccountManager(req.user)) {
+      const resolved = await resolveAccountManager(accountManagerId);
+      if (resolved.error) return res.status(400).json({ success: false, detail: resolved.error });
+      agent.accountManagerId = resolved.value;
     }
 
     await agent.save();
 
-    res.status(200).json(agent.toJSON());
+    res.status(200).json(serializeAgent(await reloadWithManager(agent.id), req.user));
   } catch (error) {
     console.error('Update agent error:', error);
     res.status(500).json({
@@ -261,15 +344,6 @@ exports.deleteAgent = async (req, res) => {
         success: false,
         detail: 'Agent not found'
       });
-    }
-
-    // Remove agent from all events
-    const events = await Event.findAll();
-    for (const event of events) {
-      if (Array.isArray(event.assignedAgents) && event.assignedAgents.some(a => a?.toString() === agent.id.toString())) {
-        event.assignedAgents = event.assignedAgents.filter(a => a?.toString() !== agent.id.toString());
-        await event.save();
-      }
     }
 
     // Delete agent
@@ -311,6 +385,13 @@ exports.uploadVerificationDocument = async (req, res) => {
       });
     }
 
+    if (IN_REVIEW_STATUSES.includes(user.onboardingStatus)) {
+      return res.status(403).json({
+        success: false,
+        detail: 'Your application is under review. Documents cannot be changed until it is returned to you.'
+      });
+    }
+
     // Generate storage path
     const storagePath = generateStoragePath(`agents/${user.id}/verification`, req.file.originalname);
 
@@ -349,7 +430,15 @@ exports.uploadVerificationDocument = async (req, res) => {
 exports.verifyAgent = async (req, res) => {
   try {
     const { isVerified, verificationStatus, remarks, documentId, documentStatus } = req.body;
-    
+
+    // Account approval/rejection now goes through the onboarding review endpoints
+    if (isVerified !== undefined || verificationStatus !== undefined) {
+      return res.status(400).json({
+        success: false,
+        detail: 'Use the onboarding review actions to approve, reject or return an application'
+      });
+    }
+
     const agent = await User.findOne({
       where: { id: req.params.id, role: 'agent' }
     });
@@ -371,14 +460,19 @@ exports.verifyAgent = async (req, res) => {
 
     let updatedDocType = 'document';
     if (documentId && documentStatus) {
-      const docs = Array.isArray(agent.verificationDocuments) ? [...agent.verificationDocuments] : [];
+      // Clone each document: editing the stored objects in place makes Sequelize see no change
+      // to the JSONB column, so the update would not be saved.
+      const docs = Array.isArray(agent.verificationDocuments)
+        ? agent.verificationDocuments.map(d => ({ ...d }))
+        : [];
       const doc = docs.find(d => d.id === documentId || d._id === documentId);
-      if (doc) {
-        doc.status = documentStatus;
-        if (remarks) doc.remarks = remarks;
-        updatedDocType = doc.docType || 'document';
-        agent.verificationDocuments = docs;
+      if (!doc) {
+        return res.status(404).json({ success: false, detail: 'Document not found' });
       }
+      doc.status = documentStatus;
+      if (remarks) doc.remarks = remarks;
+      updatedDocType = doc.docType || 'document';
+      agent.verificationDocuments = docs;
     } else if (remarks !== undefined) {
       agent.verificationRemarks = remarks;
     }
@@ -480,6 +574,13 @@ exports.deleteVerificationDocument = async (req, res) => {
       return res.status(403).json({
         success: false,
         detail: 'Only agents can delete their own verification documents'
+      });
+    }
+
+    if (IN_REVIEW_STATUSES.includes(user.onboardingStatus)) {
+      return res.status(403).json({
+        success: false,
+        detail: 'Your application is under review. Documents cannot be changed until it is returned to you.'
       });
     }
 

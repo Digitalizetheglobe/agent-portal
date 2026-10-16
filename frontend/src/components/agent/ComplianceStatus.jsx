@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, ShieldAlert, ShieldCheck, Upload, FileText, X, Clock, AlertCircle, Trash2, RefreshCw } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, Upload, FileText, X, Clock, AlertCircle, Trash2, RefreshCw, CheckCircle2, Circle, Send } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -15,6 +15,9 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { toast } from 'sonner';
+import { agentAPI, formatApiError } from '../../utils/api';
+import AgentActivationStatus from './AgentActivationStatus';
+import { getOnboardingStatus, isLockedForReview, getDocChecklist, DOC_TYPE_OPTIONS } from '../../utils/onboarding';
 
 const ComplianceStatus = () => {
   const { user, updateUser } = useAuth();
@@ -27,8 +30,45 @@ const ComplianceStatus = () => {
 
   const documents = user?.verificationDocuments || [];
   const isVerified = user?.isVerified;
+  const locked = isLockedForReview(user);
+  const status = getOnboardingStatus(user);
+  const checklist = getDocChecklist(user);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSigning, setIsSigning] = useState(false);
+  const [declaration, setDeclaration] = useState({ declarationName: '', declarationIdNumber: '' });
+  const [declarationAccepted, setDeclarationAccepted] = useState(false);
 
-  if (isVerified) return null;
+  if (isVerified) return <AgentActivationStatus />;
+
+  const canSubmit = ['draft', 'correction_required'].includes(user?.onboardingStatus);
+  // Agents created without an invite link have not signed the declaration yet
+  const needsDeclaration = canSubmit && !user?.declarationAcceptedAt;
+
+  const handleSignDeclaration = async () => {
+    setIsSigning(true);
+    try {
+      const res = await agentAPI.acceptDeclaration({ ...declaration, declarationAccepted: declarationAccepted });
+      updateUser(res.data);
+      toast.success('Declaration signed');
+    } catch (error) {
+      toast.error('Could not sign the declaration', { description: formatApiError(error) });
+    } finally {
+      setIsSigning(false);
+    }
+  };
+
+  const handleSubmitForReview = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await agentAPI.submitOnboarding();
+      updateUser(res.data);
+      toast.success('Application submitted', { description: 'Our recruitment team will review it shortly.' });
+    } catch (error) {
+      toast.error('Could not submit application', { description: formatApiError(error) });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -113,17 +153,103 @@ const ComplianceStatus = () => {
               <CardDescription>
                 {isVerified
                   ? 'Your account is fully verified and compliant.'
-                  : 'Action Required: Complete your verification to ensure full access.'}
+                  : locked
+                    ? 'Your application is with our recruitment team. We will notify you of the outcome.'
+                    : 'Action Required: upload your documents and submit your application for review.'}
               </CardDescription>
             </div>
           </div>
-          <Badge variant={isVerified ? 'default' : 'outline'} className={isVerified ? 'bg-emerald-500' : ''}>
-            {isVerified ? 'Verified' : 'Unverified'}
-          </Badge>
+          <Badge className={`border-none ${status.style}`}>{status.label}</Badge>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          {user?.onboardingStatus === 'correction_required' && user?.verificationRemarks && (
+            <div className="text-sm bg-orange-50 border border-orange-200 text-orange-900 p-3 rounded-lg">
+              <span className="font-semibold">Changes requested: </span>{user.verificationRemarks}
+            </div>
+          )}
+          {user?.onboardingStatus === 'rejected' && (
+            <div className="text-sm bg-red-50 border border-red-200 text-red-900 p-3 rounded-lg">
+              <span className="font-semibold">Application rejected. </span>{user.verificationRemarks}
+            </div>
+          )}
+
+          {/* Required documents checklist */}
+          {checklist.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Required documents</p>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {checklist.map(({ type, doc }) => (
+                  <li key={type} className="flex items-center gap-2 text-sm">
+                    {doc ? <CheckCircle2 className={`w-4 h-4 ${doc.status === 'approved' ? 'text-emerald-600' : doc.status === 'rejected' ? 'text-red-500' : 'text-amber-500'}`} />
+                         : <Circle className="w-4 h-4 text-muted-foreground" />}
+                    <span>{type}</span>
+                    {doc && <span className="text-xs text-muted-foreground">· {doc.status}</span>}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">All documents in English, scanned as PDF.</p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Choose your agent type under Settings → Application Details to see which documents are required.
+            </p>
+          )}
+
+          {needsDeclaration && (
+            <div className="p-4 border rounded-lg bg-muted/20 space-y-3" data-testid="declaration-form">
+              <h4 className="text-sm font-semibold">Declaration</h4>
+              <p className="text-sm text-muted-foreground">
+                I declare that the information given in this application and the documents submitted are true and
+                complete, and I agree to the terms of QStudy's agent programme. This can only be signed once.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="declarationName">Signature (type your full name)</Label>
+                  <Input
+                    id="declarationName"
+                    value={declaration.declarationName}
+                    onChange={(e) => setDeclaration({ ...declaration, declarationName: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="declarationIdNumber">ID number</Label>
+                  <Input
+                    id="declarationIdNumber"
+                    value={declaration.declarationIdNumber}
+                    onChange={(e) => setDeclaration({ ...declaration, declarationIdNumber: e.target.value })}
+                  />
+                </div>
+              </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={declarationAccepted}
+                  onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                />
+                <span>I have read and accept the declaration above.</span>
+              </label>
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={handleSignDeclaration}
+                  disabled={isSigning || !declarationAccepted || !declaration.declarationName.trim() || !declaration.declarationIdNumber.trim()}
+                >
+                  {isSigning ? 'Signing...' : 'Sign declaration'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {canSubmit && (
+            <Button className="w-full" onClick={handleSubmitForReview} disabled={isSubmitting || needsDeclaration}>
+              <Send className="w-4 h-4 mr-2" />
+              {isSubmitting ? 'Submitting...' : user?.onboardingStatus === 'correction_required' ? 'Resubmit for review' : 'Submit application for review'}
+            </Button>
+          )}
+
           {/* Documents List */}
           {documents.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -149,6 +275,7 @@ const ComplianceStatus = () => {
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-white"
                         onClick={() => handleReupload(doc.docType)}
+                        disabled={locked}
                         title="Re-upload"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
@@ -158,7 +285,7 @@ const ComplianceStatus = () => {
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
                         onClick={() => handleDelete(doc._id)}
-                        disabled={isDeleting === doc._id}
+                        disabled={locked || isDeleting === doc._id}
                         title="Delete"
                       >
                         {isDeleting === doc._id ? (
@@ -175,7 +302,7 @@ const ComplianceStatus = () => {
           )}
 
           {/* Upload Section */}
-          {!showUpload ? (
+          {locked ? null : !showUpload ? (
             <Button
               variant="outline"
               className="w-full border-dashed"
@@ -204,10 +331,9 @@ const ComplianceStatus = () => {
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Identity">Identity (Passport/ID)</SelectItem>
-                      <SelectItem value="Business License">Business License</SelectItem>
-                      <SelectItem value="Tax ID">Tax ID</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
+                      {DOC_TYPE_OPTIONS.map((type) => (
+                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -245,14 +371,6 @@ const ComplianceStatus = () => {
             </div>
           )}
 
-          {!isVerified && documents.length === 0 && (
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
-              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
-              <p className="text-xs text-amber-800 dark:text-amber-400 leading-relaxed">
-                To become a verified agent, please upload your Identity Document (Passport or National ID) and your Business License. Verified agents gain priority access to major events and student conversion bonuses.
-              </p>
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

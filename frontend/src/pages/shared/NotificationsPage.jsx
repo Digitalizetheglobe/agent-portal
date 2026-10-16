@@ -71,8 +71,8 @@ const NotificationsPage = () => {
         case 'Student':
           path = `/${role}/students/${notification.relatedId}`;
           break;
-        case 'Event':
-          path = `/${role}/events/${notification.relatedId}`;
+        case 'News':
+          path = `/${role}/news`;
           break;
         case 'Invoice':
           path = `/${role}/invoices`;
@@ -81,7 +81,7 @@ const NotificationsPage = () => {
           path = `/${role}/support`;
           break;
         case 'Agent':
-          path = role === 'admin' ? `/admin/agents/${notification.relatedId}/report` : `/agent/dashboard`;
+          path = role === 'admin' ? `/admin/agents/${notification.relatedId}` : `/agent/dashboard`;
           break;
         default:
           break;

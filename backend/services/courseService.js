@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { Course, University } = require('../models');
 const { sequelize } = require('../config/db');
+const { isUuid } = require('../utils/universityContent');
 
 class CourseService {
   /**
@@ -34,14 +35,19 @@ class CourseService {
       if (universityId === 'general') {
         where[Op.or] = [
           { universityId: null },
-          sequelize.literal(`"Course"."universityIds" IS NULL OR "Course"."universityIds" = '[]'::json`)
+          sequelize.literal(`"Course"."universityIds" IS NULL OR "Course"."universityIds"::text = '[]'`)
         ];
       } else {
+        if (!isUuid(universityId)) {
+          const err = new Error('Invalid university id');
+          err.statusCode = 400;
+          throw err;
+        }
         where[Op.or] = [
           { universityId },
           { universityId: null },
           sequelize.literal(`"Course"."universityIds"::text LIKE '%${universityId}%'`),
-          sequelize.literal(`"Course"."universityIds" IS NULL OR "Course"."universityIds" = '[]'::json`)
+          sequelize.literal(`"Course"."universityIds" IS NULL OR "Course"."universityIds"::text = '[]'`)
         ];
       }
     }

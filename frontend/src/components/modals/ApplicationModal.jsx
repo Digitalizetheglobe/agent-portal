@@ -40,11 +40,23 @@ const CURRENCIES = [
   { code: 'AUD', symbol: 'A$', label: 'AUD (A$)' }
 ];
 
+const INTAKE_SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
+const NO_INTAKE = 'none';
+
+const buildIntakeOptions = (current) => {
+  const year = new Date().getFullYear();
+  const options = [];
+  for (let y = year; y <= year + 2; y++) {
+    INTAKE_SEASONS.forEach(season => options.push(`${season} ${y}`));
+  }
+  if (current && !options.includes(current)) options.unshift(current);
+  return options;
+};
+
 const initialFormState = {
   studentId: '',
   agentId: '',
   universityId: '',
-  sourceEventId: '',
   courseId: '',
   courseName: '',
   courseLevel: 'Undergraduate',
@@ -68,7 +80,6 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
   const {
     students,
     universities,
-    events,
     agents,
     courses,
     createApplication,
@@ -126,6 +137,7 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
     [availableCourses, formData.courseId]
   );
   const catalogTuition = selectedCourse ? parseCourseFee(selectedCourse.tuitionFee) : null;
+  const intakeOptions = useMemo(() => buildIntakeOptions(formData.intakeTerm), [formData.intakeTerm]);
 
   // When opening or application prop changes
   useEffect(() => {
@@ -134,7 +146,6 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
         studentId: application.studentId ? String(application.studentId) : (application.student?.id ? String(application.student.id) : ''),
         agentId: application.agentId ? String(application.agentId) : (application.agent?.id ? String(application.agent.id) : ''),
         universityId: application.universityId ? String(application.universityId) : (application.university?.id ? String(application.university.id) : ''),
-        sourceEventId: application.sourceEventId ? String(application.sourceEventId) : '',
         courseId: application.courseId ? String(application.courseId) : '',
         courseName: application.courseName || '',
         courseLevel: application.courseLevel || 'Undergraduate',
@@ -160,6 +171,13 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
       if (field === 'universityId' && value !== prev.universityId) {
         next.courseId = '';
         next.courseName = '';
+        next.tuitionFee = '';
+      }
+      // Auto-fill tuition from the catalog when the course changes; the user can still overwrite it
+      if (field === 'courseId' && value !== prev.courseId) {
+        const course = courses?.find(c => String(c.id || c._id) === String(value));
+        const fee = course ? parseCourseFee(course.tuitionFee) : null;
+        next.tuitionFee = fee !== null ? String(fee) : '';
       }
       return next;
     });
@@ -213,9 +231,8 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
         universityId: formData.universityId,
         courseId: formData.courseId || undefined,
         intakeTerm: formData.intakeTerm.trim() || null,
-        tuitionFee: catalogTuition ?? (formData.tuitionFee ? parseFloat(formData.tuitionFee) : null),
+        tuitionFee: formData.tuitionFee ? parseFloat(formData.tuitionFee) : null,
         currency: formData.currency || 'USD',
-        sourceEventId: formData.sourceEventId || null,
         remarks: formData.remarks.trim() || null
       };
 
@@ -419,39 +436,24 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
             </div>
           </div>
 
-          {/* Intake Term & Source Event */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Intake Term */}
+          <div className="grid grid-cols-1 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="app-intake" className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-[#042C53]" />
-                Intake Term
-              </Label>
-              <Input
-                id="app-intake"
-                placeholder="e.g. Fall 2025 / Spring 2026"
-                value={formData.intakeTerm}
-                onChange={(e) => handleChange('intakeTerm', e.target.value)}
-                className="bg-white text-xs border-gray-200"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-gray-700">
-                Source Event (Optional)
+                Intake Term <span className="text-gray-400 font-normal">(optional)</span>
               </Label>
               <Select
-                value={formData.sourceEventId || 'none'}
-                onValueChange={(val) => handleChange('sourceEventId', val === 'none' ? '' : val)}
+                value={formData.intakeTerm || NO_INTAKE}
+                onValueChange={(val) => handleChange('intakeTerm', val === NO_INTAKE ? '' : val)}
               >
-                <SelectTrigger className="bg-white text-xs border-gray-200">
-                  <SelectValue placeholder="Direct / No Event" />
+                <SelectTrigger id="app-intake" className="bg-white text-xs border-gray-200">
+                  <SelectValue placeholder="Select intake (optional)" />
                 </SelectTrigger>
-                <SelectContent className="max-h-48">
-                  <SelectItem value="none">Direct / No Event</SelectItem>
-                  {events?.map(e => (
-                    <SelectItem key={e.id || e._id} value={String(e.id || e._id)}>
-                      {e.title}
-                    </SelectItem>
+                <SelectContent>
+                  <SelectItem value={NO_INTAKE}>Not specified</SelectItem>
+                  {intakeOptions.map(term => (
+                    <SelectItem key={term} value={term}>{term}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -463,7 +465,7 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
             <div className="space-y-1.5">
               <Label htmlFor="app-tuition" className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
                 <DollarSign className="w-3.5 h-3.5 text-[#042C53]" />
-                Estimated Tuition Fee
+                Estimated Tuition Fee <span className="text-gray-400 font-normal">(optional)</span>
               </Label>
               <Input
                 id="app-tuition"
@@ -471,13 +473,12 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
                 step="any"
                 min="0"
                 placeholder="e.g. 15000"
-                value={catalogTuition ?? formData.tuitionFee}
+                value={formData.tuitionFee}
                 onChange={(e) => handleChange('tuitionFee', e.target.value)}
-                disabled={catalogTuition !== null}
-                className={`bg-white text-xs ${errors.tuitionFee ? 'border-red-500' : 'border-gray-200'} ${catalogTuition !== null ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                className={`bg-white text-xs ${errors.tuitionFee ? 'border-red-500' : 'border-gray-200'}`}
               />
               {catalogTuition !== null && (
-                <p className="text-[11px] text-gray-500">Set from the course catalog.</p>
+                <p className="text-[11px] text-gray-500">Auto-filled from the course catalog. You can overwrite it.</p>
               )}
               {errors.tuitionFee && <p className="text-[11px] text-red-500 font-medium">{errors.tuitionFee}</p>}
             </div>

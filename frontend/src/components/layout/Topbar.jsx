@@ -13,7 +13,9 @@ import {
 } from '../ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import NotificationCenter from './NotificationCenter';
+import GlobalSearch from './GlobalSearch';
 import { cn } from '../../lib/utils';
+import { getRoleLabel } from '../../utils/staffRoles';
 
 const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
   const { user, logout } = useAuth();
@@ -61,6 +63,11 @@ const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
           </h1>
         </div>
 
+        {/* Search */}
+        <div className="hidden md:block w-72 lg:w-96 mx-4">
+          <GlobalSearch />
+        </div>
+
         {/* Right Side Actions */}
         <div className="flex items-center gap-2 md:gap-4">
 
@@ -88,7 +95,7 @@ const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
               <DropdownMenuLabel>
                 <div className="flex flex-col">
                   <span className="font-medium">{user?.name}</span>
-                  <span className="text-xs text-muted-foreground capitalize">{user?.role}</span>
+                  <span className="text-xs text-muted-foreground capitalize">{getRoleLabel(user)}</span>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />

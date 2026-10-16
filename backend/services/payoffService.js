@@ -1,8 +1,24 @@
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/db');
 const { Payoff, Invoice, User, Application, Student, University, CommissionSnapshot } = require('../models');
+const { scopeWhereToAgents, assertCanAccessAgent } = require('../utils/agentScope');
+const { putObject, getObject, generateStoragePath } = require('../utils/storage');
+const { createNotification } = require('../controllers/notificationController');
+const { randomUUID: uuidv4 } = require('crypto');
 
 const ALLOWED_PAYOFF_STATUSES = ['PENDING', 'SETTLED', 'CANCELLED'];
+
+const fail = (statusCode, message) => {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+};
+
+const addHistory = (payoff, user, action, notes) => {
+  const history = Array.isArray(payoff.history) ? [...payoff.history] : [];
+  history.push({ action, by: user.id, byName: user.name, at: new Date().toISOString(), notes: notes || null });
+  payoff.history = history;
+};
 
 // Helper to generate collision-safe unique payoff number
 const generatePayoffNumber = async (transaction = null) => {
@@ -26,7 +42,7 @@ class PayoffService {
    * Automatically generate exactly one Payoff for an approved Invoice.
    * Executed within an atomic transaction alongside invoice approval and snapshots.
    */
-  async createPayoffForApprovedInvoice(invoice, grossCommission, currentUser, transaction = null) {
+  async createPayoffForApprovedInvoice(invoice, grossCommission, currentUser, transaction = null, currency = null) {
     // 1. Idempotency guard: If Payoff already exists for this invoice, return it
     const existing = await Payoff.findOne({
       where: { invoiceId: invoice.id },
@@ -49,7 +65,8 @@ class PayoffService {
       grossCommission: gross,
       deductions,
       netAmount: net,
-      currency: invoice.currency || 'USD',
+      // The payoff is in the currency of the applications; the university payment must match it
+      currency: currency || invoice.currency || 'USD',
       status: 'PENDING'
     }, { transaction });
 
@@ -80,6 +97,8 @@ class PayoffService {
     } else if (agentId) {
       where.agentId = agentId;
     }
+    // Account Managers only see payoffs of their own agents
+    await scopeWhereToAgents(where, currentUser);
 
     // 2. Status Filter
     if (status) {
@@ -196,14 +215,142 @@ class PayoffService {
       err.statusCode = 403;
       throw err;
     }
+    await assertCanAccessAgent(currentUser, payoff.agentId);
 
     return payoff.toJSON();
   }
 
   /**
+   * Who may record that the university paid QStudy: Accounts or the Head of Admission (or super admin).
+   */
+  _requireUniversityPaymentRole(currentUser) {
+    const allowed = currentUser.role === 'admin' &&
+      (!currentUser.staffRole || ['accounts', 'head_admission'].includes(currentUser.staffRole));
+    if (!allowed) throw fail(403, 'Only Accounts or the Head of Admission can record the university payment.');
+  }
+
+  async _notifyStaff(staffRoles, excludeId, { title, message, relatedId }) {
+    const staff = await User.findAll({
+      where: { role: 'admin', status: 'active', staffRole: staffRoles },
+      attributes: ['id']
+    });
+    await Promise.all(staff.filter(s => s.id !== excludeId).map(s => createNotification({
+      recipient: s.id,
+      title,
+      message,
+      type: 'info',
+      relatedId,
+      relatedModel: 'Payoff'
+    })));
+  }
+
+  /**
+   * Record that the university has paid QStudy. This unlocks paying the agent. The payment is in the
+   * payoff's currency, so USD stays USD and RM stays RM.
+   */
+  async recordUniversityPayment(id, data = {}, currentUser) {
+    this._requireUniversityPaymentRole(currentUser);
+
+    const amount = parseFloat(data.amount);
+    if (isNaN(amount) || !isFinite(amount) || amount <= 0) {
+      throw fail(400, 'The amount the university paid must be greater than 0.');
+    }
+    const reference = typeof data.reference === 'string' ? data.reference.trim() : '';
+    if (!reference) throw fail(400, 'A payment reference is required.');
+
+    let receivedAt = new Date();
+    if (data.receivedAt) {
+      receivedAt = new Date(data.receivedAt);
+      if (isNaN(receivedAt.getTime())) throw fail(400, 'The date the payment was received is not valid.');
+      if (receivedAt.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+        throw fail(400, 'The date the payment was received cannot be in the future.');
+      }
+    }
+
+    const payoff = await Payoff.findByPk(id);
+    if (!payoff) throw fail(404, 'Payoff not found');
+    if (payoff.status !== 'PENDING') throw fail(400, `A ${payoff.status.toLowerCase()} payoff cannot take a university payment.`);
+
+    // The currency of the university payment is the payoff's currency
+    if (data.currency && String(data.currency).toUpperCase() !== String(payoff.currency).toUpperCase()) {
+      throw fail(400, `This payoff is in ${payoff.currency}, so the university payment must be recorded in ${payoff.currency}. ` +
+        'If the university paid in another currency, correct the currency on the applications first.');
+    }
+
+    const firstTime = !payoff.universityPaidAt;
+    payoff.universityPaidAmount = Math.round(amount * 100) / 100;
+    payoff.universityPaidAt = receivedAt;
+    payoff.universityPaymentReference = reference;
+    payoff.universityPaymentNotes = typeof data.notes === 'string' && data.notes.trim() ? data.notes.trim() : null;
+    payoff.universityPaymentRecordedBy = currentUser.id;
+    payoff.universityPaymentRecordedAt = new Date();
+    addHistory(payoff, currentUser, firstTime ? 'UNIVERSITY_PAYMENT_RECORDED' : 'UNIVERSITY_PAYMENT_UPDATED',
+      `${payoff.currency} ${payoff.universityPaidAmount.toFixed(2)} received. Ref: ${reference}`);
+    await payoff.save();
+
+    if (firstTime) {
+      await this._notifyStaff(['accounts', 'head_admission'], currentUser.id, {
+        title: 'University payment recorded',
+        message: `The university paid QStudy for payoff ${payoff.payoffNumber}. The agent can now be paid.`,
+        relatedId: payoff.id
+      });
+    }
+
+    return await this.getPayoffById(payoff.id, currentUser);
+  }
+
+  /**
+   * Head of Admission (or super admin): allow the agent to be paid before the university has paid,
+   * with a note. Accounts can then settle the payoff.
+   */
+  async authorizeBypass(id, { note } = {}, currentUser) {
+    const allowed = currentUser.role === 'admin' && (!currentUser.staffRole || currentUser.staffRole === 'head_admission');
+    if (!allowed) throw fail(403, 'Only the Head of Admission can allow payment before the university has paid.');
+
+    const reason = typeof note === 'string' ? note.trim() : '';
+    if (!reason) throw fail(400, 'A note explaining the exception is required.');
+
+    const payoff = await Payoff.findByPk(id);
+    if (!payoff) throw fail(404, 'Payoff not found');
+    if (payoff.status !== 'PENDING') throw fail(400, `A ${payoff.status.toLowerCase()} payoff cannot be changed.`);
+    if (payoff.universityPaidAt) throw fail(400, 'The university payment is already recorded, so no exception is needed.');
+    if (payoff.blockBypassedAt) throw fail(400, 'An exception has already been authorized for this payoff.');
+
+    payoff.blockBypassedBy = currentUser.id;
+    payoff.blockBypassedAt = new Date();
+    payoff.blockBypassNote = reason;
+    addHistory(payoff, currentUser, 'UNIVERSITY_PAYMENT_BYPASSED', reason);
+    await payoff.save();
+
+    await this._notifyStaff(['accounts'], currentUser.id, {
+      title: 'Payment exception authorized',
+      message: `${currentUser.name} allowed payoff ${payoff.payoffNumber} to be paid before the university has paid. Reason: ${reason}`,
+      relatedId: payoff.id
+    });
+
+    return await this.getPayoffById(payoff.id, currentUser);
+  }
+
+  /**
+   * The payment slip, for the agent who owns the payoff and for staff.
+   */
+  async getSlipFile(id, currentUser) {
+    const payoff = await Payoff.findByPk(id);
+    if (!payoff) throw fail(404, 'Payoff not found');
+    if (currentUser.role === 'agent' && payoff.agentId.toString() !== currentUser.id.toString()) {
+      throw fail(403, 'Access denied. You do not own this payoff.');
+    }
+    await assertCanAccessAgent(currentUser, payoff.agentId);
+    const slip = payoff.paymentSlip;
+    if (!slip || !slip.fileUrl) throw fail(404, 'No payment slip has been uploaded.');
+    const { data, contentType } = await getObject(slip.fileUrl);
+    return { data, contentType: contentType || slip.contentType, fileName: slip.fileName };
+  }
+
+  /**
    * Admin settles a pending payoff (human-confirmed offline settlement recording).
    */
-  async settlePayoff(id, data, currentUser) {
+  async settlePayoff(id, data, currentUser, slipFile = null) {
     if (currentUser.role !== 'admin') {
       const err = new Error('Access denied. Only admin can record payoff settlement.');
       err.statusCode = 403;
@@ -222,6 +369,7 @@ class PayoffService {
       err.statusCode = 400;
       throw err;
     }
+    if (!slipFile) throw fail(400, 'Please upload the payment slip.');
 
     let parsedSettledAt = new Date();
     if (settledAt) {
@@ -266,6 +414,23 @@ class PayoffService {
         throw err;
       }
 
+      // The agent is paid only after the university has paid QStudy (or the Head of Admission allowed an exception)
+      if (!payoff.universityPaidAt && !payoff.blockBypassedAt) {
+        throw fail(400, 'The university has not paid QStudy yet. Record the university payment first. ' +
+          'If the agent must be paid earlier, the Head of Admission can authorize an exception.');
+      }
+
+      const slipPath = generateStoragePath(`payoffs/${payoff.id}/slip`, slipFile.originalname);
+      const slipResult = await putObject(slipPath, slipFile.buffer, slipFile.mimetype);
+      payoff.paymentSlip = {
+        id: uuidv4(),
+        fileUrl: slipResult.path,
+        fileName: slipFile.originalname,
+        contentType: slipFile.mimetype,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: currentUser.id
+      };
+
       payoff.status = 'SETTLED';
       payoff.settlementReference = settlementReference.trim();
       payoff.settledAt = parsedSettledAt;
@@ -273,6 +438,8 @@ class PayoffService {
       if (settlementNotes !== undefined) payoff.settlementNotes = settlementNotes ? settlementNotes.trim() : null;
       if (batchReference !== undefined) payoff.batchReference = batchReference ? batchReference.trim() : null;
 
+      addHistory(payoff, currentUser, 'PAYOFF_SETTLED',
+        `${payoff.currency} ${Number(payoff.netAmount).toFixed(2)} paid. Ref: ${payoff.settlementReference}`);
       await payoff.save({ transaction: t });
 
       // Legacy compatibility sync: Mark associated Invoice as Paid
@@ -286,6 +453,15 @@ class PayoffService {
       }
 
       await t.commit();
+
+      await createNotification({
+        recipient: payoff.agentId,
+        title: 'Payment cleared',
+        message: `Your commission payment of ${payoff.currency} ${Number(payoff.netAmount).toFixed(2)} (${payoff.payoffNumber}) has been paid.`,
+        type: 'success',
+        relatedId: payoff.id,
+        relatedModel: 'Payoff'
+      });
 
       return await this.getPayoffById(payoff.id, currentUser);
     } catch (error) {

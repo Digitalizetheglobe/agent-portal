@@ -19,7 +19,7 @@ import {
   Send,
   Search,
   UserPlus,
-  Calendar,
+  Newspaper,
   FileText,
   User,
   ChevronDown,
@@ -59,38 +59,32 @@ const SupportPage = () => {
     {
       id: 'q1',
       category: 'Student Registration',
-      question: 'How do I register a student for an event?',
-      answer: 'Go to Events from your dashboard and select the event you want to register for. Click Register Student, fill in all required fields — full name (as per ID), email, phone, preferred country, course interest, and current city — then submit.'
+      question: 'How do I register a student?',
+      answer: 'Go to Students from your sidebar and click Register Student. Fill in all required fields — full name (as per ID), email, phone, preferred country, course interest, and current city — then submit.'
     },
     {
       id: 'q1.5',
       category: 'Student Registration',
       question: 'What if a student doesn\'t have a passport yet?',
-      answer: 'Students can initially register with any government-issued ID. However, for Event Entry and Visa Processing, a valid passport is mandatory. They can update their passport details in the portal later once they receive it.'
+      answer: 'Students can initially register with any government-issued ID. However, for university applications and Visa Processing, a valid passport is mandatory. They can update their passport details in the portal later once they receive it.'
     },
     {
       id: 'q2',
       category: 'Student Registration',
       question: 'What documents does a student need to upload?',
-      answer: 'Required documents vary by event, but typically include: Passport (mandatory), Academic transcripts, and IELTS/TOEFL score card. Upload documents via the student\'s profile page.'
+      answer: 'Required documents typically include: Passport (mandatory), Academic transcripts, and IELTS/TOEFL score card. Upload documents via the student\'s profile page.'
     },
     {
       id: 'q3',
-      category: 'Events & Seats',
-      question: 'How do I check seat availability?',
-      answer: 'Seat availability is shown in real-time on the Event Listings page. Each event card shows a seat count badge — green for open, amber when limited.'
-    },
-    {
-      id: 'q3.5',
-      category: 'Events & Seats',
-      question: 'How can I filter events by country?',
-      answer: 'On the Events Dashboard, use the "Filter" button at the top right. You can filter events by Country, Date Range, and Institution type. This helps you find the most relevant opportunities for your students.'
+      category: 'News & Updates',
+      question: 'Where can I find portal announcements?',
+      answer: 'Open News & Updates from your sidebar. Admins publish news and portal updates there, and you will also get a notification when something new is posted.'
     },
     {
       id: 'q4',
       category: 'Invoices & Payments',
       question: 'How do I raise an invoice?',
-      answer: 'Go to Invoices from your sidebar and click New invoice. Select the event, and the system will automatically pull the number of confirmed students. Review and submit.'
+      answer: 'Go to Invoices from your sidebar and click New invoice. Select the application you are invoicing for, review the details and submit.'
     },
     {
       id: 'q5',
@@ -108,7 +102,7 @@ const SupportPage = () => {
       id: 'q7',
       category: 'Account & Profile',
       question: 'My account shows "Pending Verification" — what does that mean?',
-      answer: 'This means our admin team is reviewing your agency documents. This usually takes 1-2 business days. You can browse events but cannot register students until verified.'
+      answer: 'This means our admin team is reviewing your agency documents. This usually takes 1-2 business days. You can browse the portal but cannot register students until verified.'
     }
   ];
 
@@ -179,7 +173,7 @@ const SupportPage = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4 md:px-8">
         {[
           { label: 'Student Registration', icon: UserPlus, color: '#E6F1FB', iconColor: '#0C447C' },
-          { label: 'Events & Seats', icon: Calendar, color: '#EAF3DE', iconColor: '#27500A' },
+          { label: 'News & Updates', icon: Newspaper, color: '#EAF3DE', iconColor: '#27500A' },
           { label: 'Invoices & Payments', icon: FileText, color: '#FAEEDA', iconColor: '#633806' },
           { label: 'Account & Profile', icon: User, color: '#EEEDFE', iconColor: '#3C3489' },
         ].map((item, idx) => {

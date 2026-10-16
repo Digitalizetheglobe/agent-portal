@@ -1,7 +1,7 @@
 const { sequelize, Sequelize } = require('../config/db');
 
 const User = require('./User');
-const Event = require('./Event');
+const NewsItem = require('./NewsItem');
 const Student = require('./Student');
 const Invoice = require('./Invoice');
 const Ticket = require('./Ticket');
@@ -12,8 +12,16 @@ const Application = require('./Application');
 const Course = require('./Course');
 const CommissionSnapshot = require('./CommissionSnapshot');
 const Payoff = require('./Payoff');
+const AgentInvite = require('./AgentInvite');
+const AuditLog = require('./AuditLog');
+const UniversityUpdate = require('./UniversityUpdate');
+const ChatMessage = require('./ChatMessage');
+const { installAuditHooks } = require('../utils/audit');
 
 // User <-> Student
+User.belongsTo(User, { foreignKey: 'accountManagerId', as: 'accountManager', onDelete: 'SET NULL' });
+User.hasMany(User, { foreignKey: 'accountManagerId', as: 'managedAgents' });
+
 User.hasMany(Student, { foreignKey: 'agentId', as: 'students' });
 Student.belongsTo(User, { foreignKey: 'agentId', as: 'agent' });
 
@@ -21,14 +29,9 @@ Student.belongsTo(User, { foreignKey: 'agentId', as: 'agent' });
 Student.belongsTo(User, { foreignKey: 'verifiedBy', as: 'verifier', onDelete: 'SET NULL' });
 User.hasMany(Student, { foreignKey: 'verifiedBy', as: 'verifiedStudents' });
 
-// Event <-> Student
-Event.hasMany(Student, { foreignKey: 'eventId', as: 'students', onDelete: 'CASCADE' });
-Student.belongsTo(Event, { foreignKey: 'eventId', as: 'event' });
-
-
-// User <-> Event (Creator)
-User.hasMany(Event, { foreignKey: 'createdBy', as: 'createdEvents' });
-Event.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+// User <-> NewsItem (author)
+User.hasMany(NewsItem, { foreignKey: 'createdBy', as: 'newsItems' });
+NewsItem.belongsTo(User, { foreignKey: 'createdBy', as: 'author' });
 
 // User <-> Invoice
 User.hasMany(Invoice, { foreignKey: 'agentId', as: 'invoices' });
@@ -60,10 +63,6 @@ Application.belongsTo(University, { foreignKey: 'universityId', as: 'university'
 User.hasMany(Application, { foreignKey: 'agentId', as: 'applications' });
 Application.belongsTo(User, { foreignKey: 'agentId', as: 'agent' });
 
-// Event <-> Application (optional source)
-Event.hasMany(Application, { foreignKey: 'sourceEventId', as: 'applications', onDelete: 'SET NULL' });
-Application.belongsTo(Event, { foreignKey: 'sourceEventId', as: 'sourceEvent' });
-
 // Invoice <-> Application (optional reference)
 Invoice.hasMany(Application, { foreignKey: 'invoiceId', as: 'applications', onDelete: 'SET NULL' });
 Application.belongsTo(Invoice, { foreignKey: 'invoiceId', as: 'invoice' });
@@ -92,11 +91,31 @@ Payoff.belongsTo(User, { foreignKey: 'agentId', as: 'agent' });
 User.hasMany(Payoff, { foreignKey: 'settledBy', as: 'settledPayoffs' });
 Payoff.belongsTo(User, { foreignKey: 'settledBy', as: 'settler' });
 
+// Agent onboarding invites
+User.hasMany(AgentInvite, { foreignKey: 'createdBy', as: 'sentInvites', onDelete: 'CASCADE' });
+AgentInvite.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+AgentInvite.belongsTo(User, { foreignKey: 'accountManagerId', as: 'accountManager', onDelete: 'SET NULL' });
+
+// University <-> UniversityUpdate (news and scholarship updates)
+University.hasMany(UniversityUpdate, { foreignKey: 'universityId', as: 'updates', onDelete: 'CASCADE' });
+UniversityUpdate.belongsTo(University, { foreignKey: 'universityId', as: 'university' });
+
+// Live chat: a conversation is all messages of one agent
+User.hasMany(ChatMessage, { foreignKey: 'agentId', as: 'chatMessages', onDelete: 'CASCADE' });
+ChatMessage.belongsTo(User, { foreignKey: 'agentId', as: 'agent' });
+ChatMessage.belongsTo(User, { foreignKey: 'senderId', as: 'sender', onDelete: 'CASCADE' });
+
+// Every create / update / delete of any record is written to the audit log, with who did it
+installAuditHooks(sequelize, AuditLog);
+
 module.exports = {
   sequelize,
   Sequelize,
+  AuditLog,
+  UniversityUpdate,
+  ChatMessage,
   User,
-  Event,
+  NewsItem,
   Student,
   Invoice,
   Ticket,
@@ -106,6 +125,7 @@ module.exports = {
   Application,
   Course,
   CommissionSnapshot,
-  Payoff
+  Payoff,
+  AgentInvite
 };
 

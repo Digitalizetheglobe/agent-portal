@@ -39,7 +39,7 @@ const educationLevels = [
   'PhD', 'Diploma', 'Associate Degree', 'Professional Certification'
 ];
 
-const StudentForm = ({ eventId }) => {
+const StudentForm = () => {
   const { addStudent } = useData();
   const { user } = useAuth();
 
@@ -70,7 +70,6 @@ const StudentForm = ({ eventId }) => {
     try {
       const studentData = {
         ...data,
-        eventId,
         agentId: user?.id
       };
 

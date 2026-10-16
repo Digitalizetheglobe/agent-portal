@@ -1,6 +1,11 @@
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/db');
-const { User, Event, Student } = require('../models');
+const { User, Student, Application } = require('../models');
+const { getScopedAgentIds } = require('../utils/agentScope');
+const { DISPLAY_STAGES, DISPLAY_LABELS, INACTIVE_APPLICATION_STATUSES, getDisplayStage } = require('../utils/visaPipeline');
+
+// Matches no agent: used for an Account Manager who has no agents assigned yet
+const NO_AGENT = '00000000-0000-0000-0000-000000000000';
 
 // @desc    Get dashboard stats
 // @route   GET /api/stats
@@ -8,58 +13,43 @@ const { User, Event, Student } = require('../models');
 exports.getStats = async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';
-    const filter = isAdmin ? {} : { agentId: req.user.id };
-    const today = new Date().toISOString().split('T')[0];
+    // Account Managers see numbers for their own agents only (null = no limit)
+    const scopedIds = await getScopedAgentIds(req.user);
+    const scopedList = scopedIds && scopedIds.length ? scopedIds : [NO_AGENT];
+    const agentWhere = scopedIds ? { id: { [Op.in]: scopedList } } : {};
+    const filter = !isAdmin
+      ? { agentId: req.user.id }
+      : (scopedIds ? { agentId: { [Op.in]: scopedList } } : {});
 
     // 1. Basic Counts
-    const totalAgents = isAdmin ? await User.count({ where: { role: 'agent' } }) : 0;
-    const activeAgents = isAdmin ? await User.count({ where: { role: 'agent', status: 'active' } }) : 0;
-
-    let totalEvents = 0;
-    let upcomingEvents = 0;
-
-    if (isAdmin) {
-      totalEvents = await Event.count();
-      upcomingEvents = await Event.count({
-        where: { date: { [Op.gte]: today } }
-      });
-    } else {
-      totalEvents = await Event.count({
-        where: sequelize.literal(`"assignedAgents"::jsonb @> '["${req.user.id}"]'`)
-      });
-      upcomingEvents = await Event.count({
-        where: {
-          [Op.and]: [
-            sequelize.literal(`"assignedAgents"::jsonb @> '["${req.user.id}"]'`),
-            { date: { [Op.gte]: today } }
-          ]
-        }
-      });
-    }
+    const totalAgents = isAdmin ? await User.count({ where: { role: 'agent', ...agentWhere } }) : 0;
+    const activeAgents = isAdmin ? await User.count({ where: { role: 'agent', status: 'active', ...agentWhere } }) : 0;
 
     const totalStudents = await Student.count({ where: filter });
-    const convertedStudents = await Student.count({
-      where: { ...filter, status: 'Converted' }
+    // Students whose fees are confirmed (Visa 100% and fees accepted on at least one application)
+    const convertedStudents = await Application.count({
+      where: { ...filter, pipelineStage: 'Visa100', feeStatus: 'Accepted' },
+      distinct: true,
+      col: 'studentId'
     });
 
     const conversionRate = totalStudents > 0
       ? ((convertedStudents / totalStudents) * 100).toFixed(1)
       : 0;
 
-    // 2. Status Breakdown
-    const statusData = await Student.findAll({
-      attributes: [
-        'status',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
-      ],
-      where: filter,
-      group: ['status'],
+    // 2b. Visa pipeline: every live application counts in exactly one stage, so moving a student on
+    // lowers one count and raises the next. At Visa 100% it is either waiting for fees or fees paid.
+    const pipelineApps = await Application.findAll({
+      attributes: ['pipelineStage', 'feeStatus'],
+      where: { ...filter, status: { [Op.notIn]: INACTIVE_APPLICATION_STATUSES } },
       raw: true
     });
-
-    const statusBreakdown = statusData.map(item => ({
-      status: item.status,
-      count: parseInt(item.count, 10) || 0
+    const pipelineCounts = Object.fromEntries(DISPLAY_STAGES.map(key => [key, 0]));
+    pipelineApps.forEach(app => { pipelineCounts[getDisplayStage(app)] += 1; });
+    const pipelineBreakdown = DISPLAY_STAGES.map(key => ({
+      stage: key,
+      label: DISPLAY_LABELS[key],
+      count: pipelineCounts[key]
     }));
 
     // 3. Registration Trend (Last 6 Months)
@@ -72,7 +62,7 @@ exports.getStats = async (req, res) => {
         EXTRACT(MONTH FROM "createdAt")::int AS month,
         COUNT(*)::int AS count
       FROM "Students"
-      WHERE ${isAdmin ? '1=1' : '"agentId" = :agentId'}
+      WHERE ${!isAdmin ? '"agentId" = :agentId' : (scopedIds ? '"agentId" IN (:scopedIds)' : '1=1')}
         AND "createdAt" >= :sixMonthsAgo
       GROUP BY year, month
       ORDER BY year ASC, month ASC
@@ -81,6 +71,7 @@ exports.getStats = async (req, res) => {
     const trendResults = await sequelize.query(trendQuery, {
       replacements: {
         agentId: req.user.id,
+        scopedIds: scopedList,
         sixMonthsAgo: sixMonthsAgo
       },
       type: sequelize.QueryTypes.SELECT
@@ -89,31 +80,6 @@ exports.getStats = async (req, res) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const formattedTrend = trendResults.map(item => ({
       month: `${months[item.month - 1]} ${item.year}`,
-      count: parseInt(item.count, 10) || 0
-    }));
-
-    // 4. Event Breakdown (Registrations per Event)
-    const eventBreakdownData = await Student.findAll({
-      attributes: [
-        'eventId',
-        [sequelize.fn('COUNT', sequelize.col('Student.id')), 'count']
-      ],
-      include: [{
-        model: Event,
-        as: 'event',
-        attributes: ['title'],
-        required: true
-      }],
-      where: filter,
-      group: ['Student.eventId', 'event.id', 'event.title'],
-      order: [[sequelize.literal('count'), 'DESC']],
-      limit: 5,
-      raw: true,
-      nest: true
-    });
-
-    const eventBreakdown = eventBreakdownData.map(item => ({
-      title: item.event?.title || 'Unknown Event',
       count: parseInt(item.count, 10) || 0
     }));
 
@@ -131,6 +97,7 @@ exports.getStats = async (req, res) => {
           attributes: ['name'],
           required: true
         }],
+        where: filter,
         group: ['Student.agentId', 'agent.id', 'agent.name'],
         order: [[sequelize.literal('count'), 'DESC']],
         limit: 5,
@@ -147,14 +114,11 @@ exports.getStats = async (req, res) => {
     res.status(200).json({
       totalAgents,
       activeAgents,
-      totalEvents,
-      upcomingEvents,
       totalStudents,
       convertedStudents,
       conversionRate,
-      statusBreakdown,
+      pipelineBreakdown,
       registrationTrend: formattedTrend,
-      eventBreakdown,
       agentBreakdown
     });
   } catch (error) {

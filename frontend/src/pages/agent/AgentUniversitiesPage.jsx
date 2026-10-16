@@ -137,7 +137,7 @@ const AgentUniversitiesPage = () => {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search university name, code, or city..."
+                placeholder="Search name, code, location, contact or commission..."
                 className="pl-9 text-xs bg-[#F9FAFB] border-gray-200"
               />
             </div>
@@ -199,6 +199,7 @@ const AgentUniversitiesPage = () => {
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Code</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Country & City</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Contact</TableHead>
+              <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Commission</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-center">Status</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-right">Action</TableHead>
             </TableRow>
@@ -206,14 +207,14 @@ const AgentUniversitiesPage = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-16">
+                <TableCell colSpan={7} className="text-center py-16">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#042C53] mx-auto"></div>
                   <p className="text-xs text-gray-500 mt-3 font-medium">Loading universities...</p>
                 </TableCell>
               </TableRow>
             ) : universities.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-16 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-16 text-gray-500">
                   <Building2 size={40} className="mx-auto mb-3 opacity-20" />
                   <p className="font-semibold text-sm text-gray-700">No partner universities found</p>
                   <p className="text-xs text-gray-400 mt-1">Try modifying your search or filter options</p>
@@ -291,6 +292,11 @@ const AgentUniversitiesPage = () => {
                     ) : (
                       <span className="text-xs text-gray-400">Contact office</span>
                     )}
+                  </TableCell>
+
+                  {/* Commission */}
+                  <TableCell className="px-6 py-4 text-xs font-semibold text-gray-900 tabular-nums">
+                    {uni.commissionRate != null ? `${uni.commissionRate}%` : <span className="text-gray-400 font-normal">Not set</span>}
                   </TableCell>
 
                   {/* Status */}

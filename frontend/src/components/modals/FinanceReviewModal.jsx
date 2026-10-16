@@ -8,8 +8,7 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertTriangle,
-  History,
-  Percent
+  History
 } from 'lucide-react';
 import {
   Dialog,
@@ -35,11 +34,11 @@ import {
 import { toast } from 'sonner';
 
 const CORRECTION_PROMPT_CHIPS = [
-  'Missing tuition deposit receipt',
-  'Enrolled student count discrepancy',
-  'Deposit verification not yet completed',
+  'Fee payment proof is missing or unclear',
+  'Number of students does not match the applications',
+  'Applications are for more than one university',
   'Course fee mismatch with institutional records',
-  'Clarify student enrollment start date'
+  'Attach the invoice document'
 ];
 
 /**
@@ -54,17 +53,13 @@ const FinanceReviewModal = ({
   initialInvoice,
   onSuccess
 }) => {
-  const { payoffs, agents } = useData() || {};
+  const { payoffs } = useData() || {};
 
   const [invoice, setInvoice] = useState(initialInvoice || null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
-  // Rate determination state
-  const [customCommissionRate, setCustomCommissionRate] = useState('');
-  const [settingRate, setSettingRate] = useState(false);
 
   // Review action state
   const [activeAction, setActiveAction] = useState(null); // 'approve' | 'reject' | 'correction' | null
@@ -82,11 +77,6 @@ const FinanceReviewModal = ({
         invoiceReviewAPI.getHistory(id).catch(() => ({ data: [] }))
       ]);
       setInvoice(invRes.data);
-      if (invRes.data?.commissionRate) {
-        setCustomCommissionRate(String(invRes.data.commissionRate));
-      } else {
-        setCustomCommissionRate('');
-      }
       const histData = Array.isArray(histRes.data)
         ? histRes.data
         : (histRes.data?.history || []);
@@ -108,7 +98,6 @@ const FinanceReviewModal = ({
       loadInvoiceData(invoiceId);
     } else if (open && initialInvoice) {
       setInvoice(initialInvoice);
-      setCustomCommissionRate(initialInvoice.commissionRate ? String(initialInvoice.commissionRate) : '');
       if (initialInvoice.id) {
         loadInvoiceData(initialInvoice.id);
       }
@@ -118,18 +107,6 @@ const FinanceReviewModal = ({
   const apps = useMemo(() => {
     return Array.isArray(invoice?.applications) ? invoice.applications : [];
   }, [invoice?.applications]);
-
-  // Admin-configured rate on the agent profile, used as the default for this invoice
-  const agentDefaultRate = useMemo(() => {
-    const agentId = invoice?.agentId?._id || invoice?.agentId?.id || invoice?.agentId;
-    const agent = (agents || []).find(a => String(a.id || a._id) === String(agentId));
-    const rate = parseFloat(agent?.commissionRate);
-    return rate > 0 ? rate : null;
-  }, [invoice?.agentId, agents]);
-
-  const isRateOverride = agentDefaultRate !== null
-    && customCommissionRate !== ''
-    && parseFloat(customCommissionRate) !== agentDefaultRate;
 
   const associatedPayoff = useMemo(() => {
     if (!invoice) return null;
@@ -143,14 +120,10 @@ const FinanceReviewModal = ({
     return apps.reduce((sum, a) => sum + (parseFloat(a.tuitionFee) || 0), 0);
   }, [apps]);
 
-  const previewAmount = useMemo(() => {
-    const rate = parseFloat(customCommissionRate);
-    if (isNaN(rate) || rate <= 0) return invoice?.amount || 0;
-    if (tuitionSum > 0) {
-      return (tuitionSum * (rate / 100));
-    }
-    return invoice?.amount || 0;
-  }, [tuitionSum, customCommissionRate, invoice]);
+  // Commission is set per university; the server returns the breakdown per application
+  const breakdown = invoice?.commissionBreakdown || null;
+  const missingRates = breakdown?.missing || [];
+  const previewAmount = breakdown ? breakdown.total : (invoice?.amount || 0);
 
   const handleApplyPromptChip = (chipText) => {
     setCorrectionReason(prev => {
@@ -183,42 +156,12 @@ const FinanceReviewModal = ({
     }
   };
 
-  const handleSaveRate = async () => {
-    const id = invoice?.id || invoiceId;
-    if (!id) return;
-
-    const rateNum = parseFloat(customCommissionRate);
-    if (isNaN(rateNum) || rateNum <= 0 || rateNum > 100) {
-      setErrorMsg('Please enter a valid commission rate percentage (> 0 and <= 100).');
-      return;
-    }
-
-    setSettingRate(true);
-    setErrorMsg('');
-    try {
-      const res = await invoiceReviewAPI.setRate(id, { commissionRate: rateNum });
-      toast.success('Authoritative commission rate updated');
-      setInvoice(res.data);
-      setCustomCommissionRate(String(res.data.commissionRate));
-      await loadInvoiceData(id);
-      if (onSuccess) onSuccess(res.data);
-    } catch (err) {
-      console.error('Error setting commission rate:', err);
-      const msg = formatApiError(err);
-      setErrorMsg(msg);
-      toast.error('Failed to set commission rate', { description: msg });
-    } finally {
-      setSettingRate(false);
-    }
-  };
-
   const handleApprove = async () => {
     const id = invoice?.id || invoiceId;
     if (!id) return;
 
-    const rateNum = customCommissionRate ? parseFloat(customCommissionRate) : (invoice?.commissionRate || 0);
-    if (!rateNum || rateNum <= 0 || isNaN(rateNum) || rateNum > 100) {
-      setErrorMsg('An Admin-controlled commission rate (> 0% and <= 100%) must be established before approval.');
+    if (missingRates.length) {
+      setErrorMsg(`Set the commission rate on these universities first: ${missingRates.join(', ')}.`);
       return;
     }
 
@@ -226,12 +169,10 @@ const FinanceReviewModal = ({
     setErrorMsg('');
     try {
       const res = await invoiceReviewAPI.approve(id, {
-        notes: reviewNotes.trim() || undefined,
-        commissionRate: rateNum
+        notes: reviewNotes.trim() || undefined
       });
       toast.success('Invoice approved — CommissionSnapshot and Payoff created');
       setInvoice(res.data);
-      setCustomCommissionRate(String(res.data.commissionRate));
       setActiveAction(null);
       await loadInvoiceData(id);
       if (onSuccess) onSuccess(res.data);
@@ -310,8 +251,7 @@ const FinanceReviewModal = ({
   const reviewStatus = invoice?.financeReviewStatus || 'PendingReview';
   const money = (v) => formatCurrency(v, invoice?.currency);
   const agent = invoice?.agentId || {};
-  const rateNum = parseFloat(customCommissionRate);
-  const rateValid = !isNaN(rateNum) && rateNum > 0 && rateNum <= 100;
+  const canApprove = missingRates.length === 0;
   const closeAnd = () => onOpenChange(false);
 
   const Section = ({ title, hint, children }) => (
@@ -395,7 +335,7 @@ const FinanceReviewModal = ({
               <span className="text-xl font-bold text-[#042C53] font-['Outfit'] tabular-nums block">
                 {invoice?.amount > 0
                   ? money(invoice.amount)
-                  : rateValid && tuitionSum > 0 ? money(previewAmount) : 'Not set'}
+                  : previewAmount > 0 ? money(previewAmount) : 'Not set'}
               </span>
             </div>
           </div>
@@ -520,62 +460,38 @@ const FinanceReviewModal = ({
             )}
           </Section>
 
-          {/* Commission rate (only while reviewing) */}
-          {reviewStatus === 'UnderReview' && (
-            <Section title="Commission" hint="Step 2: confirm the rate. The commission is the total tuition multiplied by this rate.">
-              <div className="bg-white p-4 rounded-xl border border-blue-200 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                  <div>
-                    <Label htmlFor="customRate" className="text-[11px] font-semibold text-gray-700">
-                      Commission rate (%)
-                    </Label>
-                    <div className="relative mt-1">
-                      <Percent className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-gray-400" />
-                      <Input
-                        id="customRate"
-                        type="number"
-                        min="0.1"
-                        max="100"
-                        step="0.1"
-                        placeholder="e.g. 10"
-                        value={customCommissionRate}
-                        onChange={(e) => setCustomCommissionRate(e.target.value)}
-                        className="text-xs h-9 pl-8 font-semibold bg-white tabular-nums"
-                      />
+          {/* Commission: the rate comes from each application's university */}
+          {breakdown && breakdown.lines.length > 0 && (
+            <Section
+              title="Commission"
+              hint={breakdown.locked
+                ? 'Locked when this invoice was approved.'
+                : "Each application uses its university's commission rate, set by the Head of Admission."}
+            >
+              <div className="bg-white rounded-xl border border-blue-200 divide-y divide-gray-100">
+                {breakdown.lines.map((line) => (
+                  <div key={line.applicationId} className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{line.universityName || 'Unknown university'}</p>
+                      <p className="text-[11px] text-gray-500 font-mono">{line.applicationNumber}</p>
+                    </div>
+                    <div className="text-right shrink-0 tabular-nums">
+                      {line.rate
+                        ? <span className="text-gray-700">{money(line.tuition)} × {line.rate}% = <strong className="text-gray-900">{money(line.gross)}</strong></span>
+                        : <span className="text-red-600 font-semibold">Rate not set</span>}
                     </div>
                   </div>
-                  <div>
-                    <span className="text-[11px] font-semibold text-gray-700 block">Total tuition</span>
-                    <div className="h-9 flex items-center text-xs font-semibold text-gray-900 mt-1 bg-gray-50 px-3 rounded-md border border-gray-200 tabular-nums">
-                      {money(tuitionSum)}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-semibold text-gray-700 block">Commission to pay</span>
-                    <div className="h-9 flex items-center text-xs font-bold text-[#042C53] mt-1 bg-blue-50 px-3 rounded-md border border-blue-200 tabular-nums">
-                      {money(previewAmount)}
-                    </div>
-                  </div>
-                </div>
-                <p className={`text-[11px] ${isRateOverride ? 'text-amber-700 font-semibold' : 'text-gray-500'}`}>
-                  {agentDefaultRate === null
-                    ? 'No default rate is set on this agent. Enter the rate to use.'
-                    : isRateOverride
-                      ? `This is different from the agent's usual rate of ${agentDefaultRate}%. The change is recorded in the history.`
-                      : `This is the agent's usual rate (${agentDefaultRate}%).`}
-                </p>
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleSaveRate}
-                    disabled={settingRate || !rateValid}
-                    className="text-xs h-8 bg-[#042C53] hover:bg-[#03213F] text-white font-semibold"
-                  >
-                    {settingRate ? 'Saving...' : 'Save rate'}
-                  </Button>
+                ))}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-blue-50 text-xs">
+                  <span className="font-semibold text-gray-700">Commission to pay</span>
+                  <span className="font-bold text-[#042C53] tabular-nums">{money(previewAmount)}</span>
                 </div>
               </div>
+              {missingRates.length > 0 && (
+                <p className="text-[11px] text-red-700 font-semibold">
+                  Commission is not set for {missingRates.join(', ')}. Set it on the university before approving.
+                </p>
+              )}
             </Section>
           )}
 
@@ -654,22 +570,9 @@ const FinanceReviewModal = ({
               </div>
               <p className="text-xs text-emerald-900 leading-relaxed">
                 The agent will be owed <strong>{money(previewAmount)}</strong>
-                {rateValid && <> ({rateNum}% of {money(tuitionSum)})</>}. A payoff is created and waits for you to record the bank transfer. <strong>This cannot be undone.</strong>
+                {breakdown && breakdown.blendedRate > 0 && <> ({breakdown.blendedRate}% of {money(tuitionSum)})</>}. A payoff is created and waits for you to record the bank transfer. <strong>This cannot be undone.</strong>
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="approveRate" className="text-[11px] font-semibold text-emerald-900">Commission rate (%)</Label>
-                  <Input
-                    id="approveRate"
-                    type="number"
-                    min="0.1"
-                    max="100"
-                    step="0.1"
-                    value={customCommissionRate}
-                    onChange={(e) => setCustomCommissionRate(e.target.value)}
-                    className="text-xs h-9 bg-white tabular-nums"
-                  />
-                </div>
                 <div className="space-y-1">
                   <Label htmlFor="approveNotes" className="text-[11px] font-semibold text-emerald-900">Note (optional)</Label>
                   <Input
@@ -685,7 +588,7 @@ const FinanceReviewModal = ({
                 <Button
                   size="sm"
                   onClick={handleApprove}
-                  disabled={actionLoading || !rateValid}
+                  disabled={actionLoading || !canApprove}
                   className="text-xs h-9 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold"
                 >
                   {actionLoading ? 'Approving...' : 'Approve and create payoff'}
