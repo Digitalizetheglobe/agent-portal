@@ -196,7 +196,7 @@ const UniversitiesPage = () => {
   }, [universities]);
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="admin-universities-page">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="admin-universities-page">
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -221,7 +221,7 @@ const UniversitiesPage = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="border-[#E5E7EB] bg-white shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Total Institutions</p>
@@ -268,7 +268,7 @@ const UniversitiesPage = () => {
             <div className="flex flex-wrap items-center gap-2">
               {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[130px] text-xs bg-[#F9FAFB] border-gray-200">
+                <SelectTrigger className="w-full sm:w-[130px] text-xs bg-[#F9FAFB] border-gray-200">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -280,7 +280,7 @@ const UniversitiesPage = () => {
 
               {/* Country Filter */}
               <Select value={countryFilter} onValueChange={setCountryFilter}>
-                <SelectTrigger className="w-[150px] text-xs bg-[#F9FAFB] border-gray-200">
+                <SelectTrigger className="w-full sm:w-[150px] text-xs bg-[#F9FAFB] border-gray-200">
                   <SelectValue placeholder="Country" />
                 </SelectTrigger>
                 <SelectContent className="max-h-56">

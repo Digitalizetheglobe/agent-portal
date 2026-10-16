@@ -185,7 +185,7 @@ const CoursesPage = () => {
   const uniqueLevels = useMemo(() => new Set(courses.map(c => c.level).filter(Boolean)).size, [courses]);
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="admin-courses-page">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="admin-courses-page">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -212,7 +212,7 @@ const CoursesPage = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="border border-gray-100 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
@@ -288,7 +288,7 @@ const CoursesPage = () => {
             <div className="flex flex-wrap items-center gap-2">
               {/* Level Filter */}
               <Select value={levelFilter} onValueChange={setLevelFilter}>
-                <SelectTrigger className="w-[150px] h-10 text-xs bg-white border-gray-200">
+                <SelectTrigger className="w-full sm:w-[150px] h-10 text-xs bg-white border-gray-200">
                   <SelectValue placeholder="All Levels" />
                 </SelectTrigger>
                 <SelectContent>
@@ -301,7 +301,7 @@ const CoursesPage = () => {
 
               {/* University Filter */}
               <Select value={universityFilter} onValueChange={setUniversityFilter}>
-                <SelectTrigger className="w-[170px] h-10 text-xs bg-white border-gray-200">
+                <SelectTrigger className="w-full sm:w-[170px] h-10 text-xs bg-white border-gray-200">
                   <SelectValue placeholder="All Universities" />
                 </SelectTrigger>
                 <SelectContent>
@@ -317,7 +317,7 @@ const CoursesPage = () => {
 
               {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[120px] h-10 text-xs bg-white border-gray-200">
+                <SelectTrigger className="w-full sm:w-[120px] h-10 text-xs bg-white border-gray-200">
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>

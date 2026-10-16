@@ -84,7 +84,7 @@ const AuditLogPage = () => {
   };
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="audit-log-page">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="audit-log-page">
       <div>
         <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight flex items-center gap-2">
           <ScrollText className="w-6 h-6 text-[#042C53]" /> Audit log

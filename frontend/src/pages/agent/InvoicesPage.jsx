@@ -280,7 +280,7 @@ const InvoicesPage = () => {
   );
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -305,7 +305,7 @@ const InvoicesPage = () => {
       <InvoiceStageSummary invoices={invoices} />
 
       {/* True Financial Lifecycle KPI Cards (FA-4.3) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {[
           { label: 'Total Invoices', val: stats.total, sub: 'All submitted claims', color: '#0C447C', highlight: false },
           { label: 'In Review', val: stats.inReviewCount, sub: 'Finance triage queue', color: '#1D4ED8', highlight: false },

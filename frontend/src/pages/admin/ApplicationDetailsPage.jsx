@@ -231,7 +231,7 @@ const ApplicationDetailsPage = () => {
   // 403 Forbidden
   if (errorStatus === 403) {
     return (
-      <div className="p-6 bg-[#F9FAFB] min-h-screen">
+      <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen">
         <div className="max-w-xl mx-auto my-12 p-8 bg-white rounded-xl border border-red-200 text-center space-y-4 shadow-sm">
           <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto">
             <Shield className="w-6 h-6" />
@@ -254,7 +254,7 @@ const ApplicationDetailsPage = () => {
   // 404 Not Found
   if (!application) {
     return (
-      <div className="p-6 bg-[#F9FAFB] min-h-screen">
+      <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen">
         <div className="max-w-xl mx-auto my-12 p-8 bg-white rounded-xl border border-[#E5E7EB] text-center space-y-4 shadow-sm">
           <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center mx-auto">
             <AlertCircle className="w-6 h-6" />
@@ -277,7 +277,7 @@ const ApplicationDetailsPage = () => {
   const isTerminal = ['Rejected', 'Withdrawn'].includes(application.status);
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="application-details-page">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="application-details-page">
       {/* Header & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-start gap-4">
@@ -306,7 +306,7 @@ const ApplicationDetailsPage = () => {
             </div>
             <div className="flex items-center flex-wrap gap-2.5 mt-2">
               {/* Status Badge */}
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${getStatusBadgeStyle(application.status)}`}>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap uppercase tracking-wider ${getStatusBadgeStyle(application.status)}`}>
                 {APPLICATION_STATUS_LABELS[application.status] || application.status}
               </span>
               <span className="text-xs font-medium text-[#6B7280]">
@@ -353,7 +353,7 @@ const ApplicationDetailsPage = () => {
                 Application review
               </span>
               <div className="flex items-center gap-2.5">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${getStatusBadgeStyle(application.status)}`}>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${getStatusBadgeStyle(application.status)}`}>
                   <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5" />
                   {APPLICATION_STATUS_LABELS[application.status] || application.status}
                 </span>

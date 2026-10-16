@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import GlobalSearch from './GlobalSearch';
 import { cn } from '../../lib/utils';
 
 const DashboardLayout = ({ requiredRole }) => {
@@ -41,13 +42,13 @@ const DashboardLayout = ({ requiredRole }) => {
       {/* Mobile Overlay */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
       {/* Sidebar - Desktop */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           collapsed={sidebarCollapsed}
           setCollapsed={setSidebarCollapsed}
@@ -56,8 +57,8 @@ const DashboardLayout = ({ requiredRole }) => {
 
       {/* Sidebar - Mobile */}
       <div className={cn(
-        'fixed inset-y-0 left-0 z-50 md:hidden transition-transform duration-300',
-        mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        'fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] lg:hidden transition-transform duration-300',
+        mobileMenuOpen ? 'translate-x-0' : '-translate-x-full invisible'
       )}>
         <Sidebar
           collapsed={false}
@@ -68,7 +69,7 @@ const DashboardLayout = ({ requiredRole }) => {
       {/* Main Content */}
       <div className={cn(
         'flex flex-col min-h-screen transition-all duration-300',
-        sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'
+        sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
       )}>
         <Topbar
           sidebarCollapsed={sidebarCollapsed}
@@ -76,6 +77,10 @@ const DashboardLayout = ({ requiredRole }) => {
         />
         <main className="flex-1 overflow-x-hidden">
           <div className="max-w-[1400px] mx-auto w-full">
+            {/* Topbar search is hidden below md, so offer it here on phones */}
+            <div className="md:hidden px-4 pt-4">
+              <div className="[&_input]:h-10"><GlobalSearch /></div>
+            </div>
             {dataLoading && !initialized ? (
               <div className="flex items-center justify-center h-64">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

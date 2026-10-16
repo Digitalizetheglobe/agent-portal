@@ -64,7 +64,7 @@ const Conversation = ({ load, send, mine, title, whatsappUrl }) => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-280px)] min-h-[420px]">
+    <div className="flex flex-col h-[calc(100dvh-280px)] min-h-[420px]">
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
         <p className="text-sm font-semibold text-gray-900">{title}</p>
         {whatsappUrl && (
@@ -159,7 +159,7 @@ const StaffChat = () => {
 
   return (
     <Card className="border-[#E5E7EB] bg-white shadow-sm overflow-hidden rounded-xl grid grid-cols-1 md:grid-cols-[280px_1fr]">
-      <div className="border-b md:border-b-0 md:border-r border-gray-100 h-[calc(100vh-280px)] min-h-[420px] overflow-y-auto">
+      <div className="border-b md:border-b-0 md:border-r border-gray-100 h-[calc(100dvh-280px)] min-h-[420px] overflow-y-auto">
         <div className="p-3 border-b border-gray-100">
           <select className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm" value="" onChange={(e) => choose(e.target.value)}>
             <option value="">Start a chat with an agent...</option>
@@ -181,7 +181,7 @@ const StaffChat = () => {
       {selected ? (
         <Conversation key={selected} load={load} send={send} mine={(m) => !m.fromAgent} title={currentName} whatsappUrl={agentWhatsapp} />
       ) : (
-        <div className="h-[calc(100vh-280px)] min-h-[420px] flex flex-col items-center justify-center text-gray-400 gap-2">
+        <div className="h-[calc(100dvh-280px)] min-h-[420px] flex flex-col items-center justify-center text-gray-400 gap-2">
           <MessageCircle size={32} />
           <p className="text-sm">Choose a conversation</p>
         </div>
@@ -194,7 +194,7 @@ const ChatPage = () => {
   const { user } = useAuth();
   const isAgent = user && user.role === 'agent';
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight flex items-center gap-2">
           <MessageCircle size={22} className="text-[#042C53]" /> Live chat

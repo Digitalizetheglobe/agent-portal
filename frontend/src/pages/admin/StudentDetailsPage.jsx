@@ -539,7 +539,7 @@ const StudentDetailsPage = () => {
   }
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-8" data-testid="student-details-page">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-8" data-testid="student-details-page">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-start gap-4">

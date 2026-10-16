@@ -187,7 +187,7 @@ const AdminStudentVerificationPage = () => {
   const totalAll = useMemo(() => Object.values(statusCounts).reduce((a, b) => a + b, 0), [statusCounts]);
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="verification-queue-page">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="verification-queue-page">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight flex items-center gap-2">

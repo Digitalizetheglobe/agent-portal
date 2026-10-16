@@ -86,3 +86,37 @@
     }
 }
 
+
+/* KPI / stat card rows: two per row on phones, so they don't stack into a long scroll */
+@media (max-width: 639px) {
+    .stat-grid > * {
+        min-width: 0;
+    }
+    .stat-grid > [class*="p-4"],
+    .stat-grid [class*="p-4"],
+    .stat-grid [class*="p-5"],
+    .stat-grid [class*="p-6"] {
+        padding: 0.75rem;
+    }
+    .stat-grid [class*="text-2xl"],
+    .stat-grid [class*="text-3xl"] {
+        font-size: 1.25rem;
+        line-height: 1.75rem;
+    }
+    .stat-grid [class*="w-10"][class*="h-10"],
+    .stat-grid [class*="w-11"][class*="h-11"],
+    .stat-grid [class*="w-12"][class*="h-12"] {
+        width: 2rem;
+        height: 2rem;
+        flex-shrink: 0;
+    }
+    .stat-grid [class*="w-10"][class*="h-10"] svg,
+    .stat-grid [class*="w-11"][class*="h-11"] svg,
+    .stat-grid [class*="w-12"][class*="h-12"] svg {
+        width: 1rem;
+        height: 1rem;
+    }
+    .stat-grid p {
+        overflow-wrap: anywhere;
+    }
+}

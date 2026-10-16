@@ -303,7 +303,7 @@ const AdminPayoffsPage = () => {
   );
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -317,7 +317,7 @@ const AdminPayoffsPage = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: 'Pending Settlement', val: `$${(stats.pendingVolume / 1000).toFixed(1)}k`, sub: `${stats.pendingCount} pending payoffs`, color: '#633806' },
           { label: 'Settled Commission', val: `$${(stats.settledVolume / 1000).toFixed(1)}k`, sub: `${stats.settledCount} confirmed wire transfers`, color: '#27500A' },

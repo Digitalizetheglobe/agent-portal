@@ -45,7 +45,7 @@ const StudentRejectionModal = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[480px] p-0 overflow-hidden border border-slate-200 shadow-xl bg-white">
+      <DialogContent className="max-w-[480px] p-0 overflow-y-auto border border-slate-200 shadow-xl bg-white">
         <DialogHeader className="p-6 border-b border-slate-100 bg-white">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">

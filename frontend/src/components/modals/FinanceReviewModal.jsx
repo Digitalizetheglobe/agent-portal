@@ -314,7 +314,7 @@ const FinanceReviewModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[760px] p-0 overflow-hidden border-none shadow-2xl">
+      <DialogContent className="max-w-[760px] p-0 overflow-y-auto border-none shadow-2xl">
         {/* Header */}
         <DialogHeader className="px-6 py-5 border-b border-gray-100 bg-white">
           <div className="flex items-center justify-between gap-4">

@@ -313,7 +313,7 @@ const NewsPage = () => {
           </DialogHeader>
 
           <form onSubmit={handleSubmit}>
-            <div className="p-6 bg-[#F9FAFB] space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 bg-[#F9FAFB] space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-gray-700">
                   Title <span className="text-red-500">*</span>

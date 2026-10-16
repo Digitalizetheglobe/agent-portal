@@ -87,7 +87,7 @@ const AgentDetailPage = () => {
   ];
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen font-['Inter']">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen font-['Inter']">
       <button
         onClick={() => navigate('/admin/agents')}
         className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#042C53] hover:underline mb-4"

@@ -43,7 +43,7 @@ const Topbar = ({ sidebarCollapsed, onMobileMenuClick }) => {
     >
       <div className="w-full flex items-center justify-between px-4 md:px-6">
         {/* Mobile Menu Button */}
-        <div className="flex items-center gap-2 md:hidden">
+        <div className="flex items-center gap-2 lg:hidden">
           <div className="text-sm font-medium text-slate-200 font-['Outfit']">
             {user?.role === 'admin' ? 'Admin' : 'Agent'}
           </div>

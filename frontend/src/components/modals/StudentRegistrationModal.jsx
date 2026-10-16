@@ -17,7 +17,7 @@ const StudentRegistrationModal = ({ open, onOpenChange }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[650px] p-0 overflow-hidden border-none shadow-2xl">
+      <DialogContent className="max-w-[650px] p-0 overflow-y-auto border-none shadow-2xl">
         <DialogHeader className="p-6 border-b border-gray-100 bg-white">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[#042C53]/5 flex items-center justify-center">

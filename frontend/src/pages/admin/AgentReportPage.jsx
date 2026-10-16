@@ -202,7 +202,7 @@ const AgentReportPage = () => {
   ];
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen font-['Inter'] print:bg-white">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen font-['Inter'] print:bg-white">
       <button
         onClick={() => navigate('/admin/agents')}
         className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#042C53] hover:underline mb-4 print:hidden"
@@ -238,7 +238,7 @@ const AgentReportPage = () => {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
         {kpis.map((k, i) => (
           <div key={i} className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm">
             <div className="text-[10px] text-[#6B7280] mb-1.5 uppercase font-bold tracking-wider">{k.label}</div>

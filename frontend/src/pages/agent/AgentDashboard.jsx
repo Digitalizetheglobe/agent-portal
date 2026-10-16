@@ -286,7 +286,7 @@ const AgentDashboard = () => {
       <PipelineSummary applications={myApplications} to="/agent/applications" />
 
       {/* KPI Cards — 5 cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {kpiCards.map((kpi, index) => {
           const Icon = kpi.icon;
           const inner = (

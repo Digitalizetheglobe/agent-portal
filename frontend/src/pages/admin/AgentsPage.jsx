@@ -294,16 +294,16 @@ const AgentsPage = () => {
   };
 
   return (
-    <div className="space-y-6 p-6 bg-[#F9FAFB] min-h-screen font-['Inter']" data-testid="agents-page">
+    <div className="space-y-6 p-4 sm:p-6 bg-[#F9FAFB] min-h-screen font-['Inter']" data-testid="agents-page">
       {/* Top Row */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Agent Management</h1>
           <p className="text-sm text-[#6B7280] mt-0.5">
             {agents.length} agents · {agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length} pending verification
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <Button variant="outline" size="sm"
             className="text-xs font-semibold h-10 px-4 border-slate-200 hover:bg-slate-50 transition-all hover:text-[#042C53]"
           >
@@ -323,7 +323,7 @@ const AgentsPage = () => {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: 'Total agents', val: agents.length, sub: `${agents.filter(a => a.status === 'active').length} active`, subColor: 'text-[#27500A]' },
           { label: 'Pending verification', val: agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length, sub: 'Needs review', subColor: 'text-[#633806]' },

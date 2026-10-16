@@ -410,7 +410,7 @@ const StudentsPage = () => {
       {activeTab === 'all' ? (
         <>
           {/* KPI Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="stat-grid grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
             {[
               { label: 'Total Students', val: kpis.total, sub: 'Global reach', color: '#0C447C' },
               { label: 'Verified Students', val: kpis.verifiedStudents, sub: `${kpis.verifiedPerc}% verified`, color: '#085041' },
@@ -439,7 +439,7 @@ const StudentsPage = () => {
               />
             </div>
             <select
-              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] flex-1 sm:flex-none outline-none"
               value={universityFilter}
               onChange={(e) => setUniversityFilter(e.target.value)}
             >
@@ -449,7 +449,7 @@ const StudentsPage = () => {
               ))}
             </select>
             <select
-              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[130px] outline-none"
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[130px] flex-1 sm:flex-none outline-none"
               value={countryFilter}
               onChange={(e) => setCountryFilter(e.target.value)}
             >
@@ -459,7 +459,7 @@ const StudentsPage = () => {
               ))}
             </select>
             <select
-              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] outline-none"
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] flex-1 sm:flex-none outline-none"
               value={verificationFilter}
               onChange={(e) => setVerificationFilter(e.target.value)}
             >
@@ -470,7 +470,7 @@ const StudentsPage = () => {
               <option value="Rejected">Rejected</option>
             </select>
             <select
-              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[120px] outline-none"
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[120px] flex-1 sm:flex-none outline-none"
               value={docFilter}
               onChange={(e) => setDocFilter(e.target.value)}
             >
@@ -506,7 +506,7 @@ const StudentsPage = () => {
 
           {/* Table / Grid View */}
           {displayMode === 'table' ? (
-            <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-x-auto shadow-sm mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
@@ -734,7 +734,7 @@ const StudentsPage = () => {
           </div>
 
           {/* Queue Table */}
-          <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm">
+          <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-x-auto shadow-sm">
             <table className="w-full border-collapse text-sm text-left">
               <thead>
                 <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">

@@ -122,7 +122,7 @@ const UniversityDetailsPage = () => {
 
   if (loading) {
     return (
-      <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6">
+      <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
         <Button
           variant="ghost"
           size="sm"
@@ -143,7 +143,7 @@ const UniversityDetailsPage = () => {
 
   if (!university) {
     return (
-      <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6">
+      <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
         <Button
           variant="ghost"
           size="sm"
@@ -164,7 +164,7 @@ const UniversityDetailsPage = () => {
   }
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="university-details-page">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="university-details-page">
       {/* Back button & Action Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Button

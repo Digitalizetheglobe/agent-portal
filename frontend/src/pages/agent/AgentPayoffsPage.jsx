@@ -182,7 +182,7 @@ const AgentPayoffsPage = () => {
   );
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -196,7 +196,7 @@ const AgentPayoffsPage = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: 'Settled Payouts', val: `$${(stats.settledAmount / 1000).toFixed(1)}k`, sub: `${stats.settledCount} confirmed transfers`, color: '#27500A' },
           { label: 'Pending Settlement', val: `$${(stats.pendingAmount / 1000).toFixed(1)}k`, sub: `${stats.pendingCount} approved & queued`, color: '#633806' },

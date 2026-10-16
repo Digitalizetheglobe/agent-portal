@@ -112,7 +112,7 @@ const AgentUniversitiesPage = () => {
   }, [universities]);
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="agent-universities-page">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="agent-universities-page">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -144,7 +144,7 @@ const AgentUniversitiesPage = () => {
             <div className="flex flex-wrap items-center gap-2">
               {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[130px] text-xs bg-[#F9FAFB] border-gray-200">
+                <SelectTrigger className="w-full sm:w-[130px] text-xs bg-[#F9FAFB] border-gray-200">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -156,7 +156,7 @@ const AgentUniversitiesPage = () => {
 
               {/* Country Filter */}
               <Select value={countryFilter} onValueChange={setCountryFilter}>
-                <SelectTrigger className="w-[150px] text-xs bg-[#F9FAFB] border-gray-200">
+                <SelectTrigger className="w-full sm:w-[150px] text-xs bg-[#F9FAFB] border-gray-200">
                   <SelectValue placeholder="Country" />
                 </SelectTrigger>
                 <SelectContent className="max-h-56">

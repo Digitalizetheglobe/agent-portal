@@ -145,7 +145,7 @@ const AdminSupportPage = () => {
   };
 
   return (
-    <div className="space-y-6 p-6 bg-[#F9FAFB] min-h-screen font-['Inter']">
+    <div className="space-y-6 p-4 sm:p-6 bg-[#F9FAFB] min-h-screen font-['Inter']">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Support Management</h1>
@@ -165,7 +165,7 @@ const AdminSupportPage = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {stats.map((stat, idx) => (
           <Card key={idx} className="border-[#E5E7EB] bg-white shadow-none rounded-xl overflow-hidden">
             <CardContent className="p-4">
@@ -276,7 +276,7 @@ const AdminSupportPage = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Select value={selectedTicket.status} onValueChange={handleUpdateStatus}>
-                      <SelectTrigger className="w-[120px] bg-white/10 border-white/20 text-white font-bold text-[9px] uppercase tracking-wider rounded-lg h-8">
+                      <SelectTrigger className="w-full sm:w-[120px] bg-white/10 border-white/20 text-white font-bold text-[9px] uppercase tracking-wider rounded-lg h-8">
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>

@@ -307,7 +307,7 @@ const AdminDashboard = () => {
         <div className="mb-2">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operations</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <KpiCard
             title="Total Agents"
             value={totalAgents}
@@ -350,7 +350,7 @@ const AdminDashboard = () => {
         <div className="mb-2">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Finance</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <KpiCard
             title="Invoices Under Review"
             value={invoicesUnderReview}

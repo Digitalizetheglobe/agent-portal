@@ -125,8 +125,8 @@ const TeamPage = () => {
   const grouped = ROLE_ORDER.map((key) => ({ key, members: staff.filter((s) => roleKey(s) === key) }));
 
   return (
-    <div className="p-6 bg-[#F9FAFB] min-h-screen space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight flex items-center gap-2">
             <UsersRound size={22} className="text-[#042C53]" /> Team
@@ -137,7 +137,7 @@ const TeamPage = () => {
       </div>
 
       {/* Who does what */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {grouped.map(({ key, members }) => (
           <Card key={key} className="border-[#E5E7EB] bg-white shadow-none p-4">
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{key === 'super' ? 'Super Admin' : STAFF_ROLE_LABELS[key]}</p>

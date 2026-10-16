@@ -203,7 +203,7 @@ const AgentApplicationsPage = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="border-[#E5E7EB] bg-white shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">My Total Applications</p>
@@ -250,7 +250,7 @@ const AgentApplicationsPage = () => {
             <div className="flex flex-wrap items-center gap-2">
               {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[150px] text-xs bg-[#F9FAFB] border-gray-200">
+                <SelectTrigger className="w-full sm:w-[150px] text-xs bg-[#F9FAFB] border-gray-200">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent className="max-h-56">
@@ -265,7 +265,7 @@ const AgentApplicationsPage = () => {
 
               {/* University Filter */}
               <Select value={universityFilter} onValueChange={setUniversityFilter}>
-                <SelectTrigger className="w-[170px] text-xs bg-[#F9FAFB] border-gray-200">
+                <SelectTrigger className="w-full sm:w-[170px] text-xs bg-[#F9FAFB] border-gray-200">
                   <SelectValue placeholder="University" />
                 </SelectTrigger>
                 <SelectContent className="max-h-56">
@@ -300,7 +300,7 @@ const AgentApplicationsPage = () => {
       {/* Applications Table */}
       <Card className="border-[#E5E7EB] bg-white shadow-none overflow-hidden">
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[960px]">
             <TableHeader className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
               <TableRow>
                 <TableHead className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider py-3.5">
@@ -419,11 +419,11 @@ const AgentApplicationsPage = () => {
 
                     {/* Status */}
                     <TableCell className="py-3.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadgeStyle(app.status)}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap border ${getStatusBadgeStyle(app.status)}`}>
                         {APPLICATION_STATUS_LABELS[app.status] || app.status}
                       </span>
                       {isPipelineActive(app) && (
-                        <span className={`mt-1 flex w-fit items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${getDisplayStageInfo(app).style}`}>
+                        <span className={`mt-1 flex w-fit items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${getDisplayStageInfo(app).style}`}>
                           {getDisplayStageInfo(app).label}
                         </span>
                       )}
