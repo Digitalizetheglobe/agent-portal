@@ -270,8 +270,6 @@ export const studentAPI = {
   getById: (id) => api.get(`/students/${id}`),
   create: (data) => api.post('/students', data),
   update: (id, data) => {
-    console.log(`Making PUT request to: /students/${id}`);
-    console.log('Update data:', data);
     return api.put(`/students/${id}`, data);
   },
   delete: (id) => api.delete(`/students/${id}`),

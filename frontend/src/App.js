@@ -1,4 +1,5 @@
 import "@/App.css";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider } from "./context/AuthContext";
@@ -6,41 +7,42 @@ import { DataProvider } from "./context/DataContext";
 import { ThemeProvider } from "./context/ThemeContext";
 
 // Pages
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AgentsPage from "./pages/admin/AgentsPage";
-import NewsPage from "./pages/shared/NewsPage";
-import StudentsPage from "./pages/admin/StudentsPage";
-import AuditLogPage from "./pages/admin/AuditLogPage";
-import StudentDetailsPage from "./pages/admin/StudentDetailsPage";
-import StudentEditPage from "./pages/admin/StudentEditPage";
-import AgentDashboard from "./pages/agent/AgentDashboard";
-import InvoicesPage from "./pages/agent/InvoicesPage";
-import AgentPayoffsPage from "./pages/agent/AgentPayoffsPage";
-import SupportPage from "./pages/agent/SupportPage";
-import ChatPage from "./pages/ChatPage";
-import TeamPage from "./pages/admin/TeamPage";
-import AgentStudentsPage from "./pages/agent/AgentStudentsPage";
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AgentsPage = lazy(() => import("./pages/admin/AgentsPage"));
+const NewsPage = lazy(() => import("./pages/shared/NewsPage"));
+const StudentsPage = lazy(() => import("./pages/admin/StudentsPage"));
+const AuditLogPage = lazy(() => import("./pages/admin/AuditLogPage"));
+const StudentDetailsPage = lazy(() => import("./pages/admin/StudentDetailsPage"));
+const StudentEditPage = lazy(() => import("./pages/admin/StudentEditPage"));
+const AgentDashboard = lazy(() => import("./pages/agent/AgentDashboard"));
+const InvoicesPage = lazy(() => import("./pages/agent/InvoicesPage"));
+const AgentPayoffsPage = lazy(() => import("./pages/agent/AgentPayoffsPage"));
+const SupportPage = lazy(() => import("./pages/agent/SupportPage"));
+const ChatPage = lazy(() => import("./pages/ChatPage"));
+const TeamPage = lazy(() => import("./pages/admin/TeamPage"));
+const AgentStudentsPage = lazy(() => import("./pages/agent/AgentStudentsPage"));
 
-import AdminInvoicesPage from "./pages/admin/AdminInvoicesPage";
-import AdminPayoffsPage from "./pages/admin/AdminPayoffsPage";
-import AdminStudentVerificationPage from "./pages/admin/AdminStudentVerificationPage";
-import AdminSupportPage from "./pages/admin/AdminSupportPage";
-import AgentReportPage from "./pages/admin/AgentReportPage";
-import AgentDetailPage from "./pages/admin/AgentDetailPage";
-import UniversitiesPage from "./pages/admin/UniversitiesPage";
-import UniversityDetailsPage from "./pages/admin/UniversityDetailsPage";
-import CoursesPage from "./pages/admin/CoursesPage";
-import ApplicationsPage from "./pages/admin/ApplicationsPage";
-import ApplicationDetailsPage from "./pages/admin/ApplicationDetailsPage";
-import AgentUniversitiesPage from "./pages/agent/AgentUniversitiesPage";
-import AgentApplicationsPage from "./pages/agent/AgentApplicationsPage";
-import SettingsPage from "./pages/shared/SettingsPage";
-import NotificationsPage from "./pages/shared/NotificationsPage";
+const AdminInvoicesPage = lazy(() => import("./pages/admin/AdminInvoicesPage"));
+const AdminPayoffsPage = lazy(() => import("./pages/admin/AdminPayoffsPage"));
+const AdminStudentVerificationPage = lazy(() => import("./pages/admin/AdminStudentVerificationPage"));
+const AdminSupportPage = lazy(() => import("./pages/admin/AdminSupportPage"));
+const AgentReportPage = lazy(() => import("./pages/admin/AgentReportPage"));
+const AgentDetailPage = lazy(() => import("./pages/admin/AgentDetailPage"));
+const UniversitiesPage = lazy(() => import("./pages/admin/UniversitiesPage"));
+const UniversityDetailsPage = lazy(() => import("./pages/admin/UniversityDetailsPage"));
+const CoursesPage = lazy(() => import("./pages/admin/CoursesPage"));
+const ApplicationsPage = lazy(() => import("./pages/admin/ApplicationsPage"));
+const ApplicationDetailsPage = lazy(() => import("./pages/admin/ApplicationDetailsPage"));
+const AgentUniversitiesPage = lazy(() => import("./pages/agent/AgentUniversitiesPage"));
+const AgentApplicationsPage = lazy(() => import("./pages/agent/AgentApplicationsPage"));
+const SettingsPage = lazy(() => import("./pages/shared/SettingsPage"));
+const NotificationsPage = lazy(() => import("./pages/shared/NotificationsPage"));
 
 // Layouts
 import DashboardLayout from "./components/layout/DashboardLayout";
+import PageSkeleton from "./components/common/PageSkeleton";
 
 function App() {
   return (
@@ -49,6 +51,7 @@ function App() {
         <DataProvider>
           <div className="App">
             <BrowserRouter>
+              <Suspense fallback={<div className="p-6"><PageSkeleton /></div>}>
               <Routes>
                 {/* Public Routes */}
                 <Route path="/login" element={<LoginPage />} />
@@ -104,6 +107,7 @@ function App() {
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 <Route path="*" element={<Navigate to="/login" replace />} />
               </Routes>
+              </Suspense>
             </BrowserRouter>
             <Toaster position="top-right" richColors closeButton />
           </div>

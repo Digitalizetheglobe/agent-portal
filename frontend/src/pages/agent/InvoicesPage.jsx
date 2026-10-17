@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card, CardContent } from '../../components/ui/card';
@@ -40,7 +40,7 @@ import {
 import { toast } from 'sonner';
 
 const InvoicesPage = () => {
-  const { invoices, fetchInvoices, payoffs, fetchPayoffs, loading } = useData();
+  const { invoices, fetchInvoices, payoffs, loading } = useData();
   const { user } = useAuth();
 
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
@@ -54,15 +54,6 @@ const InvoicesPage = () => {
   const [agentCorrectionRemarks, setAgentCorrectionRemarks] = useState('');
   const [resubmitting, setResubmitting] = useState(false);
   const [resubmitError, setResubmitError] = useState('');
-
-  useEffect(() => {
-    if (fetchInvoices) {
-      fetchInvoices();
-    }
-    if (fetchPayoffs) {
-      fetchPayoffs();
-    }
-  }, [fetchInvoices, fetchPayoffs]);
 
   // Unique student names covered by an invoice (from applications, falling back to studentIds)
   const getStudentNames = (inv) => {

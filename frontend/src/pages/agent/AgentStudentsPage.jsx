@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Download, GraduationCap, Mail, Phone,
@@ -57,10 +57,6 @@ const AgentStudentsPage = () => {
   const [uploadCategory, setUploadCategory] = useState(null);
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({});
-
-  useEffect(() => {
-    fetchStudents();
-  }, [fetchStudents]);
 
   const myStudents = useMemo(() => {
     return getStudentsByAgent(user?.id);

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { hasStaffRole } from '../../utils/staffRoles';
@@ -69,12 +69,6 @@ const AdminPayoffsPage = () => {
   const [payoffDetail, setPayoffDetail] = useState(null);
   const [reviewHistory, setReviewHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-
-  useEffect(() => {
-    if (fetchPayoffs) {
-      fetchPayoffs();
-    }
-  }, [fetchPayoffs]);
 
   const handleOpenSettlement = (payoff) => {
     setPayoffToSettle(payoff);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -6,6 +6,7 @@ import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import GlobalSearch from './GlobalSearch';
 import { cn } from '../../lib/utils';
+import PageSkeleton from '../common/PageSkeleton';
 
 const DashboardLayout = ({ requiredRole }) => {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
@@ -82,11 +83,11 @@ const DashboardLayout = ({ requiredRole }) => {
               <div className="[&_input]:h-10"><GlobalSearch /></div>
             </div>
             {dataLoading && !initialized ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
+              <PageSkeleton />
             ) : (
-              <Outlet />
+              <Suspense fallback={<PageSkeleton />}>
+                <Outlet />
+              </Suspense>
             )}
           </div>
         </main>

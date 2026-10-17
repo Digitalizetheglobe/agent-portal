@@ -6,7 +6,6 @@ import { Textarea } from '../../components/ui/textarea';
 import {
   User,
   Lock,
-  Bell,
   CreditCard,
   Building2,
   Phone,
@@ -30,7 +29,6 @@ import ApplicationFormFields from '../../components/agent/ApplicationFormFields'
 const NAV_ITEMS = [
   { id: 'profile', icon: User, label: 'Profile & Agency', roles: ['admin', 'agent'] },
   { id: 'security', icon: Lock, label: 'Password & Security', roles: ['admin', 'agent'] },
-  { id: 'notifications', icon: Bell, label: 'Notifications', roles: ['admin', 'agent'] },
   { id: 'billing', icon: CreditCard, label: 'Payment Details', roles: ['agent'] },
   { id: 'admins', icon: UserPlus, label: 'Manage Admins', roles: ['admin'], superAdminOnly: true },
 ];
@@ -75,13 +73,6 @@ export default function SettingsPage() {
 
   const [newAdmin, setNewAdmin] = useState({
     name: '', email: '', phone: '', staffRole: '', password: '', confirmPassword: ''
-  });
-
-  const [notifPrefs, setNotifPrefs] = useState({
-    email: true,
-    inapp: true,
-    sms: false,
-    marketing: false,
   });
 
   const handleProfileUpdate = async (e) => {
@@ -161,7 +152,7 @@ export default function SettingsPage() {
         <div className="mb-2">
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Account Settings</h1>
           <p className="text-sm font-medium text-[#6B7280] mt-1">
-            Manage your profile, security, and notification preferences.
+            Manage your profile, password, and payment details.
           </p>
         </div>
 
@@ -371,20 +362,6 @@ export default function SettingsPage() {
 
                   <Divider />
 
-                  {/* Security info */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                    {[
-                      { label: 'Last Login', value: 'Today' },
-                      { label: 'Sessions', value: '1 active' },
-                      { label: '2FA', value: 'Not enabled' },
-                    ].map((item, i) => (
-                      <div key={i} className="bg-slate-50/50 border border-slate-100 rounded-xl p-4">
-                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{item.label}</p>
-                        <p className="text-sm font-medium text-slate-900 mt-1">{item.value}</p>
-                      </div>
-                    ))}
-                  </div>
-
                   <Button
                     type="submit"
                     disabled={loading}
@@ -394,60 +371,6 @@ export default function SettingsPage() {
                     Update Password
                   </Button>
                 </form>
-              </div>
-            )}
-
-            {/* ─── NOTIFICATIONS TAB ─── */}
-            {activeTab === 'notifications' && (
-              <div className="bg-white border border-slate-200 rounded-xl p-6 px-7">
-                <div className="mb-5">
-                  <SectionTitle>Notification Preferences</SectionTitle>
-                  <p className="text-sm text-slate-500 font-medium mt-1">
-                    Choose how and when you want to be alerted.
-                  </p>
-                </div>
-
-                <div className="divide-y divide-slate-100">
-                  {[
-                    { key: 'email', label: 'Email Notifications', desc: 'Receive updates on your students, applications and payments via email.' },
-                    { key: 'inapp', label: 'In-app Notifications', desc: 'Real-time alerts inside the portal dashboard.' },
-                    { key: 'sms', label: 'SMS Notifications', desc: 'Critical alerts sent to your phone. (Coming Soon)', disabled: true },
-                    { key: 'marketing', label: 'Marketing Updates', desc: 'Stay updated with new institutional partners.' },
-                  ].map(item => (
-                    <div key={item.key} className="flex items-center justify-between py-4">
-                      <div>
-                        <p className="text-sm font-medium text-slate-900">{item.label}</p>
-                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">{item.desc}</p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={item.disabled}
-                        onClick={() => !item.disabled && setNotifPrefs(p => ({ ...p, [item.key]: !p[item.key] }))}
-                        className={cn(
-                          "relative w-10 h-5 rounded-full transition-colors shrink-0",
-                          notifPrefs[item.key] ? "bg-[#042C53]" : "bg-slate-200",
-                          item.disabled && "opacity-40 cursor-not-allowed"
-                        )}
-                      >
-                        <span className={cn(
-                          "absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all",
-                          notifPrefs[item.key] ? "left-[22px]" : "left-0.5"
-                        )} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <Divider />
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={() => toast.success('Preferences saved')}
-                    className="bg-[#042C53] hover:bg-[#0C447C] text-white text-sm font-medium h-9 px-5 rounded-lg transition-colors"
-                  >
-                    Save Preferences
-                  </Button>
-                </div>
               </div>
             )}
 
@@ -462,20 +385,6 @@ export default function SettingsPage() {
                 </div>
 
                 <Divider />
-
-                {/* Commission plan summary */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                  {[
-                    { label: 'Commission Plan', value: 'Standard · 8%' },
-                    { label: 'Next Payout', value: 'Pending' },
-                    { label: 'Payout Cycle', value: '15 working days' },
-                  ].map((item, i) => (
-                    <div key={i} className="bg-slate-50/50 border border-slate-100 rounded-xl p-4">
-                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{item.label}</p>
-                      <p className="text-sm font-medium text-slate-900 mt-1">{item.value}</p>
-                    </div>
-                  ))}
-                </div>
 
                 <form onSubmit={handleBankUpdate} className="max-w-2xl">
                   <ApplicationFormFields

@@ -69,10 +69,6 @@ const StudentsPage = () => {
   const [queueLimit] = useState(20);
   const [queueActionLoading, setQueueActionLoading] = useState(false);
 
-  useEffect(() => {
-    fetchStudents();
-  }, [fetchStudents]);
-
   // Fetch Verification Queue
   const fetchQueue = useCallback(async () => {
     try {

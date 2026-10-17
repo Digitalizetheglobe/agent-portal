@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import {
   agentAPI,
@@ -494,13 +494,13 @@ export const DataProvider = ({ children }) => {
     }
   };
 
-  const getStudentsByAgent = (agentId) => {
+  const getStudentsByAgent = useCallback((agentId) => {
     if (!agentId) return [];
     return students.filter(student => {
       const sAgentId = student.agentId?.id || student.agentId?._id || student.agentId || student.agent?.id;
       return String(sAgentId) === String(agentId);
     });
-  };
+  }, [students]);
 
   const deleteStudent = async (id) => {
     try {
@@ -1011,7 +1011,10 @@ export const DataProvider = ({ children }) => {
     }
   };
 
-  const value = {
+  // Rebuilt only when data changes, so unrelated parent renders don't re-render every consumer.
+  // Handlers close over this state, so every state value is a dependency.
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const value = useMemo(() => ({
     agents,
     news,
     students,
@@ -1113,7 +1116,8 @@ export const DataProvider = ({ children }) => {
     markAllNotificationsAsRead,
     // Statistics
     getStats
-  };
+  }), [agents, news, students, stats, invoices, payoffs, tickets, notifications, universities, courses, applications, reviewQueue, verificationQueue, loading, initialized, user, userRole, fetchAgents, fetchNews, fetchStudents, fetchStats, fetchInvoices, fetchPayoffs, fetchTickets, fetchNotifications, fetchUniversities, fetchCourses, fetchApplications, fetchReviewQueue, fetchVerificationQueue, refreshData, clearData]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
     <DataContext.Provider value={value}>

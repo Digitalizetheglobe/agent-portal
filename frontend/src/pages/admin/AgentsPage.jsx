@@ -220,7 +220,12 @@ const AgentsPage = () => {
   // admin returns to the tab. Otherwise documents an agent uploaded later never appear.
   useEffect(() => {
     fetchAgents();
-    const onFocus = () => fetchAgents();
+    let last = Date.now();
+    const onFocus = () => {
+      if (Date.now() - last < 60000) return;
+      last = Date.now();
+      fetchAgents();
+    };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [fetchAgents]);

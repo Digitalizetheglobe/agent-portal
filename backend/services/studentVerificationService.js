@@ -11,7 +11,7 @@ const ALLOWED_TRANSITIONS = {
   Pending:     ['UnderReview'],
   UnderReview: ['Verified', 'Rejected'],
   Verified:    [],
-  Rejected:    ['Pending']
+  Rejected:    ['Pending', 'UnderReview']
 };
 
 const verificationIncludes = [
@@ -182,7 +182,7 @@ class StudentVerificationService {
     await assertReadyForVerification(studentId);
     const t = await sequelize.transaction();
     try {
-      await this._transition(studentId, 'UnderReview', {},
+      await this._transition(studentId, 'UnderReview', { verificationRejectionReason: null },
         (from) => buildHistoryEntry('VERIFICATION_STARTED', from, 'UnderReview', null, currentUser.id),
         currentUser, t);
       await t.commit();

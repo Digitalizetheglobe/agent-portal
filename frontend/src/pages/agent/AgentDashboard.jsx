@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users,
@@ -20,14 +20,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
-import { Badge } from '../../components/ui/badge';
 import ComplianceStatus from '../../components/agent/ComplianceStatus';
 import PipelineSummary from '../../components/application/PipelineSummary';
 import { formatCurrency } from '../../utils/financialFormatters';
 import { getFunnelLabel } from '../../utils/studentProgress';
-import { ChartCard, TrendChart, DonutChart, HBarChart, bucketByMonth, countBy, prettyStatus } from '../../components/dashboard/DashboardCharts';
+import { TodayPanel, HistoryPanel, isSameDay } from '../../components/dashboard/WorkTimeline';
 
 const AgentDashboard = () => {
   const { user } = useAuth();
@@ -36,44 +33,36 @@ const AgentDashboard = () => {
     invoices,
     applications,
     payoffs,
-    reviewQueue,
-    fetchInvoices,
-    fetchPayoffs,
-    fetchApplications,
-    fetchStudents
+    reviewQueue
   } = useData();
 
-  useEffect(() => {
-    if (fetchInvoices) fetchInvoices();
-    if (fetchPayoffs) fetchPayoffs();
-    if (fetchApplications) fetchApplications();
-  }, [fetchInvoices, fetchPayoffs, fetchApplications]);
+  // Invoices, payoffs and applications are already loaded once by DataProvider on login.
 
   // Helper for payoff amounts (backend uses netAmount, grossCommission, or amount)
   const getPayoffAmount = (p) => Number(p.netAmount ?? p.grossCommission ?? p.amount ?? 0);
 
   // ── Scoped data for this agent ──
   const userId = user?.id || user?._id;
-  const myStudents = getStudentsByAgent(userId) || [];
+  const myStudents = useMemo(() => getStudentsByAgent(userId) || [], [getStudentsByAgent, userId]);
 
   // If user is logged in as agent, backend data is already scoped to them
-  const myInvoices = (invoices || []).filter(inv => {
+  const myInvoices = useMemo(() => (invoices || []).filter(inv => {
     if (user?.role === 'agent') return true;
     const invAgentId = inv.agentId?.id || inv.agentId?._id || inv.agentId;
     return String(invAgentId) === String(userId);
-  });
+  }), [invoices, user?.role, userId]);
 
-  const myApplications = (applications || []).filter(app => {
+  const myApplications = useMemo(() => (applications || []).filter(app => {
     if (user?.role === 'agent') return true;
     const appAgentId = app.agentId?.id || app.agentId?._id || app.agentId;
     return String(appAgentId) === String(userId);
-  });
+  }), [applications, user?.role, userId]);
 
-  const myPayoffs = (payoffs || []).filter(p => {
+  const myPayoffs = useMemo(() => (payoffs || []).filter(p => {
     if (user?.role === 'agent') return true;
     const pAgentId = p.agentId?.id || p.agentId?._id || p.agentId;
     return String(pAgentId) === String(userId);
-  });
+  }), [payoffs, user?.role, userId]);
 
   // ── KPI Calculations ──
   const totalStudents = myStudents.length;
@@ -110,71 +99,12 @@ const AgentDashboard = () => {
   });
   const totalSettled = settledPayoffsList.reduce((sum, p) => sum + getPayoffAmount(p), 0);
 
-  // ── KPI Card definitions ──
-  const kpiCards = [
-    {
-      title: 'Total Students',
-      value: totalStudents,
-      subtitle: `${myStudents.filter(s => s.feesPaid).length} with fees paid`,
-      icon: GraduationCap,
-      color: '#185FA5',
-      bgColor: '#E6F1FB',
-      link: '/agent/students'
-    },
-    {
-      title: 'Active Applications',
-      value: activeApplications,
-      subtitle: `${myApplications.length} total submitted`,
-      icon: ClipboardList,
-      color: '#534AB7',
-      bgColor: '#EEEDFE',
-      link: '/agent/applications'
-    },
-    {
-      title: 'Action Required',
-      value: actionRequiredCount,
-      subtitle: actionRequiredCount > 0 ? 'Items need your attention' : 'All clear',
-      icon: AlertTriangle,
-      color: actionRequiredCount > 0 ? '#B45309' : '#10B981',
-      bgColor: actionRequiredCount > 0 ? '#FEF3C7' : '#ECFDF5',
-      highlight: actionRequiredCount > 0,
-      link: null
-    },
-    {
-      title: 'Pending Payout',
-      value: formatCurrency(pendingPayout),
-      subtitle: `${pendingPayoffsList.length} payoff${pendingPayoffsList.length !== 1 ? 's' : ''} pending`,
-      icon: Clock,
-      color: '#B45309',
-      bgColor: '#FFF7ED',
-      link: '/agent/payoffs'
-    },
-    {
-      title: 'Total Settled',
-      value: formatCurrency(totalSettled),
-      subtitle: `${settledPayoffsList.length} settlement${settledPayoffsList.length !== 1 ? 's' : ''} received`,
-      icon: BadgeCheck,
-      color: '#047857',
-      bgColor: '#ECFDF5',
-      link: '/agent/payoffs'
-    }
+  const glanceCards = [
+    { title: 'My students', value: totalStudents, subtitle: `${myStudents.filter(s => s.feesPaid).length} have paid fees`, icon: GraduationCap, color: '#185FA5', bgColor: '#E6F1FB', link: '/agent/students' },
+    { title: 'Applications in progress', value: activeApplications, subtitle: `${myApplications.length} submitted in total`, icon: ClipboardList, color: '#534AB7', bgColor: '#EEEDFE', link: '/agent/applications' },
+    { title: 'Waiting to be paid', value: formatCurrency(pendingPayout), subtitle: `${pendingPayoffsList.length} payout${pendingPayoffsList.length !== 1 ? 's' : ''} pending`, icon: Clock, color: '#B45309', bgColor: '#FFF7ED', link: '/agent/payoffs' },
+    { title: 'Total received', value: formatCurrency(totalSettled), subtitle: `${settledPayoffsList.length} payout${settledPayoffsList.length !== 1 ? 's' : ''} received`, icon: BadgeCheck, color: '#047857', bgColor: '#ECFDF5', link: '/agent/payoffs' },
   ];
-
-  // ── Chart data ──
-  const registrationTrend = bucketByMonth(
-    myStudents, s => s.createdAt,
-    [{ key: 'registered' }, { key: 'converted', filter: s => s.feesPaid }]
-  );
-  const studentStatusData = countBy(myStudents, s => getFunnelLabel(s));
-  const applicationStatusData = countBy(myApplications, a => prettyStatus(a.status));
-  const earningsTrend = bucketByMonth(
-    myPayoffs, p => p.settledAt || p.updatedAt || p.createdAt,
-    [
-      { key: 'settled', filter: p => ['SETTLED', 'COMPLETED'].includes((p.status || '').toUpperCase()), value: getPayoffAmount },
-      { key: 'pending', filter: p => ['PENDING', 'APPROVED'].includes((p.status || '').toUpperCase()), value: getPayoffAmount },
-    ]
-  );
-  const invoiceStatusData = countBy(myInvoices, inv => prettyStatus(inv.financeReviewStatus || inv.status || 'Submitted'));
 
   // ── Action items aggregation ──
   const actionItems = [];
@@ -223,38 +153,59 @@ const AgentDashboard = () => {
     });
   }
 
-  // ── Recent Applications (latest 5) ──
-  const recentApplications = [...myApplications]
-    .sort((a, b) => new Date(b.createdAt || b.submittedAt) - new Date(a.createdAt || a.submittedAt))
-    .slice(0, 5);
+  // ── Work events (feeds "Today's work" and "Work history") ──
+  const toDate = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d : null; };
+  const events = [];
+  const pushEvent = (e) => { if (e.time) events.push(e); };
+  myStudents.forEach(s => {
+    const created = toDate(s.createdAt);
+    const updated = toDate(s.updatedAt);
+    pushEvent({
+      id: `s-${s.id || s._id}`, type: 'student', time: updated || created,
+      title: s.name || 'Student',
+      detail: created && updated && updated - created > 60000 ? `Student updated — ${getFunnelLabel(s)}` : 'Student registered',
+      icon: GraduationCap, iconBg: '#E6F1FB', iconColor: '#185FA5', to: `/agent/students/${s.id || s._id}`
+    });
+  });
+  myApplications.forEach(app => pushEvent({
+    id: `a-${app.id || app._id}`, type: 'application', time: toDate(app.updatedAt || app.createdAt || app.submittedAt),
+    title: app.studentName || app.student?.name || 'Student',
+    detail: `Application — ${formatStatus(app.status)}`,
+    icon: ClipboardList, iconBg: '#EEEDFE', iconColor: '#534AB7', to: '/agent/applications'
+  }));
+  myInvoices.forEach(inv => pushEvent({
+    id: `i-${inv.id || inv._id}`, type: 'invoice', time: toDate(inv.updatedAt || inv.raisedAt || inv.createdAt),
+    title: `Invoice ${inv.invoiceNumber || ''}`.trim(),
+    detail: formatStatus(inv.financeReviewStatus || inv.status || 'Submitted'),
+    icon: FileText, iconBg: '#E6F1FB', iconColor: '#0C447C', to: '/agent/invoices'
+  }));
+  myPayoffs.forEach(p => pushEvent({
+    id: `p-${p.id || p._id}`, type: 'payoff', time: toDate(p.settledAt || p.updatedAt || p.createdAt),
+    title: `Payoff ${p.payoffNumber || ''}`.trim(),
+    detail: `${formatStatus(p.status)} — ${formatCurrency(getPayoffAmount(p))}`,
+    icon: Wallet, iconBg: '#ECFDF5', iconColor: '#047857', to: '/agent/payoffs'
+  }));
+  events.sort((a, b) => b.time - a.time);
 
-  // ── Recent Invoices (latest 5) ──
-  const recentInvoices = [...myInvoices]
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 5);
+  const now = new Date();
+  const madeToday = (list, getDate) => list.filter(x => { const d = toDate(getDate(x)); return d && isSameDay(d, now); }).length;
+  const todayTiles = [
+    { label: 'Students added', value: madeToday(myStudents, s => s.createdAt), hint: 'registered today', icon: GraduationCap, color: '#185FA5', bg: '#E6F1FB', to: '/agent/students' },
+    { label: 'Applications', value: madeToday(myApplications, a => a.createdAt || a.submittedAt), hint: 'submitted today', icon: ClipboardList, color: '#534AB7', bg: '#EEEDFE', to: '/agent/applications' },
+    { label: 'Invoices raised', value: madeToday(myInvoices, i => i.raisedAt || i.createdAt), hint: 'sent to finance today', icon: FileText, color: '#0C447C', bg: '#E6F1FB', to: '/agent/invoices' },
+    { label: 'Status changes', value: events.filter(e => isSameDay(e.time, now) && ['application', 'invoice'].includes(e.type)).length, hint: 'applications & invoices', icon: Clock, color: '#B45309', bg: '#FFF7ED' },
+    { label: 'Paid today', value: madeToday(settledPayoffsList, p => p.settledAt || p.updatedAt), hint: 'payouts received', icon: BadgeCheck, color: '#047857', bg: '#ECFDF5', to: '/agent/payoffs' },
+  ];
+  const todayActions = actionItems.map(i => ({
+    icon: i.icon, iconBg: i.iconBg, iconColor: i.iconColor, link: i.link,
+    count: i.type === 'invoice' ? invoicesNeedingCorrection.length : i.type === 'application' ? applicationsNeedingAction.length : documentsRequested.length,
+    label: i.title.replace(/^\d+\s+/, '') + ` — ${i.description}`,
+  }));
 
-  // ── Helpers ──
-  const getApplicationStatusStyle = (status) => {
-    const s = status?.toLowerCase() || '';
-    if (s === 'completed') return 'bg-[#DCFCE7] text-[#166534]';
-    if (s.includes('review') || s === 'processing' || s === 'submitted') return 'bg-[#E6F1FB] text-[#0C447C]';
-    if (s.includes('reject') || s === 'cancelled') return 'bg-[#FCEBEB] text-[#791F1F]';
-    if (s.includes('correction') || s.includes('action') || s.includes('document')) return 'bg-[#FEF3C7] text-[#92400E]';
-    return 'bg-[#F3F4F6] text-[#374151]';
-  };
-
-  const getInvoiceStatusStyle = (status, reviewStatus) => {
-    const s = (reviewStatus || status || '').toLowerCase();
-    if (s.includes('approved') || s.includes('paid')) return 'bg-[#DCFCE7] text-[#166534]';
-    if (s.includes('review') || s.includes('submitted') || s.includes('pending')) return 'bg-[#E6F1FB] text-[#0C447C]';
-    if (s.includes('correction') || s.includes('reject')) return 'bg-[#FCEBEB] text-[#791F1F]';
-    return 'bg-[#F3F4F6] text-[#374151]';
-  };
-
-  const formatStatus = (status) => {
+  function formatStatus(status) {
     if (!status) return 'Pending';
     return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  };
+  }
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -285,265 +236,35 @@ const AgentDashboard = () => {
       {/* Visa progress for your students */}
       <PipelineSummary applications={myApplications} to="/agent/applications" />
 
-      {/* KPI Cards — 5 cards */}
-      <div className="stat-grid grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        {kpiCards.map((kpi, index) => {
-          const Icon = kpi.icon;
-          const inner = (
-            <div
-              key={index}
-              className={`bg-white border rounded-xl p-5 transition-all duration-200 group ${
-                kpi.highlight
-                  ? 'border-amber-300 shadow-sm shadow-amber-100 hover:shadow-md hover:shadow-amber-100'
-                  : 'border-slate-200 hover:shadow-md hover:border-slate-300'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{kpi.title}</span>
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform"
-                  style={{ backgroundColor: kpi.bgColor }}
-                >
-                  <Icon className="w-4 h-4" style={{ color: kpi.color }} />
-                </div>
-              </div>
-              <div className="text-2xl font-bold text-[#111827] font-['Outfit']">
-                {kpi.value}
-              </div>
-              <p className="text-[11px] text-slate-500 font-medium mt-1">{kpi.subtitle}</p>
-            </div>
-          );
+      <TodayPanel tiles={todayTiles} actions={todayActions} events={events} />
 
-          return kpi.link ? (
-            <Link key={index} to={kpi.link} className="block">{inner}</Link>
-          ) : (
-            <div key={index}>{inner}</div>
-          );
-        })}
-      </div>
-
-      {/* ═══ ACTION REQUIRED Section ═══ */}
-      {actionItems.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            <h2 className="text-sm font-bold text-[#111827] uppercase tracking-wider">Action Required</h2>
-            <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-              {actionRequiredCount}
-            </span>
-          </div>
-          <div className="space-y-2">
-            {actionItems.map((item, i) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={i}
-                  className={`bg-white border rounded-xl p-4 flex items-center gap-4 transition-all hover:shadow-sm ${
-                    item.urgency === 'high' ? 'border-red-200' : 'border-amber-200'
-                  }`}
-                >
-                  <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: item.iconBg }}
-                  >
-                    <Icon className="w-5 h-5" style={{ color: item.iconColor }} />
+      {/* At a glance */}
+      <div>
+        <div className="mb-2">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">At a glance</span>
+        </div>
+        <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {glanceCards.map((c) => {
+            const Icon = c.icon;
+            return (
+              <Link key={c.title} to={c.link} className="block">
+                <div className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md hover:border-slate-300 transition-all group h-full">
+                  <div className="flex items-start justify-between mb-3">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{c.title}</span>
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: c.bgColor }}>
+                      <Icon className="w-4 h-4" style={{ color: c.color }} />
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-[#111827]">{item.title}</p>
-                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">{item.description}</p>
-                  </div>
-                  <Link
-                    to={item.link}
-                    className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-[#042C53] text-white text-xs font-bold rounded-lg hover:bg-[#0C447C] transition-colors"
-                  >
-                    {item.linkText} <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
+                  <div className="text-2xl font-bold text-[#111827] font-['Outfit']">{c.value}</div>
+                  <p className="text-[11px] text-slate-500 font-medium mt-1">{c.subtitle}</p>
                 </div>
-              );
-            })}
-          </div>
+              </Link>
+            );
+          })}
         </div>
-      )}
-
-      {/* If no action required, show all-clear state */}
-      {actionItems.length === 0 && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-emerald-900">You're all caught up!</p>
-            <p className="text-[11px] text-emerald-700 font-medium mt-0.5">
-              No pending actions — all your invoices, applications, and documents are in order.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ CHARTS ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ChartCard className="lg:col-span-2" title="My student registrations" hint="Students you registered and how many have their fees paid, last 6 months">
-          <TrendChart data={registrationTrend} series={[
-            { key: 'registered', name: 'Registered', color: '#042C53' },
-            { key: 'converted', name: 'Fees paid', color: '#10B981' },
-          ]} />
-        </ChartCard>
-        <ChartCard title="My students by progress" hint="Where your students are in the visa process">
-          <DonutChart data={studentStatusData} />
-        </ChartCard>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ChartCard title="Applications by status" hint="Progress of the applications you submitted">
-          <HBarChart data={applicationStatusData} color="#534AB7" labelWidth={120} name="Applications" />
-        </ChartCard>
-        <ChartCard title="Invoices by status" hint="Where your commission invoices are">
-          <DonutChart data={invoiceStatusData} />
-        </ChartCard>
-        <ChartCard title="My earnings per month" hint="Settled versus pending payouts, last 6 months">
-          <TrendChart type="bar" stacked money data={earningsTrend} series={[
-            { key: 'settled', name: 'Settled', color: '#10B981' },
-            { key: 'pending', name: 'Pending', color: '#F59E0B' },
-          ]} />
-        </ChartCard>
       </div>
 
-      {/* ═══ RECENT APPLICATIONS ═══ */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div>
-            <h3 className="text-base font-semibold text-[#111827] font-['Outfit']">Recent Applications</h3>
-            <p className="text-[11px] text-slate-500 font-medium mt-0.5">Track your student application progress</p>
-          </div>
-          <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-            <Link to="/agent/applications">View All <ArrowUpRight className="w-3.5 h-3.5 ml-1" /></Link>
-          </Button>
-        </div>
-
-        {recentApplications.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-[#FAFAFA] border-b border-slate-100">
-                <tr>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Student</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">University</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Course</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="text-right py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {recentApplications.map((app) => (
-                  <tr key={app.id || app._id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3.5 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-full bg-[#E6F1FB] flex items-center justify-center text-[#0C447C] text-[10px] font-bold">
-                          {(app.studentName || app.student?.name || 'S').charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium text-[#111827]">
-                          {app.studentName || app.student?.name || 'Student'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-6 text-sm text-slate-600">
-                      {app.universityName || app.university?.name || '—'}
-                    </td>
-                    <td className="py-3.5 px-6 text-sm text-slate-500 max-w-[160px] truncate">
-                      {app.courseName || app.course?.name || '—'}
-                    </td>
-                    <td className="py-3.5 px-6">
-                      <span className={`text-[9px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider inline-block ${getApplicationStatusStyle(app.status)}`}>
-                        {formatStatus(app.status)}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-6 text-right">
-                      <Link
-                        to={`/agent/applications`}
-                        className="text-[11px] text-slate-500 hover:text-[#042C53] font-medium inline-flex items-center gap-1"
-                      >
-                        View <ExternalLink className="w-3 h-3" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="p-10 text-center">
-            <ClipboardList className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-400 font-medium">No applications yet</p>
-            <p className="text-[11px] text-slate-400 mt-1">Applications you create for students will appear here</p>
-          </div>
-        )}
-      </div>
-
-      {/* ═══ RECENT INVOICES ═══ */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div>
-            <h3 className="text-base font-semibold text-[#111827] font-['Outfit']">Recent Invoices</h3>
-            <p className="text-[11px] text-slate-500 font-medium mt-0.5">Track your commission invoice status</p>
-          </div>
-          <Button variant="ghost" size="sm" asChild className="text-[#042C53] font-semibold text-xs">
-            <Link to="/agent/invoices">Raise Invoice + <ArrowUpRight className="w-3.5 h-3.5 ml-1" /></Link>
-          </Button>
-        </div>
-
-        {recentInvoices.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-[#FAFAFA] border-b border-slate-100">
-                <tr>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Invoice ID</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Amount</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-6 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Submitted</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {recentInvoices.map((inv) => {
-                  const displayStatus = inv.financeReviewStatus || inv.status || 'Pending';
-                  const isApproved = ['approved', 'paid'].includes(displayStatus.toLowerCase());
-                  const isRejectedOrCorrection = ['correctionrequired', 'correction_required', 'rejected'].includes(displayStatus.toLowerCase());
-
-                  return (
-                    <tr key={inv.id || inv._id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="py-3.5 px-6 text-sm font-bold text-[#111827] font-mono">{inv.invoiceNumber}</td>
-                      <td className="py-3.5 px-6 text-sm font-medium text-[#111827] font-['Outfit']">
-                        {inv.amount > 0 ? formatCurrency(inv.amount, inv.currency) : 'Pending Review'}
-                      </td>
-                      <td className="py-3.5 px-6">
-                        <span className={`text-[9px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider inline-flex items-center gap-1 ${getInvoiceStatusStyle(inv.status, inv.financeReviewStatus)}`}>
-                          {isApproved ? (
-                            <><CheckCircle2 className="w-2.5 h-2.5" /> {formatStatus(displayStatus)}</>
-                          ) : isRejectedOrCorrection ? (
-                            <><XCircle className="w-2.5 h-2.5" /> {formatStatus(displayStatus)}</>
-                          ) : (
-                            formatStatus(displayStatus)
-                          )}
-                        </span>
-                      </td>
-                    <td className="py-3.5 px-6 text-[11px] text-slate-500 font-medium">
-                      {inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('en-IN', {
-                        day: 'numeric', month: 'short', year: 'numeric'
-                      }) : '—'}
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="p-10 text-center">
-            <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-400 font-medium">No invoices raised yet</p>
-            <p className="text-[11px] text-slate-400 mt-1">
-              Create an invoice from the <Link to="/agent/invoices" className="text-[#042C53] hover:underline">Invoices</Link> page
-            </p>
-          </div>
-        )}
-      </div>
+      <HistoryPanel events={events} />
     </div>
   );
 };

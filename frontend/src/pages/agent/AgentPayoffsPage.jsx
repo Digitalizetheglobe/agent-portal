@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card, CardContent } from '../../components/ui/card';
@@ -28,7 +28,7 @@ import { FinancialStatusBadge } from '../../components/common/FinancialStatusBad
 import { formatCurrency, formatFinancialDate } from '../../utils/financialFormatters';
 
 const AgentPayoffsPage = () => {
-  const { payoffs, fetchPayoffs, viewPayoffSlip, loading } = useData();
+  const { payoffs, viewPayoffSlip, loading } = useData();
   const { user } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,12 +36,6 @@ const AgentPayoffsPage = () => {
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [reviewHistory, setReviewHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-
-  useEffect(() => {
-    if (fetchPayoffs) {
-      fetchPayoffs();
-    }
-  }, [fetchPayoffs]);
 
   const handleOpenView = async (item) => {
     setSelectedPayoff(item);
