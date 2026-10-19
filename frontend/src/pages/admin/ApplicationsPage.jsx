@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { getDisplayStage, getDisplayStageInfo, isPipelineActive } from '../../utils/pipeline';
 import {
   FileCheck,
@@ -93,6 +94,9 @@ const ApplicationsPage = () => {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
+  // The API only sees the settled search text; requestIdRef drops responses from superseded requests
+  const [debouncedSearch, flushSearch] = useDebouncedValue(searchQuery);
+  const requestIdRef = useRef(0);
   const [statusFilter, setStatusFilter] = useState('all');
   const [universityFilter, setUniversityFilter] = useState('all');
   const [agentFilter, setAgentFilter] = useState('all');
@@ -106,6 +110,7 @@ const ApplicationsPage = () => {
 
   // Fetch applications from backend
   const loadApplications = useCallback(async (page = 1) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const params = {
@@ -114,12 +119,13 @@ const ApplicationsPage = () => {
         envelope: 'true'
       };
 
-      if (searchQuery.trim()) params.search = searchQuery.trim();
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
       if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
       if (universityFilter && universityFilter !== 'all') params.universityId = universityFilter;
       if (isAdmin() && agentFilter && agentFilter !== 'all') params.agentId = agentFilter;
 
       const response = await applicationAPI.getAll(params);
+      if (requestId !== requestIdRef.current) return;
       const data = response.data;
 
       if (data && Array.isArray(data.applications)) {
@@ -138,29 +144,30 @@ const ApplicationsPage = () => {
         setTotalPages(1);
       }
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Error loading applications:', err);
       toast.error('Failed to load applications', { description: formatApiError(err) });
       setApplications([]);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [limit, searchQuery, statusFilter, universityFilter, agentFilter, isAdmin]);
+  }, [limit, debouncedSearch, statusFilter, universityFilter, agentFilter, isAdmin]);
 
   useEffect(() => {
     loadApplications(1);
-  }, [statusFilter, universityFilter, agentFilter, loadApplications]);
+  }, [loadApplications]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    loadApplications(1);
+    flushSearch(searchQuery);
   };
 
   const handleClearFilters = () => {
     setSearchQuery('');
+    flushSearch('');
     setStatusFilter('all');
     setUniversityFilter('all');
     setAgentFilter('all');
-    loadApplications(1);
   };
 
   const handleOpenAdd = () => {
@@ -515,7 +522,7 @@ const ApplicationsPage = () => {
                           size="sm"
                           onClick={() => navigate(isAdmin() ? `/admin/applications/${app.id}` : `/agent/applications/${app.id}`)}
                           title="View Application Details"
-                          className="h-8 w-8 p-0 text-gray-500 hover:text-gray-900"
+                          className="h-8 w-8 p-0 text-gray-500 hover:text-white"
                         >
                           <Eye className="w-4 h-4 text-blue-600" />
                         </Button>
@@ -524,9 +531,9 @@ const ApplicationsPage = () => {
                           size="sm"
                           onClick={() => handleOpenEdit(app)}
                           title="Edit Application"
-                          className="h-8 w-8 p-0 text-gray-500 hover:text-gray-900"
+                          className="h-8 w-8 p-0 text-gray-600 hover:text-white"
                         >
-                          <Edit2 className="w-3.5 h-3.5 text-gray-600" />
+                          <Edit2 className="w-3.5 h-3.5" />
                         </Button>
                         {/* Delete button: Only if not invoiced, and agents only if Draft */}
                         {(!app.isInvoiced && (isAdmin() || app.status === 'Draft')) && (

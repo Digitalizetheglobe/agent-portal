@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import {
   Search, Plus, Download, Flag, User, Mail, Phone,
   ChevronRight, FileText, CheckCircle2, AlertCircle,
@@ -70,7 +71,12 @@ const StudentsPage = () => {
   const [queueActionLoading, setQueueActionLoading] = useState(false);
 
   // Fetch Verification Queue
+  // The queue is searched server-side, so it uses the settled text, and stale responses are dropped
+  const [debouncedSearch] = useDebouncedValue(searchQuery);
+  const queueRequestIdRef = useRef(0);
+
   const fetchQueue = useCallback(async () => {
+    const requestId = ++queueRequestIdRef.current;
     try {
       setLoadingQueue(true);
       const params = {
@@ -81,11 +87,12 @@ const StudentsPage = () => {
       if (queueStatusFilter !== 'all') {
         params.status = queueStatusFilter;
       }
-      if (searchQuery.trim()) {
-        params.search = searchQuery.trim();
+      if (debouncedSearch.trim()) {
+        params.search = debouncedSearch.trim();
       }
 
       const res = await studentVerificationAPI.getQueue(params);
+      if (requestId !== queueRequestIdRef.current) return;
       if (res.data?.students) {
         setQueueStudents(res.data.students);
         setQueueTotal(res.data.total || 0);
@@ -96,12 +103,13 @@ const StudentsPage = () => {
         setQueueTotalPages(1);
       }
     } catch (err) {
+      if (requestId !== queueRequestIdRef.current) return;
       console.error('Failed to fetch verification queue:', err);
       toast.error('Failed to load verification queue');
     } finally {
-      setLoadingQueue(false);
+      if (requestId === queueRequestIdRef.current) setLoadingQueue(false);
     }
-  }, [queuePage, queueLimit, queueStatusFilter, searchQuery]);
+  }, [queuePage, queueLimit, queueStatusFilter, debouncedSearch]);
 
   useEffect(() => {
     if (activeTab === 'queue') {

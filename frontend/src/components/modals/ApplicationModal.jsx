@@ -132,6 +132,18 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
     });
   }, [courses, formData.universityId]);
 
+  // "All universities" or the (first two) university names a course is limited to
+  const describeAvailability = (course) => {
+    const ids = (course.universityIds || []).map(String);
+    if (ids.length === 0) return 'All universities';
+    const names = ids
+      .map(id => universities?.find(u => String(u.id || u._id) === id)?.name)
+      .filter(Boolean);
+    if (names.length === 0) return `${ids.length} universities`;
+    const shown = names.slice(0, 2).join(', ');
+    return names.length > 2 ? `${shown} +${names.length - 2}` : shown;
+  };
+
   const selectedCourse = useMemo(
     () => availableCourses.find(c => String(c.id || c._id) === String(formData.courseId)),
     [availableCourses, formData.courseId]
@@ -414,6 +426,10 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
                       <SelectItem key={c.id || c._id} value={String(c.id || c._id)}>
                         <span className="font-medium">{c.name}</span>
                         {c.level && <span className="text-gray-500 text-[11px] ml-1.5">({c.level})</span>}
+                        {/* Same-named courses can differ in fee, duration and availability, so show all three */}
+                        <span className="text-gray-500 text-[11px] ml-1.5">
+                          · {[c.duration, c.tuitionFee, describeAvailability(c)].filter(Boolean).join(' · ')}
+                        </span>
                       </SelectItem>
                     ))
                   )}

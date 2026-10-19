@@ -312,13 +312,27 @@ exports.updateAgent = async (req, res) => {
     Object.assign(agent, appPatch);
 
     // Agent ownership is not editable by Account Managers (commission is set per university, not per agent)
+    let newManagerId = null;
     if (accountManagerId !== undefined && !isAccountManager(req.user)) {
       const resolved = await resolveAccountManager(accountManagerId);
       if (resolved.error) return res.status(400).json({ success: false, detail: resolved.error });
+      if (resolved.value !== agent.accountManagerId) newManagerId = resolved.value;
       agent.accountManagerId = resolved.value;
     }
 
     await agent.save();
+
+    // An application already in review is waiting for the Account Manager who now owns the agent
+    if (newManagerId && ['submitted', 'under_review'].includes(agent.onboardingStatus)) {
+      await createNotification({
+        recipient: newManagerId,
+        title: 'Agent assigned to you',
+        message: `${agent.name} was assigned to you and has an application waiting for your review.`,
+        type: 'info',
+        relatedId: agent.id,
+        relatedModel: 'Agent'
+      });
+    }
 
     res.status(200).json(serializeAgent(await reloadWithManager(agent.id), req.user));
   } catch (error) {

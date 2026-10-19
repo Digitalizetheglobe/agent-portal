@@ -155,7 +155,7 @@ const AgentsPage = () => {
       const converted = agentStudents.filter(hasFeesPaid).length;
       const convRate = registrations > 0 ? ((converted / registrations) * 100).toFixed(1) : '0.0';
       const totalCommission = invoices
-        .filter(inv => inv.agentId === agent.id && inv.status === 'paid')
+        .filter(inv => (inv.agentId?.id || inv.agentId?._id || inv.agentId) === agent.id && (inv.status || '').toLowerCase() === 'paid')
         .reduce((sum, inv) => sum + (inv.amount || 0), 0);
 
       return {
@@ -175,7 +175,7 @@ const AgentsPage = () => {
   }, [agentInDrawer, students]);
 
   const drawerEarnings = useMemo(() => {
-    const mine = agentInDrawer ? invoices.filter(inv => inv.agentId === agentInDrawer.id) : [];
+    const mine = agentInDrawer ? invoices.filter(inv => (inv.agentId?.id || inv.agentId?._id || inv.agentId) === agentInDrawer.id) : [];
     const sum = (list) => list.reduce((t, inv) => t + (Number(inv.amount) || 0), 0);
     const st = (inv) => (inv.status || '').toLowerCase();
     return {

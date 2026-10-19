@@ -149,8 +149,10 @@ const formatReview = async (invoice) => {
   }
 
   // Linked Payoff
+  // The active payoff, or the latest cancelled one when it has not been replaced yet
   const payoff = await Payoff.findOne({
-    where: { invoiceId: inv.id }
+    where: { invoiceId: inv.id },
+    order: [[sequelize.literal(`("status" = 'CANCELLED')`), 'ASC'], ['createdAt', 'DESC']]
   });
   inv.payoff = payoff ? payoff.toJSON() : null;
 

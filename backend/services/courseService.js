@@ -3,6 +3,47 @@ const { Course, University } = require('../models');
 const { sequelize } = require('../config/db');
 const { isUuid } = require('../utils/universityContent');
 
+const normalizeCode = (code) => (code ? String(code).trim().toUpperCase() : '');
+
+/**
+ * Reject an active course that is indistinguishable from another active course:
+ * same name, code and level with overlapping universities. A course with no
+ * universities is open to all, so it overlaps every other course.
+ */
+const assertNoAmbiguousDuplicate = async ({ id, name, code, level, universityIds, status }) => {
+  if (status !== 'active') return;
+
+  const candidates = await Course.findAll({
+    where: {
+      id: id ? { [Op.ne]: id } : { [Op.ne]: null },
+      status: 'active',
+      level,
+      [Op.and]: [
+        sequelize.where(sequelize.fn('lower', sequelize.col('name')), name.trim().toLowerCase())
+      ]
+    }
+  });
+
+  const myIds = universityIds.map(String);
+  const conflict = candidates.find(c => {
+    if (normalizeCode(c.code) !== normalizeCode(code)) return false;
+    const otherIds = c.toJSON().universityIds;
+    if (myIds.length === 0 || otherIds.length === 0) return true;
+    return myIds.some(uid => otherIds.includes(uid));
+  });
+
+  if (conflict) {
+    const err = new Error(
+      `An active "${conflict.name}" course with the same code and level already exists for ` +
+      `${conflict.toJSON().universityIds.length ? 'an overlapping university' : 'all universities'} ` +
+      `(${conflict.tuitionFee || 'no fee set'}, ${conflict.duration || 'no duration set'}). ` +
+      'Change the name or code, or limit the universities of one course so they do not overlap.'
+    );
+    err.statusCode = 409;
+    throw err;
+  }
+};
+
 class CourseService {
   /**
    * Get all courses with optional filters (search, universityId, level, status)
@@ -21,9 +62,9 @@ class CourseService {
 
     const where = {};
 
-    // Status filtering: non-admin only sees active courses
-    if (currentUser?.role === 'admin' && status) {
-      if (status !== 'all') {
+    // Status filtering: admins see every status unless they filter; non-admins only see active courses
+    if (currentUser?.role === 'admin') {
+      if (status && status !== 'all') {
         where.status = status;
       }
     } else {
@@ -95,11 +136,18 @@ class CourseService {
       distinct: true
     });
 
+    // Aggregates across the whole filtered result set (not just the current page)
+    const [activeCount, levelCount] = await Promise.all([
+      Course.count({ where: { [Op.and]: [where, { status: 'active' }] } }),
+      Course.count({ where, distinct: true, col: 'level' })
+    ]);
+
     return {
       courses: rows.map(r => r.toJSON()),
       total: count,
       page: parseInt(page, 10),
-      totalPages: Math.ceil(count / effectiveLimit) || 1
+      totalPages: Math.ceil(count / effectiveLimit) || 1,
+      stats: { activeCount, levelCount }
     };
   }
 
@@ -157,11 +205,21 @@ class CourseService {
     }
 
     const primaryUniId = finalUniversityIds.length > 0 ? finalUniversityIds[0] : null;
+    const finalLevel = level ? level.trim() : 'Undergraduate';
+    const finalStatus = status === 'inactive' ? 'inactive' : 'active';
+
+    await assertNoAmbiguousDuplicate({
+      name,
+      code,
+      level: finalLevel,
+      universityIds: finalUniversityIds,
+      status: finalStatus
+    });
 
     const course = await Course.create({
       name: name.trim(),
       code: code ? code.trim().toUpperCase() : null,
-      level: level ? level.trim() : 'Undergraduate',
+      level: finalLevel,
       department: department ? department.trim() : null,
       duration: duration ? duration.trim() : null,
       tuitionFee: tuitionFee ? tuitionFee.trim() : null,
@@ -226,6 +284,15 @@ class CourseService {
       course.universityId = finalUniversityIds.length > 0 ? finalUniversityIds[0] : null;
     }
 
+    await assertNoAmbiguousDuplicate({
+      id: course.id,
+      name: course.name,
+      code: course.code,
+      level: course.level,
+      universityIds: course.toJSON().universityIds,
+      status: course.status
+    });
+
     await course.save();
     return await this.getCourseById(course.id);
   }
@@ -246,6 +313,16 @@ class CourseService {
       err.statusCode = 400;
       throw err;
     }
+
+    // Re-activating must not create an ambiguous duplicate
+    await assertNoAmbiguousDuplicate({
+      id: course.id,
+      name: course.name,
+      code: course.code,
+      level: course.level,
+      universityIds: course.toJSON().universityIds,
+      status: newStatus
+    });
 
     course.status = newStatus;
     await course.save();

@@ -6,6 +6,7 @@ const {
   getPayoff,
   settlePayoff,
   cancelPayoff,
+  replacePayoff,
   recordUniversityPayment,
   authorizeBypass,
   downloadSlip
@@ -43,5 +44,6 @@ router.patch('/:id/bypass-block', restrictToStaffRole('head_admission'), authori
 // Settlement (with the payment slip) and cancellation: Accounts
 router.patch('/:id/settle', restrictToStaffRole('accounts'), slipUpload.single('slip'), settlePayoff);
 router.patch('/:id/cancel', restrictToStaffRole('accounts'), cancelPayoff);
+router.post('/:id/replace', restrictToStaffRole('accounts'), replacePayoff);
 
 module.exports = router;

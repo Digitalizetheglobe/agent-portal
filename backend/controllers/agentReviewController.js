@@ -112,7 +112,8 @@ exports.submitOnboarding = async (req, res) => {
     await Promise.all(recipients.map(recipient => createNotification({
       recipient,
       title: 'Agent application submitted',
-      message: `${agent.name} has ${from === 'draft' ? 'submitted' : 'resubmitted'} an application for review.`,
+      message: `${agent.name} has ${from === 'draft' ? 'submitted' : 'resubmitted'} an application for review.` +
+        (agent.accountManagerId ? '' : ' No Account Manager is assigned to this agent yet: assign one before the review can start.'),
       type: 'info',
       relatedId: agent.id,
       relatedModel: 'Agent'
@@ -123,6 +124,19 @@ exports.submitOnboarding = async (req, res) => {
     console.error('Submit onboarding error:', error);
     fail(res, 500, 'Server error');
   }
+};
+
+// Only the agent's Account Manager can recommend, so the review must not start without one:
+// the application would sit under review with nobody able to move it on.
+const accountManagerCheck = async (agent) => {
+  if (!agent.accountManagerId) {
+    return 'This agent has no Account Manager. Assign one (Edit agent, Account Manager) before starting the review.';
+  }
+  const manager = await User.findOne({
+    where: { id: agent.accountManagerId, role: 'admin', staffRole: 'account_manager', status: 'active' },
+    attributes: ['id']
+  });
+  return manager ? null : "This agent's Account Manager is inactive or no longer exists. Assign another before starting the review.";
 };
 
 const documentsApprovedCheck = (agent) => {
@@ -137,7 +151,8 @@ const ACTIONS = {
   'start-review': {
     roles: ['account_manager', 'head_recruitment'],
     from: ['submitted'],
-    to: 'under_review'
+    to: 'under_review',
+    check: accountManagerCheck
   },
   recommend: {
     roles: ['account_manager'],
@@ -243,7 +258,7 @@ exports.reviewOnboarding = async (req, res) => {
     if (!action.from.includes(agent.onboardingStatus)) {
       return fail(res, 400, `Cannot ${req.params.action.replace('-', ' ')} an application that is ${agent.onboardingStatus.replace('_', ' ')}`);
     }
-    const blocker = action.check && action.check(agent);
+    const blocker = action.check && await action.check(agent);
     if (blocker) return fail(res, 400, blocker);
 
     const from = agent.onboardingStatus;

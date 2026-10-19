@@ -42,6 +42,12 @@ const RegisterPage = () => {
         if (cancelled) return;
         setInvite(res.data);
         setForm(f => ({ ...f, name: res.data.name || '', email: res.data.email || '' }));
+        // Contact person / signatory default to the invited person; still editable
+        setApplication(a => ({
+          ...a,
+          contactPerson: a.contactPerson || res.data.name || '',
+          signatoryName: a.signatoryName || res.data.name || '',
+        }));
       })
       .catch(err => !cancelled && setInviteError(formatApiError(err)))
       .finally(() => !cancelled && setChecking(false));

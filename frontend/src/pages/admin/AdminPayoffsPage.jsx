@@ -39,7 +39,7 @@ import { formatCurrency, formatFinancialDate } from '../../utils/financialFormat
 import { toast } from 'sonner';
 
 const AdminPayoffsPage = () => {
-  const { payoffs, fetchPayoffs, cancelPayoff, viewPayoffSlip, loading } = useData();
+  const { payoffs, fetchPayoffs, cancelPayoff, replacePayoff, viewPayoffSlip, loading } = useData();
   const { user } = useAuth();
   // Recording payment belongs to Accounts
   const canSettle = hasStaffRole(user, 'accounts');
@@ -65,6 +65,7 @@ const AdminPayoffsPage = () => {
   const [payoffToCancel, setPayoffToCancel] = useState(null);
   const [cancelNotes, setCancelNotes] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [replacingId, setReplacingId] = useState(null);
 
   const [payoffDetail, setPayoffDetail] = useState(null);
   const [reviewHistory, setReviewHistory] = useState([]);
@@ -81,14 +82,25 @@ const AdminPayoffsPage = () => {
     setCancelModalOpen(true);
   };
 
+  const handleReplace = async (payoff) => {
+    setReplacingId(payoff.id);
+    try {
+      await replacePayoff(payoff.id, {});
+    } catch (err) {
+      // The error toast is shown by replacePayoff
+    } finally {
+      setReplacingId(null);
+    }
+  };
+
   const handleConfirmCancel = async () => {
-    if (!payoffToCancel?.id) return;
+    if (!payoffToCancel?.id || !cancelNotes.trim()) return;
     setCancelling(true);
     try {
       if (cancelPayoff) {
-        await cancelPayoff(payoffToCancel.id, { notes: cancelNotes.trim() || undefined });
+        await cancelPayoff(payoffToCancel.id, { reason: cancelNotes.trim() });
       } else {
-        await payoffAPI.cancel(payoffToCancel.id, { notes: cancelNotes.trim() || undefined });
+        await payoffAPI.cancel(payoffToCancel.id, { reason: cancelNotes.trim() });
         if (fetchPayoffs) await fetchPayoffs();
       }
       toast.success('Payoff cancelled successfully');
@@ -127,6 +139,13 @@ const AdminPayoffsPage = () => {
       }
     }
   };
+
+  // Invoices that already have a live (not cancelled) payoff: a cancelled payoff on one of these is already replaced
+  const invoicesWithActivePayoff = useMemo(() => new Set(
+    (payoffs || [])
+      .filter(p => p.status !== 'CANCELLED')
+      .map(p => p.invoiceId?.id || p.invoiceId)
+  ), [payoffs]);
 
   const filteredPayoffs = useMemo(() => {
     return (payoffs || []).filter(p => {
@@ -277,6 +296,17 @@ const AdminPayoffsPage = () => {
                           </Button>
                         </>
                       )}
+                      {payoff.status === 'CANCELLED' && canSettle && !invoicesWithActivePayoff.has(invoice.id || payoff.invoiceId) && (
+                        <Button
+                          size="sm"
+                          className="btn-financial-action text-white bg-[#042C53] hover:bg-[#03223F] disabled:opacity-50"
+                          disabled={replacingId === payoff.id}
+                          title="Issue a new payoff for the same approved commission"
+                          onClick={() => handleReplace(payoff)}
+                        >
+                          {replacingId === payoff.id ? 'Creating...' : 'Create replacement'}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
@@ -418,18 +448,18 @@ const AdminPayoffsPage = () => {
               <DialogTitle className="text-lg font-bold">Cancel Payoff Liability</DialogTitle>
             </div>
             <DialogDescription className="text-xs text-gray-600 mt-1">
-              Are you sure you want to void payoff <span className="font-mono font-bold text-gray-900">{payoffToCancel?.payoffNumber}</span>? This action is terminal and cannot be undone once confirmed.
+              Cancel payoff <span className="font-mono font-bold text-gray-900">{payoffToCancel?.payoffNumber}</span>? The record is kept for audit. The invoice and the agent's approved commission are unchanged, and you can create a replacement payoff afterwards.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2 py-3">
             <Label htmlFor="cancelNotes" className="text-xs font-semibold text-gray-700">
-              Cancellation Reason / Internal Memo
+              Cancellation reason (required)
             </Label>
             <Textarea
               id="cancelNotes"
               rows={2}
-              placeholder="e.g. Agency agreement revised, duplicate claim voided."
+              placeholder="e.g. Wrong bank account details, transfer failed."
               value={cancelNotes}
               onChange={(e) => setCancelNotes(e.target.value)}
               className="text-xs bg-gray-50 resize-none"
@@ -451,7 +481,7 @@ const AdminPayoffsPage = () => {
               type="button"
               size="sm"
               onClick={handleConfirmCancel}
-              disabled={cancelling}
+              disabled={cancelling || !cancelNotes.trim()}
               className="text-xs bg-red-700 hover:bg-red-800 text-white font-semibold"
             >
               {cancelling ? 'Cancelling...' : 'Confirm Cancellation'}

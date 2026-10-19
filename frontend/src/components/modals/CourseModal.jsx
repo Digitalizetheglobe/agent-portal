@@ -31,7 +31,9 @@ const initialFormState = {
   isAllUniversities: true,
   universityIds: [],
   duration: '',
-  tuitionFee: '',
+  tuitionAmount: '',
+  tuitionCurrency: 'USD',
+  tuitionPeriod: 'year',
   status: 'active',
   description: ''
 };
@@ -57,6 +59,82 @@ const DEPARTMENTS = [
   'Natural Sciences & Mathematics',
   'Architecture & Design'
 ];
+
+const COURSE_DURATIONS = [
+  '3 Months', '6 Months', '9 Months', '12 Months', '18 Months',
+  '1 Year', '1.5 Years', '2 Years', '2.5 Years', '3 Years',
+  '4 Years', '5 Years', '6 Years', '7 Years'
+];
+
+const FEE_CURRENCIES = [
+  { code: 'USD', symbol: '$' },
+  { code: 'GBP', symbol: '£' },
+  { code: 'EUR', symbol: '€' },
+  { code: 'AUD', symbol: 'A$' },
+  { code: 'CAD', symbol: 'C$' },
+  { code: 'NZD', symbol: 'NZ$' },
+  { code: 'INR', symbol: '₹' },
+  { code: 'AED', symbol: 'AED' },
+  { code: 'SGD', symbol: 'S$' }
+];
+
+const FEE_PERIODS = [
+  { value: 'year', label: 'Per year' },
+  { value: 'semester', label: 'Per semester' },
+  { value: 'month', label: 'Per month' },
+  { value: 'total', label: 'Total course fee' }
+];
+
+// Parse a stored fee string (e.g. "$22,000 / year" or "USD 22,000 / year") into parts
+const parseTuitionFee = (raw) => {
+  const parts = { amount: '', currency: 'USD', period: 'year' };
+  if (!raw) return parts;
+  const str = String(raw);
+  const num = str.match(/\d[\d,]*(?:\.\d+)?/);
+  if (num) parts.amount = num[0];
+  const upper = str.toUpperCase();
+  const byCode = FEE_CURRENCIES.find(c => new RegExp(`\\b${c.code}\\b`).test(upper));
+  if (byCode) {
+    parts.currency = byCode.code;
+  } else {
+    // longest symbol first so "A$" wins over "$"
+    const bySymbol = [...FEE_CURRENCIES]
+      .sort((a, b) => b.symbol.length - a.symbol.length)
+      .find(c => str.includes(c.symbol));
+    if (bySymbol) parts.currency = bySymbol.code;
+  }
+  const lower = str.toLowerCase();
+  if (/semester|term/.test(lower)) parts.period = 'semester';
+  else if (/month/.test(lower)) parts.period = 'month';
+  else if (/total|full|whole/.test(lower)) parts.period = 'total';
+  return parts;
+};
+
+// Course length in years from text like "2 Years", "18 Months", "1 Year" (null if unknown)
+const parseDurationYears = (duration) => {
+  const m = String(duration || '').toLowerCase().match(/(\d+(?:\.\d+)?)\s*(year|yr|month|mo)/);
+  if (!m) return null;
+  const years = m[2].startsWith('y') ? parseFloat(m[1]) : parseFloat(m[1]) / 12;
+  return years > 0 ? years : null;
+};
+
+// A total course fee is converted to a per-year fee using the course duration
+const toPerYearFee = ({ amount, currency, period }, duration) => {
+  const years = parseDurationYears(duration);
+  const total = parseFloat(String(amount || '').replace(/,/g, ''));
+  if (period !== 'total' || !years || !total) return { amount, currency, period };
+  const perYear = Math.round((total / years) * 100) / 100;
+  return { amount: String(perYear), currency, period: 'year' };
+};
+
+const formatTuitionFee = ({ amount, currency, period }) => {
+  const clean = String(amount || '').replace(/[^\d.]/g, '');
+  if (!clean) return null;
+  const [whole, dec] = clean.split('.');
+  const formatted = Number(whole || 0).toLocaleString('en-US') + (dec ? `.${dec}` : '');
+  const suffix = period === 'total' ? 'total' : `/ ${period}`;
+  return `${currency} ${formatted} ${suffix}`;
+};
 
 const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
   const { createCourse, updateCourse, universities } = useData();
@@ -86,7 +164,14 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
         isAllUniversities: allUnis,
         universityIds: initialUniIds,
         duration: course.duration || '',
-        tuitionFee: course.tuitionFee || '',
+        ...(() => {
+          const fee = parseTuitionFee(course.tuitionFee);
+          return {
+            tuitionAmount: fee.amount,
+            tuitionCurrency: fee.currency,
+            tuitionPeriod: fee.period
+          };
+        })(),
         status: course.status || 'active',
         description: course.description || ''
       });
@@ -141,7 +226,11 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
         universityIds: targetUniIds,
         universityId: targetUniIds.length > 0 ? targetUniIds[0] : null,
         duration: formData.duration.trim() || null,
-        tuitionFee: formData.tuitionFee.trim() || null,
+        tuitionFee: formatTuitionFee(toPerYearFee({
+          amount: formData.tuitionAmount,
+          currency: formData.tuitionCurrency,
+          period: formData.tuitionPeriod
+        }, formData.duration)),
         status: formData.status,
         description: formData.description.trim() || null
       };
@@ -263,7 +352,7 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
                   Assign this course to multiple partner universities so you don't have to recreate it every time.
                 </p>
               </div>
-              <Badge variant="outline" className="text-[11px] shrink-0 border-blue-200 text-[#042C53] bg-blue-50/50">
+              <Badge variant="outline" className="text-[11px] shrink-0 border-blue-200 text-[#042C53] hover:text-[#042C53] hover:bg-blue-50/50">
                 {formData.isAllUniversities
                   ? 'All Universities'
                   : `${formData.universityIds.length} Selected`}
@@ -281,7 +370,7 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
                   "text-xs h-8",
                   formData.isAllUniversities
                     ? "bg-[#042C53] text-white hover:bg-[#042C53]/90"
-                    : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                    : "border-gray-200 hover:text-[#042C53] hover:bg-gray-50"
                 )}
               >
                 <Globe className="w-3.5 h-3.5 mr-1.5" /> All Partner Universities
@@ -295,7 +384,7 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
                   "text-xs h-8",
                   !formData.isAllUniversities
                     ? "bg-[#042C53] text-white hover:bg-[#042C53]/90"
-                    : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                    : "border-gray-200 hover:text-[#042C53] hover:bg-gray-50"
                 )}
               >
                 Select Specific Universities ({formData.universityIds.length})
@@ -422,26 +511,81 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
               <Label htmlFor="course-duration" className="text-xs font-semibold text-gray-700">
                 Duration
               </Label>
-              <Input
-                id="course-duration"
-                placeholder="e.g. 3 Years, 18 Months"
-                value={formData.duration}
-                onChange={(e) => handleChange('duration', e.target.value)}
-                className="bg-white"
-              />
+              <Select
+                value={formData.duration || 'none'}
+                onValueChange={(val) => handleChange('duration', val === 'none' ? '' : val)}
+              >
+                <SelectTrigger id="course-duration" className="bg-white">
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not Specified</SelectItem>
+                  {(formData.duration && !COURSE_DURATIONS.includes(formData.duration)
+                    ? [formData.duration, ...COURSE_DURATIONS]
+                    : COURSE_DURATIONS
+                  ).map(d => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="course-tuition" className="text-xs font-semibold text-gray-700">
                 Estimated Tuition Fee
               </Label>
-              <Input
-                id="course-tuition"
-                placeholder="e.g. $18,000 / year"
-                value={formData.tuitionFee}
-                onChange={(e) => handleChange('tuitionFee', e.target.value)}
-                className="bg-white"
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  id="course-tuition"
+                  inputMode="decimal"
+                  placeholder="e.g. 22,000"
+                  value={formData.tuitionAmount}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^\d.]/g, '');
+                    const [whole, ...rest] = raw.split('.');
+                    const grouped = whole ? Number(whole).toLocaleString('en-US') : '';
+                    handleChange('tuitionAmount', rest.length ? `${grouped || '0'}.${rest.join('')}` : grouped);
+                  }}
+                  className="bg-white col-span-2"
+                />
+                <Select
+                  value={formData.tuitionCurrency}
+                  onValueChange={(val) => handleChange('tuitionCurrency', val)}
+                >
+                  <SelectTrigger className="bg-white w-full min-w-0" aria-label="Currency">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FEE_CURRENCIES.map(c => (
+                      <SelectItem key={c.code} value={c.code}>{c.code} ({c.symbol})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={formData.tuitionPeriod}
+                  onValueChange={(val) => handleChange('tuitionPeriod', val)}
+                >
+                  <SelectTrigger className="bg-white w-full min-w-0" aria-label="Fee duration">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FEE_PERIODS.map(p => (
+                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {formData.tuitionPeriod === 'total' && formData.tuitionAmount && (
+                <p className="text-xs text-gray-500">
+                  {parseDurationYears(formData.duration)
+                    ? `Will be saved as ${formatTuitionFee(toPerYearFee({
+                        amount: formData.tuitionAmount,
+                        currency: formData.tuitionCurrency,
+                        period: formData.tuitionPeriod
+                      }, formData.duration))}`
+                    : 'Enter a duration (e.g. "2 Years") to convert this to a per-year fee.'}
+                </p>
+              )}
             </div>
           </div>
 

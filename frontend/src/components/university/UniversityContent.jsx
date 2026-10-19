@@ -12,6 +12,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 const money = (amount, currency) =>
   amount == null ? '-' : `${currency ? `${currency} ` : ''}${Number(amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
+const CURRENCY_SYMBOLS = { USD: '$', GBP: '£', EUR: '€', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', INR: '₹', SGD: 'S$', AED: 'AED ' };
+
+// "USD 20,000 / year" -> "$20,000 / year"; strings without a known currency code are shown as stored
+const tuitionLabel = (fee) => {
+  if (!fee) return '-';
+  const m = String(fee).match(/^\s*([A-Z]{3})\s+(.*)$/);
+  return m && CURRENCY_SYMBOLS[m[1]] ? `${CURRENCY_SYMBOLS[m[1]]}${m[2]}` : fee;
+};
+
 const emptyUpdate = { type: 'news', title: '', content: '', amount: '', deadline: '', notifyAgents: true };
 
 const sectionTitle = 'text-base font-bold text-gray-900 font-[\'Outfit\'] flex items-center gap-2';
@@ -300,7 +309,7 @@ const UniversityContent = ({ university, canManage, onChanged }) => {
                   <TableRow key={course.id}>
                     <TableCell className="font-medium">{course.name}{course.code ? <span className="text-gray-400"> · {course.code}</span> : null}</TableCell>
                     <TableCell>{course.level || '-'}</TableCell>
-                    <TableCell>{course.tuitionAmount ? money(course.tuitionAmount) : (course.tuitionFee || '-')}</TableCell>
+                    <TableCell>{tuitionLabel(course.tuitionFee)}</TableCell>
                     <TableCell>{course.commissionAmount != null ? money(course.commissionAmount) : '-'}</TableCell>
                   </TableRow>
                 ))}

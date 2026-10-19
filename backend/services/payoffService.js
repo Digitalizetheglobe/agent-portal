@@ -43,9 +43,9 @@ class PayoffService {
    * Executed within an atomic transaction alongside invoice approval and snapshots.
    */
   async createPayoffForApprovedInvoice(invoice, grossCommission, currentUser, transaction = null, currency = null) {
-    // 1. Idempotency guard: If Payoff already exists for this invoice, return it
+    // 1. Idempotency guard: If an active (non-cancelled) Payoff already exists for this invoice, return it
     const existing = await Payoff.findOne({
-      where: { invoiceId: invoice.id },
+      where: { invoiceId: invoice.id, status: { [Op.ne]: 'CANCELLED' } },
       transaction
     });
 
@@ -471,62 +471,141 @@ class PayoffService {
   }
 
   /**
-   * Admin cancels a pending payoff.
+   * Accounts cancels a pending payoff. The cancellation voids the payout record only: the invoice
+   * stays approved with its locked commission, and a replacement payoff can be created (see replacePayoff).
    */
-  async cancelPayoff(id, { reason }, currentUser) {
+  async cancelPayoff(id, data = {}, currentUser) {
     if (currentUser.role !== 'admin') {
-      const err = new Error('Access denied. Only admin can cancel a payoff.');
-      err.statusCode = 403;
-      throw err;
+      throw fail(403, 'Access denied. Only admin can cancel a payoff.');
     }
+    const reason = typeof data.reason === 'string' ? data.reason.trim()
+      : (typeof data.notes === 'string' ? data.notes.trim() : '');
+    if (!reason) throw fail(400, 'A cancellation reason is required.');
 
     const t = await sequelize.transaction();
+    let payoff;
     try {
-      const payoff = await Payoff.findByPk(id, {
-        lock: t.LOCK.UPDATE,
-        transaction: t
-      });
-
-      if (!payoff) {
-        const err = new Error('Payoff not found');
-        err.statusCode = 404;
-        throw err;
-      }
+      payoff = await Payoff.findByPk(id, { lock: t.LOCK.UPDATE, transaction: t });
+      if (!payoff) throw fail(404, 'Payoff not found');
 
       // Terminal state check
-      if (payoff.status === 'SETTLED') {
-        const err = new Error('Cannot cancel an already settled payoff');
-        err.statusCode = 400;
-        throw err;
-      }
-
-      if (payoff.status === 'CANCELLED') {
-        const err = new Error('Payoff is already cancelled');
-        err.statusCode = 400;
-        throw err;
-      }
-
-      if (payoff.status !== 'PENDING') {
-        const err = new Error(`Invalid payoff transition from ${payoff.status} to CANCELLED`);
-        err.statusCode = 400;
-        throw err;
-      }
+      if (payoff.status === 'SETTLED') throw fail(400, 'Cannot cancel an already settled payoff');
+      if (payoff.status === 'CANCELLED') throw fail(400, 'Payoff is already cancelled');
+      if (payoff.status !== 'PENDING') throw fail(400, `Invalid payoff transition from ${payoff.status} to CANCELLED`);
 
       payoff.status = 'CANCELLED';
-      if (reason && reason.trim()) {
-        payoff.settlementNotes = payoff.settlementNotes
-          ? `${payoff.settlementNotes} | Cancellation reason: ${reason.trim()}`
-          : `Cancellation reason: ${reason.trim()}`;
-      }
-
+      payoff.cancelledAt = new Date();
+      payoff.cancelledBy = currentUser.id;
+      payoff.cancellationReason = reason;
+      addHistory(payoff, currentUser, 'PAYOFF_CANCELLED', reason);
       await payoff.save({ transaction: t });
       await t.commit();
-
-      return await this.getPayoffById(payoff.id, currentUser);
     } catch (error) {
       await t.rollback();
       throw error;
     }
+
+    await createNotification({
+      recipient: payoff.agentId,
+      title: 'Payment cancelled',
+      message: `Payoff ${payoff.payoffNumber} was cancelled: ${reason}. Your approved commission is unchanged and a replacement payment will be created.`,
+      type: 'warning',
+      relatedId: payoff.id,
+      relatedModel: 'Payoff'
+    });
+    await this._notifyStaff(['head_admission'], currentUser.id, {
+      title: 'Payoff cancelled',
+      message: `${currentUser.name} cancelled payoff ${payoff.payoffNumber}: ${reason}`,
+      relatedId: payoff.id
+    });
+
+    return await this.getPayoffById(payoff.id, currentUser);
+  }
+
+  /**
+   * Accounts creates a replacement for a cancelled payoff. The approved invoice and its commission
+   * snapshots are untouched: this only issues a new payout record for the same locked commission.
+   * The university payment is not carried over; it is recorded again on the replacement.
+   */
+  async replacePayoff(id, data = {}, currentUser) {
+    if (currentUser.role !== 'admin') {
+      throw fail(403, 'Access denied. Only admin can create a replacement payoff.');
+    }
+
+    const t = await sequelize.transaction();
+    let created;
+    try {
+      const cancelled = await Payoff.findByPk(id, { lock: t.LOCK.UPDATE, transaction: t });
+      if (!cancelled) throw fail(404, 'Payoff not found');
+      if (cancelled.status !== 'CANCELLED') throw fail(400, 'Only a cancelled payoff can be replaced.');
+
+      // Locking the invoice serialises two simultaneous replacements
+      const invoice = await Invoice.findByPk(cancelled.invoiceId, { lock: t.LOCK.UPDATE, transaction: t });
+      if (!invoice) throw fail(404, 'Invoice not found');
+      if (invoice.financeReviewStatus !== 'Approved') {
+        throw fail(400, 'The invoice is not approved, so it cannot have a payoff.');
+      }
+      if (invoice.status === 'Paid') throw fail(400, 'The invoice is already paid.');
+
+      const active = await Payoff.findOne({
+        where: { invoiceId: invoice.id, status: { [Op.ne]: 'CANCELLED' } },
+        transaction: t
+      });
+      if (active) throw fail(400, `This invoice already has an active payoff (${active.payoffNumber}).`);
+
+      // The amount comes from the locked commission snapshots, never recalculated
+      const snapshots = await CommissionSnapshot.findAll({ where: { invoiceId: invoice.id }, transaction: t });
+      if (snapshots.length === 0) throw fail(400, 'The invoice has no locked commission snapshots.');
+      const gross = Math.round(snapshots.reduce((sum, s) => sum + parseFloat(s.grossAmount), 0) * 100) / 100;
+      const deductions = parseFloat(cancelled.deductions) || 0;
+      if (Math.abs(gross - parseFloat(cancelled.grossCommission)) > 0.005) {
+        throw fail(409, 'The locked commission no longer matches the cancelled payoff. Check the invoice before creating a replacement.');
+      }
+
+      const reason = typeof data.reason === 'string' ? data.reason.trim() : '';
+      const payoffNumber = await generatePayoffNumber(t);
+      created = await Payoff.create({
+        payoffNumber,
+        agentId: cancelled.agentId,
+        invoiceId: invoice.id,
+        grossCommission: gross,
+        deductions,
+        netAmount: Math.round((gross - deductions) * 100) / 100,
+        currency: cancelled.currency,
+        status: 'PENDING',
+        replacesPayoffId: cancelled.id,
+        history: [{
+          action: 'PAYOFF_CREATED_AS_REPLACEMENT',
+          by: currentUser.id,
+          byName: currentUser.name,
+          at: new Date().toISOString(),
+          notes: `Replaces ${cancelled.payoffNumber}${reason ? `. ${reason}` : ''}`
+        }]
+      }, { transaction: t });
+
+      addHistory(cancelled, currentUser, 'PAYOFF_REPLACED', `Replaced by ${created.payoffNumber}`);
+      await cancelled.save({ transaction: t });
+      await t.commit();
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
+
+    await createNotification({
+      recipient: created.agentId,
+      title: 'Replacement payment created',
+      message: `Payoff ${created.payoffNumber} replaces the cancelled payment. Your approved commission is unchanged.`,
+      type: 'info',
+      relatedId: created.id,
+      relatedModel: 'Payoff'
+    });
+    await this._notifyStaff(['head_admission'], currentUser.id, {
+      title: 'Replacement payoff created',
+      message: `${currentUser.name} created payoff ${created.payoffNumber} to replace a cancelled payoff.`,
+      relatedId: created.id
+    });
+
+    return await this.getPayoffById(created.id, currentUser);
   }
 }
 

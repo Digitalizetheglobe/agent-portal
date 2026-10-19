@@ -705,6 +705,18 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  const replacePayoff = async (id, data) => {
+    try {
+      const response = await payoffAPI.replace(id, data);
+      await Promise.all([fetchPayoffs(), fetchInvoices()]);
+      toast.success('Replacement payoff created');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to create replacement payoff', { description: formatApiError(error) });
+      throw error;
+    }
+  };
+
   // Ticket operations
   const createTicket = async (data) => {
     try {
@@ -1094,6 +1106,7 @@ export const DataProvider = ({ children }) => {
     fetchPayoffs,
     settlePayoff,
     cancelPayoff,
+    replacePayoff,
     // Finance review operations
     fetchReviewQueue,
     startInvoiceReview,

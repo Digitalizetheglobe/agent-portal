@@ -1,4 +1,5 @@
 const { sequelize, Sequelize } = require('../config/db');
+const { Op } = require('sequelize');
 
 const User = require('./User');
 const NewsItem = require('./NewsItem');
@@ -82,7 +83,8 @@ User.hasMany(CommissionSnapshot, { foreignKey: 'lockedBy', as: 'lockedSnapshots'
 CommissionSnapshot.belongsTo(User, { foreignKey: 'lockedBy', as: 'lockedByUser' });
 
 // Payoff Associations
-Invoice.hasOne(Payoff, { foreignKey: 'invoiceId', as: 'payoff', onDelete: 'RESTRICT' });
+// 'payoff' is the invoice's active payoff (a cancelled one may have been replaced)
+Invoice.hasOne(Payoff, { foreignKey: 'invoiceId', as: 'payoff', onDelete: 'RESTRICT', scope: { status: { [Op.ne]: 'CANCELLED' } } });
 Payoff.belongsTo(Invoice, { foreignKey: 'invoiceId', as: 'invoice' });
 
 User.hasMany(Payoff, { foreignKey: 'agentId', as: 'payoffs' });

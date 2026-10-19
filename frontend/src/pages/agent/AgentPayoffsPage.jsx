@@ -299,7 +299,7 @@ const AgentPayoffsPage = () => {
                   <div className="text-right">
                     <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Created On</span>
                     <span className="text-xs font-bold text-gray-900 mt-1 block">
-                      {selectedPayoff.createdAt ? format(new Date(selectedPayoff.createdAt), 'MMMM dd, yyyy') : 'N/A'}
+                      {selectedPayoff.createdAt ? formatFinancialDate(selectedPayoff.createdAt) : 'N/A'}
                     </span>
                   </div>
                 </div>
@@ -317,7 +317,7 @@ const AgentPayoffsPage = () => {
                       </div>
                       <div>
                         <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Transfer Confirmation Date</span>
-                        <span>{selectedPayoff.settledAt ? format(new Date(selectedPayoff.settledAt), 'MMMM dd, yyyy') : 'N/A'}</span>
+                        <span>{selectedPayoff.settledAt ? formatFinancialDate(selectedPayoff.settledAt) : 'N/A'}</span>
                       </div>
                     </div>
                     {selectedPayoff.paymentSlip && (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   BookOpen,
   Plus,
@@ -6,15 +6,12 @@ import {
   GraduationCap,
   Building2,
   Clock,
-  DollarSign,
   Edit2,
   Trash2,
   Power,
   ChevronLeft,
   ChevronRight,
-  Filter,
   CheckCircle2,
-  AlertCircle,
   Globe
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
@@ -74,8 +71,14 @@ const CoursesPage = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(10);
+  const [loadError, setLoadError] = useState(null);
+  // Aggregates across the whole filtered result set, supplied by the API
+  const [stats, setStats] = useState(null);
+  const [actionPending, setActionPending] = useState(false);
+  const requestIdRef = useRef(0);
 
-  // Filters
+  // Filters (searchInput is the raw text box; searchQuery is the debounced value sent to the API)
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [levelFilter, setLevelFilter] = useState('all');
@@ -91,8 +94,11 @@ const CoursesPage = () => {
 
   // Fetch courses with backend filters
   const loadCourses = useCallback(async (page = 1) => {
+    // Only the most recent request may update state, so slow older responses can't overwrite newer ones
+    const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
+      setLoadError(null);
       const params = {
         page,
         limit,
@@ -103,34 +109,52 @@ const CoursesPage = () => {
       };
 
       const res = await courseAPI.getAll(params);
+      if (requestId !== requestIdRef.current) return;
       const data = res.data;
 
       if (data && typeof data === 'object' && Array.isArray(data.courses)) {
         setCourses(data.courses);
-        setTotalCount(data.total || data.courses.length);
+        setTotalCount(data.total ?? data.courses.length);
         setTotalPages(data.totalPages || 1);
         setCurrentPage(data.page || page);
+        setStats(data.stats || null);
       } else if (Array.isArray(data)) {
         setCourses(data);
         setTotalCount(data.length);
         setTotalPages(1);
         setCurrentPage(1);
+        setStats(null);
+      } else {
+        throw new Error('Unexpected response from the server');
       }
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Failed to load courses:', err);
+      // Clear stale rows so old results are never shown as the answer to the current filters
+      setCourses([]);
+      setTotalCount(0);
+      setTotalPages(1);
+      setStats(null);
+      setLoadError(formatApiError(err));
       toast.error('Failed to load courses', { description: formatApiError(err) });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [searchQuery, statusFilter, levelFilter, universityFilter, limit]);
 
+  // Debounce typing into the search box
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   useEffect(() => {
     loadCourses(1);
-  }, [statusFilter, levelFilter, universityFilter, loadCourses]);
+  }, [loadCourses]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    loadCourses(1);
+    setSearchQuery(searchInput.trim());
   };
 
   const handleOpenAdd = () => {
@@ -149,15 +173,19 @@ const CoursesPage = () => {
   };
 
   const confirmDelete = async () => {
-    if (!courseToDelete) return;
+    if (!courseToDelete || actionPending) return;
+    setActionPending(true);
     try {
       await deleteCourse(courseToDelete.id || courseToDelete._id);
-      loadCourses(currentPage);
+      // If that was the only row on a later page, step back so we don't land on an empty page
+      loadCourses(courses.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage);
     } catch (err) {
+      // deleteCourse already shows an error toast
       console.error('Delete failed:', err);
     } finally {
+      setActionPending(false);
+      // courseToDelete is kept so the dialog text stays stable while it animates closed
       setDeleteDialogOpen(false);
-      setCourseToDelete(null);
     }
   };
 
@@ -167,22 +195,24 @@ const CoursesPage = () => {
   };
 
   const confirmToggleStatus = async () => {
-    if (!courseToToggle) return;
+    if (!courseToToggle || actionPending) return;
+    // Course status is an active/inactive enum in the backend
     const newStatus = courseToToggle.status === 'active' ? 'inactive' : 'active';
+    setActionPending(true);
     try {
       await updateCourseStatus(courseToToggle.id || courseToToggle._id, newStatus);
       loadCourses(currentPage);
     } catch (err) {
+      // updateCourseStatus already shows an error toast
       console.error('Toggle status failed:', err);
     } finally {
+      setActionPending(false);
       setStatusDialogOpen(false);
-      setCourseToToggle(null);
     }
   };
 
-  // Stats
-  const activeCount = useMemo(() => courses.filter(c => c.status === 'active').length, [courses]);
-  const uniqueLevels = useMemo(() => new Set(courses.map(c => c.level).filter(Boolean)).size, [courses]);
+  const hasActiveFilters = Boolean(searchQuery || statusFilter !== 'all' || levelFilter !== 'all' || universityFilter !== 'all');
+  const columnCount = canManage ? 6 : 5;
 
   return (
     <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="admin-courses-page">
@@ -229,7 +259,7 @@ const CoursesPage = () => {
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Active Courses</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1 font-['Outfit']">{activeCount}</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1 font-['Outfit']">{stats ? stats.activeCount : '—'}</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <CheckCircle2 className="w-5 h-5" />
@@ -241,7 +271,7 @@ const CoursesPage = () => {
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Degree Levels</p>
-              <p className="text-2xl font-bold text-violet-600 mt-1 font-['Outfit']">{uniqueLevels}</p>
+              <p className="text-2xl font-bold text-violet-600 mt-1 font-['Outfit']">{stats ? stats.levelCount : '—'}</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
               <GraduationCap className="w-5 h-5" />
@@ -274,8 +304,8 @@ const CoursesPage = () => {
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   placeholder="Search course by name, code, department..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   className="pl-9 h-10 text-xs bg-[#F9FAFB] border-gray-200"
                 />
               </div>
@@ -327,10 +357,11 @@ const CoursesPage = () => {
                 </SelectContent>
               </Select>
 
-              {(searchQuery || statusFilter !== 'all' || levelFilter !== 'all' || universityFilter !== 'all') && (
+              {(searchInput || hasActiveFilters) && (
                 <Button
                   variant="ghost"
                   onClick={() => {
+                    setSearchInput('');
                     setSearchQuery('');
                     setStatusFilter('all');
                     setLevelFilter('all');
@@ -357,22 +388,45 @@ const CoursesPage = () => {
                 <TableHead className="text-xs font-bold text-gray-700 uppercase tracking-wider py-3.5">University</TableHead>
                 <TableHead className="text-xs font-bold text-gray-700 uppercase tracking-wider py-3.5">Duration & Fees</TableHead>
                 <TableHead className="text-xs font-bold text-gray-700 uppercase tracking-wider py-3.5">Status</TableHead>
-                <TableHead className="text-xs font-bold text-gray-700 uppercase tracking-wider py-3.5 text-right">Actions</TableHead>
+                {canManage && (
+                  <TableHead className="text-xs font-bold text-gray-700 uppercase tracking-wider py-3.5 text-right">Actions</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-gray-400 text-xs">
+                  <TableCell colSpan={columnCount} className="text-center py-12 text-gray-400 text-xs">
                     Loading courses...
+                  </TableCell>
+                </TableRow>
+              ) : loadError ? (
+                <TableRow>
+                  <TableCell colSpan={columnCount} className="text-center py-16">
+                    <p className="font-semibold text-sm text-red-600">Couldn't load courses</p>
+                    <p className="text-xs text-gray-500 mt-1">{loadError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadCourses(currentPage)}
+                      className="mt-3 h-8 text-xs"
+                    >
+                      Retry
+                    </Button>
                   </TableCell>
                 </TableRow>
               ) : courses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-16 text-gray-400">
+                  <TableCell colSpan={columnCount} className="text-center py-16 text-gray-400">
                     <BookOpen className="w-8 h-8 mx-auto text-gray-300 mb-2" />
                     <p className="font-semibold text-sm text-gray-600">No courses found</p>
-                    <p className="text-xs text-gray-400 mt-1">Click "Add New Course" to add courses to your portal catalog</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {hasActiveFilters
+                        ? 'No courses match your search or filters'
+                        : canManage
+                          ? 'Click "Add New Course" to add courses to your portal catalog'
+                          : 'No courses have been added to the catalog yet'}
+                    </p>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -392,7 +446,7 @@ const CoursesPage = () => {
                     <TableCell className="py-4">
                       <div className="flex flex-col items-start gap-1">
                         <Badge variant="outline" className="text-[11px] font-medium border-gray-200 text-gray-700">
-                          {course.level || 'Undergraduate'}
+                          {course.level || 'Not specified'}
                         </Badge>
                         {course.department && (
                           <span className="text-[11px] text-gray-500">{course.department}</span>
@@ -414,11 +468,27 @@ const CoursesPage = () => {
                           );
                         }
 
+                        // Resolve names from the loaded universities, falling back to the
+                        // university the API embeds on the course (the primary one)
                         const matchedUnis = uniIds
-                          .map(id => universities?.find(u => String(u.id || u._id) === String(id)))
+                          .map(id => {
+                            const found = universities?.find(u => String(u.id || u._id) === String(id));
+                            if (found) return found;
+                            const embedded = course.university;
+                            return embedded && String(embedded.id || embedded._id) === String(id) ? embedded : null;
+                          })
                           .filter(Boolean);
+                        const unresolvedCount = uniIds.length - matchedUnis.length;
 
-                        if (matchedUnis.length === 1) {
+                        if (matchedUnis.length === 0) {
+                          return (
+                            <span className="text-[11px] text-gray-400">
+                              {uniIds.length === 1 ? 'University unavailable' : `${uniIds.length} universities unavailable`}
+                            </span>
+                          );
+                        }
+
+                        if (uniIds.length === 1) {
                           return (
                             <div className="flex items-center gap-1.5">
                               <Building2 className="w-3.5 h-3.5 text-[#042C53] shrink-0" />
@@ -434,14 +504,15 @@ const CoursesPage = () => {
                             <div className="flex items-center gap-1.5">
                               <Building2 className="w-3.5 h-3.5 text-[#042C53] shrink-0" />
                               <span className="text-xs font-semibold text-gray-900 truncate max-w-[150px]">
-                                {matchedUnis[0]?.name || (course.university ? course.university.name : 'University')}
+                                {matchedUnis[0].name}
                               </span>
                               <Badge variant="secondary" className="text-[10px] bg-blue-50 text-[#042C53] font-bold px-1.5 py-0 border border-blue-100">
-                                +{matchedUnis.length - 1} more
+                                +{uniIds.length - 1} more
                               </Badge>
                             </div>
                             <span className="text-[10px] text-gray-400">
-                              Offered in {matchedUnis.length} universities
+                              Offered in {uniIds.length} universities
+                              {unresolvedCount > 0 ? ` (${unresolvedCount} not loaded)` : ''}
                             </span>
                           </div>
                         );
@@ -468,33 +539,32 @@ const CoursesPage = () => {
 
                     <TableCell className="py-4">
                       <Badge
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border-none ${
-                          course.status === 'active'
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border-none ${course.status === 'active'
+                          ? 'bg-emerald-50 text-emerald-700 hover:text-white'
+                          : 'bg-gray-100 text-gray-600'
+                          }`}
                       >
                         {course.status === 'active' ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>
 
-                    <TableCell className="py-4 text-right">
-                      {canManage && <div className="flex items-center justify-end gap-1">
+                    {canManage && <TableCell className="py-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleOpenToggleStatus(course)}
                           title={course.status === 'active' ? 'Deactivate' : 'Activate'}
-                          className="h-8 w-8 p-0 text-gray-500 hover:text-gray-900"
+                          className="h-8 w-8 p-0 text-gray-500 hover:text-white"
                         >
-                          <Power className={`w-3.5 h-3.5 ${course.status === 'active' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                          <Power className={`w-3.5 h-3.5 ${course.status === 'active' ? 'text-emerald-600 hover:text-white' : 'text-gray-400 hover:text-white'}`} />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleOpenEdit(course)}
                           title="Edit Course"
-                          className="h-8 w-8 p-0 text-gray-500 hover:text-gray-900"
+                          className="h-8 w-8 p-0 text-gray-500 hover:text-white"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </Button>
@@ -507,8 +577,8 @@ const CoursesPage = () => {
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
-                      </div>}
-                    </TableCell>
+                      </div>
+                    </TableCell>}
                   </TableRow>
                 ))
               )}
@@ -569,6 +639,7 @@ const CoursesPage = () => {
             <AlertDialogCancel className="text-xs h-9">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
+              disabled={actionPending}
               className="bg-red-600 hover:bg-red-700 text-white text-xs h-9"
             >
               Delete
@@ -594,6 +665,7 @@ const CoursesPage = () => {
             <AlertDialogCancel className="text-xs h-9">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmToggleStatus}
+              disabled={actionPending}
               className="bg-[#042C53] hover:bg-[#042C53]/90 text-white text-xs h-9"
             >
               Confirm

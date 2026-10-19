@@ -284,7 +284,7 @@ const ApplicationDetailsPage = () => {
           <Button
             variant="outline"
             size="sm"
-            className="mt-1 h-9 border-[#E5E7EB] bg-white hover:bg-gray-50 text-xs"
+            className="mt-1 h-9 border-[#E5E7EB] bg-white hover:bg-[#042C53] text-xs"
             onClick={() => navigate(backRoute)}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -324,7 +324,7 @@ const ApplicationDetailsPage = () => {
               variant="outline"
               size="sm"
               onClick={() => setEditModalOpen(true)}
-              className="h-9 px-3 border-[#E5E7EB] bg-white hover:bg-gray-50 text-xs font-semibold text-[#111827]"
+              className="h-9 px-3 border-[#E5E7EB] bg-white hover:bg-[#042C53] text-xs font-semibold text-[#111827]"
             >
               <Edit2 className="w-3.5 h-3.5 mr-1.5" /> Edit
             </Button>
@@ -658,19 +658,16 @@ const ApplicationDetailsPage = () => {
             <CardContent className="p-6 space-y-3 text-xs">
               {application.isInvoiced ? (
                 <div className="space-y-3">
-                  <div className={`p-3 rounded-xl border space-y-1 ${
-                    application.invoice?.status === 'Paid'
-                      ? 'bg-[#EAF3DE]/40 border-[#C0DD97]'
-                      : 'bg-[#E6F1FB]/40 border-blue-200'
-                  }`}>
-                    <span className={`font-bold block ${
-                      application.invoice?.status === 'Paid' ? 'text-[#27500A]' : 'text-[#042C53]'
+                  <div className={`p-3 rounded-xl border space-y-1 ${application.invoice?.status === 'Paid'
+                    ? 'bg-[#EAF3DE]/40 border-[#C0DD97]'
+                    : 'bg-[#E6F1FB]/40 border-blue-200'
                     }`}>
+                    <span className={`font-bold block ${application.invoice?.status === 'Paid' ? 'text-[#27500A]' : 'text-[#042C53]'
+                      }`}>
                       {application.invoice?.status === 'Paid' ? 'Commission Payoff Settled' : 'Payoff Claim Active'}
                     </span>
-                    <p className={`text-[11px] ${
-                      application.invoice?.status === 'Paid' ? 'text-[#3B6D11]' : 'text-[#0C447C]'
-                    }`}>
+                    <p className={`text-[11px] ${application.invoice?.status === 'Paid' ? 'text-[#3B6D11]' : 'text-[#0C447C]'
+                      }`}>
                       {application.invoice?.status === 'Paid'
                         ? 'Commission payoff has been settled and disbursed to the agent.'
                         : 'Commission invoice raised and tracked in the payoff settlement queue.'}
@@ -810,11 +807,10 @@ const ApplicationDetailsPage = () => {
               type="button"
               onClick={confirmGenericWorkflowTransition}
               disabled={isTransitioning || ((targetStatus === 'Rejected' || targetStatus === 'Withdrawn') && !workflowNotes.trim())}
-              className={`text-xs h-9 font-semibold ${
-                targetStatus === 'Rejected' || targetStatus === 'Withdrawn'
-                  ? 'bg-red-600 hover:bg-red-700 text-white'
-                  : 'bg-[#042C53] hover:bg-[#0C447C] text-white'
-              }`}
+              className={`text-xs h-9 font-semibold ${targetStatus === 'Rejected' || targetStatus === 'Withdrawn'
+                ? 'bg-red-600 hover:bg-red-700 text-white'
+                : 'bg-[#042C53] hover:bg-[#0C447C] text-white'
+                }`}
             >
               {isTransitioning ? 'Updating...' : `Confirm ${targetStatus}`}
             </Button>

@@ -135,7 +135,7 @@ const AgentReportPage = () => {
     }, {});
     const monthlyData = Object.values(monthMap).sort((a, b) => a.key.localeCompare(b.key));
 
-    const agentInvoices = invoices.filter(inv => inv.agentId === agent.id);
+    const agentInvoices = invoices.filter(inv => (inv.agentId?.id || inv.agentId?._id || inv.agentId) === agent.id);
     const st = (inv) => (inv.status || '').toLowerCase();
     const sum = (list) => list.reduce((t, inv) => t + (Number(inv.amount) || 0), 0);
 

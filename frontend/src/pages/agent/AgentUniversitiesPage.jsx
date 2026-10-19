@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import {
   Building2,
   Search,
@@ -51,9 +52,14 @@ const AgentUniversitiesPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('');
+  // The API only sees the settled text; requestIdRef drops responses from superseded requests
+  const [debouncedSearch, flushSearch] = useDebouncedValue(searchQuery);
+  const [debouncedCity, flushCity] = useDebouncedValue(cityFilter);
+  const requestIdRef = useRef(0);
 
   // Load universities with backend queries
   const loadUniversities = useCallback(async (page = 1) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const params = {
@@ -62,12 +68,13 @@ const AgentUniversitiesPage = () => {
         envelope: 'true'
       };
 
-      if (searchQuery.trim()) params.search = searchQuery.trim();
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
       if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
       if (countryFilter && countryFilter !== 'all') params.country = countryFilter;
-      if (cityFilter.trim()) params.city = cityFilter.trim();
+      if (debouncedCity.trim()) params.city = debouncedCity.trim();
 
       const response = await universityAPI.getAll(params);
+      if (requestId !== requestIdRef.current) return;
       const data = response.data;
 
       if (data && typeof data === 'object' && Array.isArray(data.universities)) {
@@ -84,27 +91,31 @@ const AgentUniversitiesPage = () => {
         setCurrentPage(page);
       }
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Failed to load universities for agent:', err);
       toast.error('Failed to load partner universities', { description: formatApiError(err) });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [searchQuery, statusFilter, countryFilter, cityFilter, limit]);
+  }, [debouncedSearch, statusFilter, countryFilter, debouncedCity, limit]);
 
   useEffect(() => {
     loadUniversities(1);
-  }, [statusFilter, countryFilter, loadUniversities]);
+  }, [loadUniversities]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    loadUniversities(1);
+    flushSearch(searchQuery);
+    flushCity(cityFilter);
   };
 
   const handleResetFilters = () => {
     setSearchQuery('');
+    flushSearch('');
     setStatusFilter('all');
     setCountryFilter('all');
     setCityFilter('');
+    flushCity('');
   };
 
   const distinctCountries = useMemo(() => {

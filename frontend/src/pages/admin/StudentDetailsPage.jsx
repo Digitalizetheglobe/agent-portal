@@ -546,7 +546,7 @@ const StudentDetailsPage = () => {
           <Button
             variant="outline"
             size="sm"
-            className="mt-1 h-9 border-[#E5E7EB] bg-white hover:bg-gray-50"
+            className="mt-1 h-9 border-[#E5E7EB] bg-white hover:bg-[#042C53]"
             onClick={() => navigate(isAdmin() ? '/admin/students' : '/agent/students')}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -581,7 +581,7 @@ const StudentDetailsPage = () => {
         <div className="flex gap-3 items-center">
           <Button
             variant="outline"
-            className="h-10 px-4 border-[#E5E7EB] bg-white hover:bg-gray-50 text-xs font-semibold"
+            className="h-10 px-4 border-[#E5E7EB] bg-white hover:bg-[#042C53] text-xs font-semibold"
             onClick={fetchStudentData}
             title="Refresh details"
           >

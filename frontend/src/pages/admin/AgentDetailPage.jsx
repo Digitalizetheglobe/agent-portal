@@ -12,7 +12,7 @@ import AgentApplicationDetails from '../../components/agent/AgentApplicationDeta
 import AgentReviewDialog from '../../components/modals/AgentReviewDialog';
 import ReviewActionButtons from '../../components/agent/ReviewActionButtons';
 import AgentContractPanel from '../../components/agent/AgentContractPanel';
-import { getOnboardingStatus, canReviewDocuments, getDocChecklist, HISTORY_LABELS, IN_REVIEW_STATUSES, WAITING_FOR } from '../../utils/onboarding';
+import { getOnboardingStatus, canReviewDocuments, getDocChecklist, HISTORY_LABELS, IN_REVIEW_STATUSES, getWaitingFor } from '../../utils/onboarding';
 
 const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -127,7 +127,7 @@ const AgentDetailPage = () => {
             <div className="flex items-center gap-3">
               <Badge className={cn('border-none text-xs font-medium h-6', status.style)}>{status.label}</Badge>
               <p className="text-sm text-[#6B7280]">
-                {WAITING_FOR[agent.onboardingStatus]}
+                {getWaitingFor(agent)}
               </p>
             </div>
 

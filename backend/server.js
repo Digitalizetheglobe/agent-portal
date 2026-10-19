@@ -319,12 +319,29 @@ const startServer = async () => {
     // "alter" rewrites tables to match the models, which can change or drop data. It runs freely in
     // development; in production it needs DB_SYNC_ALTER=true (set it for one deploy that adds columns).
     const alter = process.env.NODE_ENV !== 'production' || process.env.DB_SYNC_ALTER === 'true';
+    // A cancelled payoff can be replaced, so an invoice may have several payoffs (only one active).
+    // Drop the old one-payoff-per-invoice uniqueness before sync; the model's partial index replaces it.
+    await sequelize.query('ALTER TABLE IF EXISTS "Payoffs" DROP CONSTRAINT IF EXISTS "Payoffs_invoiceId_key"');
+    await sequelize.query('DROP INDEX IF EXISTS "unique_invoice_payoff"');
     console.log(`🔄 Synchronizing PostgreSQL database schema (alter: ${alter})...`);
     await sequelize.sync({ alter });
     if (!alter) {
       // Columns added since the last deploy that plain sync cannot create
       const qi = sequelize.getQueryInterface();
       const columns = await qi.describeTable('Users');
+      const payoffColumns = await qi.describeTable('Payoffs');
+      const { DataTypes } = require('sequelize');
+      for (const [name, type] of Object.entries({
+        cancelledAt: DataTypes.DATE,
+        cancelledBy: DataTypes.UUID,
+        cancellationReason: DataTypes.TEXT,
+        replacesPayoffId: DataTypes.UUID
+      })) {
+        if (!payoffColumns[name]) {
+          await qi.addColumn('Payoffs', name, { type, allowNull: true });
+          console.log(`✅ Added Payoffs.${name}`);
+        }
+      }
       if (!columns.passwordChangedAt) {
         await qi.addColumn('Users', 'passwordChangedAt', { type: require('sequelize').DataTypes.DATE, allowNull: true });
         console.log('✅ Added Users.passwordChangedAt');

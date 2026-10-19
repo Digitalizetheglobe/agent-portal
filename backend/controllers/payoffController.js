@@ -130,3 +130,23 @@ exports.cancelPayoff = async (req, res) => {
     });
   }
 };
+
+// @desc    Create a replacement for a cancelled payoff (same approved invoice and commission)
+// @route   POST /api/payoffs/:id/replace
+// @access  Private (Accounts, super admin)
+exports.replacePayoff = async (req, res) => {
+  try {
+    const payoff = await payoffService.replacePayoff(req.params.id, req.body, req.user);
+    res.status(201).json({
+      success: true,
+      detail: 'Replacement payoff created',
+      data: payoff
+    });
+  } catch (error) {
+    console.error('Replace payoff error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      detail: error.message || 'Server error'
+    });
+  }
+};

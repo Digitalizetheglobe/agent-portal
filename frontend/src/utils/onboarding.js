@@ -96,6 +96,15 @@ export const WAITING_FOR = {
   rejected: 'Application rejected.',
 };
 
+// WAITING_FOR, but an agent with no Account Manager is waiting for staff to assign one first
+export const getWaitingFor = (agent) => {
+  const status = agent?.onboardingStatus;
+  if (['submitted', 'under_review'].includes(status) && !agent.accountManagerId) {
+    return 'No Account Manager is assigned. Assign one (Edit agent) so the application can be reviewed and recommended.';
+  }
+  return WAITING_FOR[status];
+};
+
 // Documents required with the application, by agent type (mirrors the backend)
 export const REQUIRED_DOCS = {
   company: ['Company Profile', 'Business Registration Certificate', 'Director Passport'],

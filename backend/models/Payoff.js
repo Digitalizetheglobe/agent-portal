@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 const { sequelize } = require('../config/db');
 
 const Payoff = sequelize.define('Payoff', {
@@ -29,7 +29,8 @@ const Payoff = sequelize.define('Payoff', {
   invoiceId: {
     type: DataTypes.UUID,
     allowNull: false,
-    unique: true,
+    // Not unique on its own: a cancelled payoff can be replaced. The partial index below allows
+    // only one non-cancelled payoff per invoice.
     references: {
       model: 'Invoices',
       key: 'id'
@@ -132,6 +133,12 @@ const Payoff = sequelize.define('Payoff', {
     type: DataTypes.JSONB,
     allowNull: true
   },
+  // Cancellation (the cancelled payoff is kept for the audit trail)
+  cancelledAt: { type: DataTypes.DATE, allowNull: true },
+  cancelledBy: { type: DataTypes.UUID, allowNull: true },
+  cancellationReason: { type: DataTypes.TEXT, allowNull: true },
+  // A replacement payoff points at the cancelled payoff it replaces
+  replacesPayoffId: { type: DataTypes.UUID, allowNull: true },
   // Audit trail: { action, by, byName, at, notes }
   history: {
     type: DataTypes.JSONB,
@@ -142,11 +149,14 @@ const Payoff = sequelize.define('Payoff', {
   timestamps: true,
   tableName: 'Payoffs',
   indexes: [
+    // One active (non-cancelled) payoff per invoice. Cancelled payoffs stay for the audit trail.
     {
       unique: true,
       fields: ['invoiceId'],
-      name: 'unique_invoice_payoff'
+      name: 'unique_active_invoice_payoff',
+      where: { status: { [Op.ne]: 'CANCELLED' } }
     },
+    { fields: ['invoiceId'] },
     {
       unique: true,
       fields: ['payoffNumber'],

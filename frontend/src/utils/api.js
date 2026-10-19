@@ -415,6 +415,8 @@ export const payoffAPI = {
     return api.patch(`/payoffs/${id}/settle`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   cancel: (id, data = {}) => api.patch(`/payoffs/${id}/cancel`, data),
+  // A cancelled payoff is replaced by a new payoff for the same approved invoice
+  replace: (id, data = {}) => api.post(`/payoffs/${id}/replace`, data),
   // The agent is paid only after the university has paid QStudy
   recordUniversityPayment: (id, data = {}) => api.patch(`/payoffs/${id}/university-payment`, data),
   authorizeBypass: (id, data = {}) => api.patch(`/payoffs/${id}/bypass-block`, data),

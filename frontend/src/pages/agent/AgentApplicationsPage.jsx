@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import {
   FileCheck,
   Plus,
@@ -69,6 +70,9 @@ const AgentApplicationsPage = () => {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
+  // The API only sees the settled search text; requestIdRef drops responses from superseded requests
+  const [debouncedSearch, flushSearch] = useDebouncedValue(searchQuery);
+  const requestIdRef = useRef(0);
   const [statusFilter, setStatusFilter] = useState('all');
   const [universityFilter, setUniversityFilter] = useState('all');
 
@@ -81,6 +85,7 @@ const AgentApplicationsPage = () => {
 
   // Fetch agent's applications from backend
   const loadApplications = useCallback(async (page = 1) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const params = {
@@ -89,11 +94,12 @@ const AgentApplicationsPage = () => {
         envelope: 'true'
       };
 
-      if (searchQuery.trim()) params.search = searchQuery.trim();
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
       if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
       if (universityFilter && universityFilter !== 'all') params.universityId = universityFilter;
 
       const response = await applicationAPI.getAll(params);
+      if (requestId !== requestIdRef.current) return;
       const data = response.data;
 
       if (data && Array.isArray(data.applications)) {
@@ -112,28 +118,29 @@ const AgentApplicationsPage = () => {
         setTotalPages(1);
       }
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Error loading agent applications:', err);
       toast.error('Failed to load applications', { description: formatApiError(err) });
       setApplications([]);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [limit, searchQuery, statusFilter, universityFilter]);
+  }, [limit, debouncedSearch, statusFilter, universityFilter]);
 
   useEffect(() => {
     loadApplications(1);
-  }, [statusFilter, universityFilter, loadApplications]);
+  }, [loadApplications]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    loadApplications(1);
+    flushSearch(searchQuery);
   };
 
   const handleClearFilters = () => {
     setSearchQuery('');
+    flushSearch('');
     setStatusFilter('all');
     setUniversityFilter('all');
-    loadApplications(1);
   };
 
   const handleOpenAdd = () => {

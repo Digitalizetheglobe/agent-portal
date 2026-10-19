@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/db');
-const { Invoice, Application, Student, University, User } = require('../models');
+const { Invoice, Application, Student, University, User, Payoff } = require('../models');
 const { hasAuthoritativeTuition } = require('../utils/tuitionUtils');
 const { scopeWhereToAgents, assertCanAccessAgent } = require('../utils/agentScope');
 const { computeCommission, assertRatesSet } = require('../utils/commission');
@@ -622,7 +622,7 @@ class InvoiceService {
 
       // Legacy synchronization with Payoff entity
       const { Payoff } = require('../models');
-      const payoff = await Payoff.findOne({ where: { invoiceId: invoice.id } });
+      const payoff = await Payoff.findOne({ where: { invoiceId: invoice.id, status: 'PENDING' } });
       if (payoff && payoff.status === 'PENDING') {
         payoff.status = 'SETTLED';
         payoff.settledAt = invoice.paidAt;
@@ -659,21 +659,39 @@ class InvoiceService {
     }
     await assertCanAccessAgent(currentUser, invoice.agentId);
 
-    if (invoice.status === 'Paid') {
-      const err = new Error('Cannot delete a paid invoice');
-      err.statusCode = 400;
-      throw err;
-    }
-
     const t = await sequelize.transaction();
     try {
+      // Same row lock the finance review takes when approving: the invoice cannot be approved (or
+      // given a payoff) between this check and the delete. Re-read under the lock.
+      const locked = await Invoice.findByPk(id, { lock: t.LOCK.UPDATE, transaction: t });
+      if (!locked) {
+        const err = new Error('Invoice not found');
+        err.statusCode = 404;
+        throw err;
+      }
+
+      if (locked.status === 'Paid') {
+        const err = new Error('Cannot delete a paid invoice');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // An approved invoice has locked commission and a payoff trail (even a cancelled payoff is
+      // part of the financial history), so it can never be deleted.
+      const payoffCount = await Payoff.count({ where: { invoiceId: locked.id }, transaction: t });
+      if (locked.financeReviewStatus === 'Approved' || payoffCount > 0) {
+        const err = new Error('Cannot delete this invoice because it has been approved or has payoff history.');
+        err.statusCode = 409;
+        throw err;
+      }
+
       // Unlink applications so their state doesn't stay orphaned
       await Application.update(
         { isInvoiced: false, invoiceId: null },
-        { where: { invoiceId: invoice.id }, transaction: t }
+        { where: { invoiceId: locked.id }, transaction: t }
       );
 
-      await invoice.destroy({ transaction: t });
+      await locked.destroy({ transaction: t });
 
       await t.commit();
 
