@@ -127,6 +127,9 @@ const User = sequelize.define('User', {
   isActivated: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   activatedAt: { type: DataTypes.DATE, allowNull: true },
 
+  // Sequential agent ID (QS-AG-0001), assigned at registration
+  agentCode: { type: DataTypes.STRING, allowNull: true, unique: true },
+
   // ── Agent application (QStudy agent application form) ──
   agentType: {
     type: DataTypes.ENUM('company', 'individual'),

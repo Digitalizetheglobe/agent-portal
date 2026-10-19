@@ -99,6 +99,7 @@ const AgentDetailPage = () => {
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">{agent.name}</h1>
+            {agent.agentCode && <span className="text-xs font-mono text-[#6B7280]">{agent.agentCode}</span>}
             <Badge className={cn('border-none text-[10px] font-medium h-5', status.style)}>
               {isVerified ? 'Verified' : status.label}
             </Badge>

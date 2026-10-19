@@ -189,7 +189,17 @@ exports.registerWithInvite = async (req, res) => {
         throw fail(400, 'An account with this email already exists');
       }
 
+      // Serialize ID assignment so concurrent registrations get distinct numbers
+      await sequelize.query('SELECT pg_advisory_xact_lock(47001)', { transaction: t });
+      const [[{ maxSeq }]] = await sequelize.query(
+        `SELECT COALESCE(MAX(CAST(SUBSTRING("agentCode" FROM '[0-9]+$') AS INTEGER)), 0) AS "maxSeq"
+           FROM "Users" WHERE "agentCode" LIKE 'QS-AG-%'`,
+        { transaction: t }
+      );
+      const agentCode = `QS-AG-${String(Number(maxSeq) + 1).padStart(4, '0')}`;
+
       const agent = await User.create({
+        agentCode,
         name: String(name).trim(),
         email: finalEmail,
         password,
