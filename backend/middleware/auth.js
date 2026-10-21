@@ -11,6 +11,7 @@ exports.isTokenStale = isTokenStale;
 
 // Protect routes - verify JWT token
 exports.protect = async (req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
   try {
     let token;
 

@@ -12,7 +12,23 @@ const getAllowedOrigins = () => {
   if (process.env.NODE_ENV !== 'production') {
     list.push('http://localhost:3000', 'http://127.0.0.1:3000');
   }
+  // Allow Vercel deployment domains by default
+  list.push('https://*.vercel.app');
   return [...new Set(list)];
+};
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  const cleanOrigin = origin.replace(/\/+$/, '');
+  const allowed = getAllowedOrigins();
+  if (allowed.includes(cleanOrigin) || allowed.includes('*')) return true;
+  return allowed.some((pattern) => {
+    if (pattern.includes('*')) {
+      const regex = new RegExp('^' + pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+      return regex.test(cleanOrigin);
+    }
+    return false;
+  });
 };
 
 // ── Passwords ──
@@ -132,7 +148,7 @@ const originCheck = (req, res, next) => {
   if (SAFE_METHODS.has(req.method)) return next();
   const origin = req.headers.origin;
   if (!origin) return next();
-  if (getAllowedOrigins().includes(origin.replace(/\/+$/, ''))) return next();
+  if (isOriginAllowed(origin)) return next();
   return res.status(403).json({ success: false, detail: 'Request origin not allowed' });
 };
 
@@ -186,6 +202,7 @@ const refreshLimiter = make({
 
 module.exports = {
   getAllowedOrigins,
+  isOriginAllowed,
   passwordProblem,
   assertStrongPassword,
   hashToken,

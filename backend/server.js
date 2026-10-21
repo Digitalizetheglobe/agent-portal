@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const { checkEnvironment } = require('./utils/env');
 const {
-  getAllowedOrigins, sanitizeRequest, safeDisposition, originCheck, passwordProblem,
+  getAllowedOrigins, isOriginAllowed, sanitizeRequest, safeDisposition, originCheck, passwordProblem,
   apiLimiter, loginLimiter, loginIpLimiter, sensitiveLimiter, refreshLimiter
 } = require('./utils/security');
 
@@ -80,7 +80,7 @@ const allowedOrigins = getAllowedOrigins();
 app.use(cors({
   origin: (origin, callback) => {
     // No Origin header = not a browser (curl, server to server): CORS does not apply
-    if (!origin || allowedOrigins.includes(origin.replace(/\/+$/, ''))) return callback(null, true);
+    if (!origin || isOriginAllowed(origin)) return callback(null, true);
     return callback(null, false);
   },
   credentials: true,
