@@ -203,7 +203,7 @@ const LoginPage = () => {
             </div>
             <div>
               <label className="font-medium">Agent:</label>
-              <p className="text-sm text-muted-foreground">test@qstudy.com</p>
+              <p className="text-sm text-muted-foreground">agent@qstudy.com</p>
               <p className="text-sm text-muted-foreground">Agent@Qstudy2026</p>
             </div>
           </div>
