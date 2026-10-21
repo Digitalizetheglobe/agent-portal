@@ -60,6 +60,7 @@ const AgentStudentsPage = () => {
 
   const myStudents = useMemo(() => {
     return getStudentsByAgent(user?.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students, user?.id, getStudentsByAgent]);
 
   const handleInputChange = (e) => {
@@ -199,6 +200,7 @@ const AgentStudentsPage = () => {
 
       return true;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myStudents, searchQuery, universityFilter, docFilter, curStage, verificationFilter, getUniversityName]);
 
   const kpis = useMemo(() => {

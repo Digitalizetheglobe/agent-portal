@@ -179,6 +179,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
         setValue(key, value);
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentData, setValue]);
 
   // Dynamically identify the country field ID (supports default 'country' and custom fields)

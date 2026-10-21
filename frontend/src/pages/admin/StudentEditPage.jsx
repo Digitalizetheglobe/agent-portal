@@ -131,6 +131,7 @@ const StudentEditPage = () => {
     if (id) {
       fetchStudent();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, students, getStudentById]);
 
   if (loading) {

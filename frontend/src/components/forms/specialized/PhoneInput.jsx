@@ -48,6 +48,7 @@ const PhoneInput = ({ value = '', onChange, placeholder = "Enter phone number", 
     if (newVal !== value) {
       onChange(newVal);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCountry, phoneNumber]);
 
   // Sync internal state with external value changes
@@ -62,6 +63,7 @@ const PhoneInput = ({ value = '', onChange, placeholder = "Enter phone number", 
       // Handle reset
       setPhoneNumber('');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   const handleNumberChange = (e) => {
