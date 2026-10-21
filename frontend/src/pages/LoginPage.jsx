@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Eye, EyeOff, User, Lock, Shield, UserCheck, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, User, Lock, Shield, UserCheck, AlertCircle, Copy, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -9,6 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Checkbox } from '../components/ui/checkbox';
 import { toast } from 'sonner';
+
+const TEST_CREDENTIALS = [
+  { role: 'Admin', email: 'admin@qstudy.com', password: 'Admin@Qstudy2026x' },
+  { role: 'Agent', email: 'agent@qstudy.com', password: 'Agent@Qstudy2026' }
+];
 
 const LoginPage = () => {
   const { login, isAuthenticated, user } = useAuth();
@@ -21,6 +26,7 @@ const LoginPage = () => {
     password: ''
   });
   const [errors, setErrors] = useState({});
+  const [copiedValue, setCopiedValue] = useState(null);
 
   const validateForm = () => {
     const newErrors = {};
@@ -83,6 +89,15 @@ const LoginPage = () => {
     }
   }, [errors]);
 
+  const handleCopy = async (value) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedValue(value);
+      setTimeout(() => setCopiedValue(null), 1500);
+    } catch (error) {
+      toast.error('Could not copy to clipboard');
+    }
+  };
 
   if (isAuthenticated) {
     const redirectPath = user?.role === 'admin' ? '/admin/dashboard' : '/agent/dashboard';
@@ -190,21 +205,33 @@ const LoginPage = () => {
               </button>
             </div>
           </form>
-        </div>
 
-        {/* Test Credentials */}
-        <div className="mt-8">
-          <h3 className="text-lg font-medium mb-4">Test Credentials</h3>
-          <div className="space-y-2">
-            <div>
-              <label className="font-medium">Admin:</label>
-              <p className="text-sm text-muted-foreground">admin@qstudy.com</p>
-              <p className="text-sm text-muted-foreground">Admin@Qstudy2026x</p>
-            </div>
-            <div>
-              <label className="font-medium">Agent:</label>
-              <p className="text-sm text-muted-foreground">agent@qstudy.com</p>
-              <p className="text-sm text-muted-foreground">Agent@Qstudy2026</p>
+          {/* Test Credentials */}
+          <div className="mt-8 p-4 border border-input rounded-lg">
+            <h3 className="text-sm font-medium mb-3 text-center">Test Credentials</h3>
+            <div className="grid grid-cols-1 gap-4">
+              {TEST_CREDENTIALS.map(({ role, email, password }) => (
+                <div key={role}>
+                  <span className="text-sm font-medium">{role}:</span>
+                  {[email, password].map((value) => (
+                    <div key={value} className="flex items-center justify-between gap-2">
+                      <p className="text-sm text-muted-foreground">{value}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(value)}
+                        className="text-muted-foreground hover:text-foreground focus:outline-none"
+                        aria-label={`Copy ${value}`}
+                      >
+                        {copiedValue === value ? (
+                          <Check className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
         </div>
