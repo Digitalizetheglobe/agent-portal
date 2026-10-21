@@ -23,7 +23,10 @@ const timeLabel = (date) => date.toLocaleTimeString('en-US', { hour: 'numeric', 
  * tiles: [{ label, value, hint, icon, color, bg, to }]
  * actions: [{ icon, iconBg, iconColor, count, label, link }]
  */
+const TODAY_PAGE = 12;
+
 export const TodayPanel = ({ tiles, actions, events }) => {
+  const [todayLimit, setTodayLimit] = useState(TODAY_PAGE);
   const todayEvents = events.filter((e) => isSameDay(e.time, new Date()));
   const actionTotal = actions.reduce((s, a) => s + a.count, 0);
 
@@ -93,7 +96,23 @@ export const TodayPanel = ({ tiles, actions, events }) => {
           </div>
           {todayEvents.length > 0 ? (
             <div className="divide-y divide-slate-50 max-h-[320px] overflow-y-auto">
-              {todayEvents.slice(0, 12).map((e) => <EventRow key={e.id} event={e} />)}
+              {todayEvents.slice(0, todayLimit).map((e) => <EventRow key={e.id} event={e} />)}
+              {todayEvents.length > todayLimit && (
+                <button
+                  onClick={() => setTodayLimit((l) => l + TODAY_PAGE)}
+                  className="w-full py-3 text-xs font-semibold text-[#042C53] hover:bg-slate-50"
+                >
+                  Show more ({todayEvents.length - todayLimit} more)
+                </button>
+              )}
+              {todayLimit > TODAY_PAGE && todayEvents.length <= todayLimit && (
+                <button
+                  onClick={() => setTodayLimit(TODAY_PAGE)}
+                  className="w-full py-3 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+                >
+                  Show less
+                </button>
+              )}
             </div>
           ) : (
             <div className="p-10 text-center">
@@ -191,6 +210,14 @@ export const HistoryPanel = ({ events, filters = FILTERS }) => {
                 className="w-full py-3 text-xs font-semibold text-[#042C53] hover:bg-slate-50 border-t border-slate-100"
               >
                 Show more ({filtered.length - limit} older)
+              </button>
+            )}
+            {limit > 25 && filtered.length <= limit && (
+              <button
+                onClick={() => setLimit(25)}
+                className="w-full py-3 text-xs font-semibold text-slate-500 hover:bg-slate-50 border-t border-slate-100"
+              >
+                Show less
               </button>
             )}
           </div>
