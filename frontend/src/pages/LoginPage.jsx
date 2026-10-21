@@ -24,31 +24,31 @@ const LoginPage = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.email) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid';
     }
-    
+
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
-    
+
     return newErrors;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return;
     }
-    
+
     setLoading(true);
     setErrors({});
 
@@ -93,9 +93,9 @@ const LoginPage = () => {
     <div className="min-h-screen flex">
       {/* Left side - Admin Dashboard Theme */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <img 
-          src="/assets/login.png" 
-          alt="Login" 
+        <img
+          src="/assets/login.png"
+          alt="Login"
           className="absolute inset-0 w-full h-full object-cover"
         />
       </div>
@@ -190,6 +190,23 @@ const LoginPage = () => {
               </button>
             </div>
           </form>
+        </div>
+
+        {/* Test Credentials */}
+        <div className="mt-8">
+          <h3 className="text-lg font-medium mb-4">Test Credentials</h3>
+          <div className="space-y-2">
+            <div>
+              <label className="font-medium">Admin:</label>
+              <p className="text-sm text-muted-foreground">admin@qstudy.com</p>
+              <p className="text-sm text-muted-foreground">Admin@Qstudy2026x</p>
+            </div>
+            <div>
+              <label className="font-medium">Agent:</label>
+              <p className="text-sm text-muted-foreground">test@qstudy.com</p>
+              <p className="text-sm text-muted-foreground">Agent@Qstudy2026</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
