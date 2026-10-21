@@ -56,53 +56,111 @@ const SupportPage = () => {
     }
   }, [location]);
   const faqs = [
+    // Account & Activation
     {
-      id: 'q1',
-      category: 'Student Registration',
-      question: 'How do I register a student?',
-      answer: 'Go to Students from your sidebar and click Register Student. Fill in all required fields — full name (as per ID), email, phone, preferred country, course interest, and current city — then submit.'
+      id: 'a1',
+      category: 'Account & Activation',
+      question: 'How does my agent account get approved?',
+      answer: 'Complete your agent application, upload the required documents and confirm the declaration that your information is true, then submit it for review. Your Account Manager recommends it, the Head of Recruitment verifies it and the Head of Admission gives the final approval. You are notified at each step. If something needs fixing, the status changes to "Changes requested" and you can update and resubmit.'
     },
     {
-      id: 'q1.5',
-      category: 'Student Registration',
+      id: 'a2',
+      category: 'Account & Activation',
+      question: 'My application is "Submitted" or "Under review" — can I edit it?',
+      answer: 'No. While your application is with the QStudy team (Submitted, Under review, Recommended or Verified) your details and documents are locked. If a reviewer asks for changes, it unlocks so you can update it and resubmit.'
+    },
+    {
+      id: 'a3',
+      category: 'Account & Activation',
+      question: 'My application is approved. When can I submit students?',
+      answer: 'After approval, the Head of Admission issues your Agent Contract in the portal. Download it, sign it and upload the signed copy from your dashboard. QStudy then uploads your E-Certificate and your account becomes Active. You can submit students only once your account is active. Registration is one time only; the contract is renewable.'
+    },
+    {
+      id: 'a4',
+      category: 'Account & Activation',
+      question: 'How do I update my profile, agency details or password?',
+      answer: 'Go to Settings. Use Profile & Agency to update your contact details, Password & Security to change your password, and Payment Details for the bank details used for your payouts.'
+    },
+    // Students & Applications
+    {
+      id: 's1',
+      category: 'Students & Applications',
+      question: 'How do I register a student and submit an application?',
+      answer: 'Go to Students and click Register Student, fill in the student\'s details and save. Then upload their documents in the student\'s profile and create an application under Applications > New Application. Documents are uploaded through the portal — please do not send them by email. Once submitted, the application goes to the QStudy team and the student enters the pipeline at the "Application" stage.'
+    },
+    {
+      id: 's2',
+      category: 'Students & Applications',
+      question: 'What documents does a student need?',
+      answer: 'A valid Passport, Academic Transcripts and an English Proficiency result (IELTS/TOEFL or equivalent). Upload them from the student\'s profile. The QStudy team reviews each document and may mark it "More Information Required" — re-upload it if so. Missing documents delay the application.'
+    },
+    {
+      id: 's3',
+      category: 'Students & Applications',
       question: 'What if a student doesn\'t have a passport yet?',
-      answer: 'Students can initially register with any government-issued ID. However, for university applications and Visa Processing, a valid passport is mandatory. They can update their passport details in the portal later once they receive it.'
+      answer: 'You can register the student first, but the passport is needed to progress the application and the visa. Upload it to the student\'s profile as soon as it is available.'
     },
     {
-      id: 'q2',
-      category: 'Student Registration',
-      question: 'What documents does a student need to upload?',
-      answer: 'Required documents typically include: Passport (mandatory), Academic transcripts, and IELTS/TOEFL score card. Upload documents via the student\'s profile page.'
+      id: 's4',
+      category: 'Students & Applications',
+      question: 'Can I edit a student or move them to the next stage?',
+      answer: 'No. Agents can view information and upload documents. The Head of Admission moves students through the stages, and you are notified every time a student\'s stage or payment status changes.'
     },
     {
-      id: 'q3',
-      category: 'News & Updates',
-      question: 'Where can I find portal announcements?',
-      answer: 'Open News & Updates from your sidebar. Admins publish news and portal updates there, and you will also get a notification when something new is posted.'
+      id: 's5',
+      category: 'Students & Applications',
+      question: 'What are the student stages?',
+      answer: 'Application → Visa 15% → Visa 35% → Visa 70% → Arrival → Registration → Pending Fees → Fees Paid. A student is in only one stage at a time, so the counts on your dashboard never double-count. When the student reaches Arrival, the team records who is arriving and the arrival date.'
     },
     {
-      id: 'q4',
+      id: 's6',
+      category: 'Students & Applications',
+      question: 'The student reached Visa 100% — what do I do next?',
+      answer: 'Upload the student\'s proof of fee payment on the application page. The record shows "Pending Fees" until the Head of Admission checks that the payment was received and accepts or rejects the proof. If it is rejected, the reason is shown and you can upload a new proof. Once accepted, the student shows "Fees Paid" and is eligible for a commission invoice.'
+    },
+    // Invoices & Payments
+    {
+      id: 'i1',
       category: 'Invoices & Payments',
-      question: 'How do I raise an invoice?',
-      answer: 'Go to Invoices from your sidebar and click New invoice. Select the application you are invoicing for, review the details and submit.'
+      question: 'When can I raise a commission invoice?',
+      answer: 'When the student has reached Visa 100% and the fees are confirmed as paid. The visa milestones (15%, 35%, 70%) do not earn commission. Go to Invoices > Raise New Invoice and select the eligible applications. An invoice can include only one university and one currency, so raise a separate invoice for each.'
     },
     {
-      id: 'q5',
+      id: 'i2',
       category: 'Invoices & Payments',
-      question: 'Where can I see my commission structure?',
-      answer: 'Your commission structure is available under Profile > Agency Details > Commission Plan. Payouts are typically processed within 15 working days after successful student conversion.'
+      question: 'What happens after I submit an invoice?',
+      answer: 'Submitted → the Head of Admission verifies and approves it → Processing (waiting for the university to pay QStudy) → Accounts pays you and uploads the payment slip → Paid. If changes are needed the invoice shows "Action Required"; correct it and resubmit.'
     },
     {
-      id: 'q6',
-      category: 'Account & Profile',
-      question: 'How do I update my agency or contact details?',
-      answer: 'Go to Settings > Profile and update your name, agency name, or contact info. Some fields may require re-verification by the admin team.'
+      id: 'i3',
+      category: 'Invoices & Payments',
+      question: 'When will I be paid?',
+      answer: 'You are paid after the university has paid QStudy and that payment is recorded in the portal; Accounts then pays you by bank transfer, in the same currency the university paid in (USD or RM). The portal only keeps the records — no money moves through it. Track each payment under Payoffs, where you can also view the payment slip.'
     },
     {
-      id: 'q7',
-      category: 'Account & Profile',
-      question: 'My account shows "Pending Verification" — what does that mean?',
-      answer: 'This means our admin team is reviewing your agency documents. This usually takes 1-2 business days. You can browse the portal but cannot register students until verified.'
+      id: 'i4',
+      category: 'Invoices & Payments',
+      question: 'How is my commission calculated?',
+      answer: 'Commission is set per university (for example University 1 = 10%, University 2 = 8%), not per agent. Open Universities to see the commission and fees for each university.'
+    },
+    // Universities & Updates
+    {
+      id: 'u1',
+      category: 'Universities & Updates',
+      question: 'Where do I find university fees, commission and brochures?',
+      answer: 'Open Universities from the sidebar. You can search and view university details, fee structures, commission, brochures and scholarship updates. This information is managed by QStudy and cannot be edited by agents.'
+    },
+    {
+      id: 'u2',
+      category: 'Universities & Updates',
+      question: 'How will I know about announcements and updates?',
+      answer: 'QStudy publishes announcements under News & Updates and you are notified when something new is posted, a university\'s information changes, a student\'s stage changes, or a payment is made. All alerts are also listed in Notifications.'
+    },
+    {
+      id: 'u3',
+      category: 'Universities & Updates',
+      question: 'How do I contact QStudy?',
+      answer: 'Use Live Chat to message the QStudy team directly (there is a WhatsApp link in the chat), or raise a support ticket from this page for anything that needs tracking.'
     }
   ];
 
@@ -172,15 +230,22 @@ const SupportPage = () => {
       {/* Quick Links */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4 md:px-8">
         {[
-          { label: 'Student Registration', icon: UserPlus, color: '#E6F1FB', iconColor: '#0C447C' },
-          { label: 'News & Updates', icon: Newspaper, color: '#EAF3DE', iconColor: '#27500A' },
+          { label: 'Account & Activation', icon: User, color: '#EEEDFE', iconColor: '#3C3489' },
+          { label: 'Students & Applications', icon: UserPlus, color: '#E6F1FB', iconColor: '#0C447C' },
           { label: 'Invoices & Payments', icon: FileText, color: '#FAEEDA', iconColor: '#633806' },
-          { label: 'Account & Profile', icon: User, color: '#EEEDFE', iconColor: '#3C3489' },
+          { label: 'Universities & Updates', icon: Newspaper, color: '#EAF3DE', iconColor: '#27500A' },
         ].map((item, idx) => {
           const count = faqs.filter(f => f.category === item.label).length;
           return (
             <button
               key={idx}
+              onClick={() => {
+                const first = faqs.find(f => f.category === item.label);
+                if (first) setOpenFaq(first.id);
+                document
+                  .getElementById(`faq-${item.label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`)
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
               className="flex flex-col items-center p-6 bg-white border border-gray-100 rounded-2xl hover:border-[#042C53] hover:shadow-lg transition-all group"
             >
               <div
@@ -211,7 +276,7 @@ const SupportPage = () => {
               if (categoryFaqs.length === 0) return null;
 
               return (
-                <div key={cat} className="space-y-4">
+                <div key={cat} id={`faq-${cat.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`} className="space-y-4 scroll-mt-24">
                   <div className="flex items-center gap-3 px-1">
                     <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">{cat}</span>
                     <div className="h-[1px] w-full bg-gray-100" />

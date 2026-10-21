@@ -183,7 +183,7 @@ const ComplianceStatus = () => {
                 {checklist.map(({ type, doc }) => (
                   <li key={type} className="flex items-center gap-2 text-sm">
                     {doc ? <CheckCircle2 className={`w-4 h-4 ${doc.status === 'approved' ? 'text-emerald-600' : doc.status === 'rejected' ? 'text-red-500' : 'text-amber-500'}`} />
-                         : <Circle className="w-4 h-4 text-muted-foreground" />}
+                      : <Circle className="w-4 h-4 text-muted-foreground" />}
                     <span>{type}</span>
                     {doc && <span className="text-xs text-muted-foreground">· {doc.status}</span>}
                   </li>
@@ -243,12 +243,7 @@ const ComplianceStatus = () => {
             </div>
           )}
 
-          {canSubmit && (
-            <Button className="w-full" onClick={handleSubmitForReview} disabled={isSubmitting || needsDeclaration}>
-              <Send className="w-4 h-4 mr-2" />
-              {isSubmitting ? 'Submitting...' : user?.onboardingStatus === 'correction_required' ? 'Resubmit for review' : 'Submit application for review'}
-            </Button>
-          )}
+
 
           {/* Documents List */}
           {documents.length > 0 && (
@@ -300,6 +295,7 @@ const ComplianceStatus = () => {
               ))}
             </div>
           )}
+
 
           {/* Upload Section */}
           {locked ? null : !showUpload ? (
@@ -369,6 +365,13 @@ const ComplianceStatus = () => {
                 </Button>
               </div>
             </div>
+          )}
+
+          {canSubmit && (
+            <Button className="w-full" onClick={handleSubmitForReview} disabled={isSubmitting || needsDeclaration}>
+              <Send className="w-4 h-4 mr-2" />
+              {isSubmitting ? 'Submitting...' : user?.onboardingStatus === 'correction_required' ? 'Resubmit for review' : 'Submit application for review'}
+            </Button>
           )}
 
         </div>

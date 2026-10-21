@@ -209,7 +209,7 @@ export default function SettingsPage() {
                   <SectionTitle>Personal Information</SectionTitle>
                 </div>
 
-                <form onSubmit={handleProfileUpdate} className="space-y-0">
+                <form onSubmit={handleProfileUpdate}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                     <div>
                       <FieldLabel>Full Name</FieldLabel>

@@ -11,8 +11,11 @@ import { Checkbox } from '../components/ui/checkbox';
 import { toast } from 'sonner';
 
 const TEST_CREDENTIALS = [
-  { role: 'Admin', email: 'admin@qstudy.com', password: 'Admin@Qstudy2026x' },
-  { role: 'Agent', email: 'agent@qstudy.com', password: 'Agent@Qstudy2026' }
+  { role: 'Admin / Head of Admission', email: 'admin@qstudy.com', password: 'Admin@Qstudy2026x' },
+  { role: 'Agent', email: 'agent@qstudy.com', password: 'Agent@Qstudy2026' },
+  { role: 'Account Manager', email: 'acc.manager@qstudy.com', password: 'Admin@Qstudy2026' },
+  { role: 'Accounts', email: 'accounts@qstudy.com', password: 'Accounts@Qstudy2026' },
+  { role: 'Head Recruiter', email: 'recruiter@qstudy.com', password: 'Admin@Qstudy2026' }
 ];
 
 const LoginPage = () => {
