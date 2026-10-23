@@ -530,14 +530,14 @@ Based on the strategic review with QStudy Leadership documented in `meeting_audi
    - **Requirement:** Under Malaysian EMGS regulations, all arriving international students must complete a mandatory post-arrival medical examination within 7 days of landing.
    - **Action:** Insert `Medical Examination` between `Student Arrival` and `University Registration`.
 
-2. **Standardized Agent User ID Auto-Generator**
-   - **Current State:** System used arbitrary UUIDs or certificate format strings (`QS-AGT-2026-XXXX`).
+2. **Standardized Agent User ID Auto-Generator** *(done)*
+   - **Current State:** System previously used arbitrary UUIDs or temporary strings (`QS-AG-XXXX`).
    - **Requirement:** Client mandated a strict, predictable auto-generation formula for unique Agent IDs:
      $$\mathbf{[3\text{-Letter Agency Code}]} + \mathbf{[4\text{-Digit Serial Number}]} + \mathbf{[3\text{-Letter Country Code}]}$$
      *(e.g., Global Education Agency in India $\rightarrow$ `GEA0001IND`).*
-   - **Action:** Implement an auto-generation utility upon agent onboarding approval based on agency initials, sequential serial count, and ISO 3166-1 alpha-3 country code.
+   - **Action:** Implemented auto-generation utility upon agent onboarding approval based on agency initials, sequential serial count, and ISO 3166-1 alpha-3 country code. Backfill script created at `backend/scripts/backfill_agent_ids.js`.
 
-3. **Dual Chat System (Dedicated AM Direct Chat vs. General Helpdesk)**
+3. **Dual Chat System (Dedicated AM Direct Chat vs. General Helpdesk)** *(done)*
    - **Current State:** Single pooled chat room per agent where any internal staff member can reply.
    - **Requirement:** Provide two distinct communication pathways:
      - **Option 1 (Direct AM Chat):** Dedicated 1-on-1 direct channel between the agent and their assigned Account Manager.
