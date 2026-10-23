@@ -445,7 +445,7 @@ const ApplicationDetailsPage = () => {
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="text-[#6B7280] text-[10px] border-[#E5E7EB]">
-                        Pending Fees
+                        Not yet eligible
                       </Badge>
                     )}
                   </div>
@@ -651,7 +651,7 @@ const ApplicationDetailsPage = () => {
                 </Badge>
               ) : (
                 <Badge variant="outline" className="text-[10px] text-[#6B7280] border-[#E5E7EB] uppercase tracking-wider px-2 py-0.5 rounded-full">
-                  Pending Fees
+                  Not yet eligible
                 </Badge>
               )}
             </CardHeader>

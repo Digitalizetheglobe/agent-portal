@@ -370,7 +370,13 @@ export const applicationAPI = {
     return api.post(`/applications/${id}/fee-proof`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   reviewFeeProof: (id, data) => api.patch(`/applications/${id}/fee-proof/review`, data),
-  downloadFeeProof: (id, params = {}) => api.get(`/applications/${id}/fee-proof/file`, { params, responseType: 'blob' })
+  downloadFeeProof: (id, params = {}) => api.get(`/applications/${id}/fee-proof/file`, { params, responseType: 'blob' }),
+  submitArrivalTicket: (id, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/applications/${id}/arrival-ticket`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  downloadArrivalTicket: (id, params = {}) => api.get(`/applications/${id}/arrival-ticket/file`, { params, responseType: 'blob' })
 };
 
 // Application review status and history (submit, start review, reject, withdraw)

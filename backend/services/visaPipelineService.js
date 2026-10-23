@@ -13,9 +13,10 @@ const { createNotification } = require('../controllers/notificationController');
 // The Head of Admission (and super admin) moves a student through the visa pipeline and checks the
 // proof of fee payment. Agents upload the proof and watch the progress.
 //
-//   Application -> Visa 15% -> Visa 35% -> Visa 70% -> Arrival -> Registration -> Visa 100%
-//   at Visa 100%: agent uploads proof -> Head of Admission accepts (Fees paid) or rejects
-//   Visa 100% + fees accepted = the agent can raise the commission invoice
+//   Application -> Visa 15% -> Visa 35% -> Visa 70% -> Arrival -> Medical Examination
+//   -> Registration -> Fees Paid -> Visa 100%
+//   at Registration: agent uploads proof -> Head of Admission accepts or rejects it
+//   Fees Paid needs the proof accepted; Visa 100% (final endorsement) unlocks the commission invoice
 
 const fail = (statusCode, message) => {
   const err = new Error(message);
@@ -73,7 +74,7 @@ class VisaPipelineService {
   /**
    * Move an application one stage forward, or one stage back (with a reason).
    */
-  async updateStage(id, { stage, remarks, arrivalPerson, arrivalDate } = {}, currentUser) {
+  async updateStage(id, { stage, remarks, arrivalPerson, arrivalDate, arrivalFlightNumber, arrivalTime, arrivalAirport } = {}, currentUser) {
     requireHeadOfAdmission(currentUser);
 
     if (!STAGES.includes(stage)) {
@@ -116,8 +117,23 @@ class VisaPipelineService {
         ? new Date(arrivalDate)
         : (application.arrivalDate ? new Date(application.arrivalDate) : null);
       if (!date || isNaN(date.getTime())) throw fail(400, 'A valid arrival date is required for the Arrival stage.');
+      const text = (value, saved) => (typeof value === 'string' && value.trim()) || saved || '';
+      const flightNumber = text(arrivalFlightNumber, application.arrivalFlightNumber);
+      const airport = text(arrivalAirport, application.arrivalAirport);
+      const time = text(arrivalTime, application.arrivalTime);
+      if (!flightNumber) throw fail(400, 'The flight number is required for the Arrival stage.');
+      if (!airport) throw fail(400, 'The arrival airport is required for the Arrival stage.');
+      if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw fail(400, 'The arrival time must be in HH:MM format.');
       application.arrivalPerson = person;
       application.arrivalDate = date.toISOString().slice(0, 10);
+      application.arrivalFlightNumber = flightNumber;
+      application.arrivalAirport = airport;
+      application.arrivalTime = time || null;
+    }
+
+    // Fees Paid is only reached once the Head of Admission has accepted the proof of payment
+    if (stage === 'FeesPaid' && !movingBack && application.feeStatus !== 'Accepted') {
+      throw fail(400, 'The proof of fee payment must be accepted before the student can move to Fees Paid.');
     }
 
     application.pipelineStage = stage;
@@ -134,21 +150,23 @@ class VisaPipelineService {
     await admissionTrackingService.deriveInvoiceEligibility(application);
     await application.save();
 
-    const atVisa100 = stage === 'Visa100';
+    let message = `${labelFor(application)} is now at ${STAGE_LABELS[stage]}.${movingBack && note ? ` Reason: ${note}` : ''}`;
+    if (!movingBack && stage === 'Registration' && application.feeStatus !== 'Accepted') {
+      message = `${labelFor(application)} is now at Registration. Please upload the proof of fee payment.`;
+    } else if (!movingBack && stage === 'Visa100') {
+      message = `${labelFor(application)} reached Visa 100%. You can now raise your commission invoice.`;
+    }
     await this._notifyAgent(
       application,
       `Student moved to ${STAGE_LABELS[stage]}`,
-      atVisa100
-        ? `${labelFor(application)} reached Visa 100%. Please upload the proof of fee payment so you can raise your commission invoice.`
-        : `${labelFor(application)} is now at ${STAGE_LABELS[stage]}.${movingBack && note ? ` Reason: ${note}` : ''}`,
+      message,
       movingBack ? 'warning' : 'info'
     );
-
     return await this._reload(application.id);
   }
 
   /**
-   * The agent uploads proof that the student's fees were paid (only once Visa 100% is reached).
+   * The agent uploads proof that the student's fees were paid (once the student reaches Registration).
    */
   async submitFeeProof(id, file, note, currentUser) {
     if (currentUser.role !== 'agent') throw fail(403, 'Only the agent can upload the proof of fee payment.');
@@ -156,8 +174,8 @@ class VisaPipelineService {
 
     const application = await this._load(id, currentUser);
 
-    if (application.pipelineStage !== 'Visa100') {
-      throw fail(400, 'Proof of fee payment can be uploaded once the student reaches Visa 100%.');
+    if (application.pipelineStage !== 'Registration') {
+      throw fail(400, 'Proof of fee payment can be uploaded while the student is at Registration.');
     }
     if (application.feeStatus === 'Accepted') throw fail(400, 'The fee payment has already been accepted.');
     if (application.isInvoiced) throw fail(400, 'This application has already been invoiced.');
@@ -227,7 +245,7 @@ class VisaPipelineService {
       changedBy: currentUser.id
     });
 
-    // Fees accepted at Visa 100% makes the application invoice-eligible
+    // Eligibility itself only follows once the student reaches Visa 100%
     await admissionTrackingService.deriveInvoiceEligibility(application);
     await application.save();
 
@@ -235,7 +253,7 @@ class VisaPipelineService {
       await this._notifyAgent(
         application,
         'Fees confirmed',
-        `Fee payment for ${labelFor(application)} is confirmed. You can now raise your commission invoice.`,
+        `Fee payment for ${labelFor(application)} is confirmed. The student will move to Fees Paid next.`,
         'success'
       );
     } else {
@@ -248,6 +266,46 @@ class VisaPipelineService {
     }
 
     return await this._reload(application.id);
+  }
+
+  /**
+   * Flight ticket / arrival confirmation, uploaded by the agent who owns the application or the Head of Admission.
+   */
+  async submitArrivalTicket(id, file, currentUser) {
+    const isHead = currentUser.role === 'admin' && (!currentUser.staffRole || currentUser.staffRole === 'head_admission');
+    if (currentUser.role !== 'agent' && !isHead) throw fail(403, 'You cannot upload the arrival ticket.');
+    if (!file) throw fail(400, 'Please upload the flight ticket or arrival confirmation.');
+
+    const application = await this._load(id, currentUser);
+    if (STAGES.indexOf(application.pipelineStage) < STAGES.indexOf('Arrival')) {
+      throw fail(400, 'The arrival ticket can be uploaded once the student reaches Arrival.');
+    }
+
+    const path = generateStoragePath(`applications/${application.id}/arrival-ticket`, file.originalname);
+    const result = await putObject(path, file.buffer, file.mimetype);
+    application.arrivalTicket = {
+      id: uuidv4(),
+      fileUrl: result.path,
+      fileName: file.originalname,
+      contentType: file.mimetype,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: currentUser.id
+    };
+    addHistory(application, {
+      action: 'ARRIVAL_TICKET_UPLOADED',
+      notes: `Arrival ticket uploaded: ${file.originalname}`,
+      changedBy: currentUser.id
+    });
+    await application.save();
+    return await this._reload(application.id);
+  }
+
+  async getArrivalTicketFile(id, currentUser) {
+    const application = await this._load(id, currentUser);
+    const ticket = application.arrivalTicket;
+    if (!ticket || !ticket.fileUrl) throw fail(404, 'No arrival ticket has been uploaded.');
+    const { data, contentType } = await getObject(ticket.fileUrl);
+    return { data, contentType: contentType || ticket.contentType, fileName: ticket.fileName };
   }
 
   /**

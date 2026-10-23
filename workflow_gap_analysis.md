@@ -59,6 +59,7 @@ Legend: ✅ done · 🟡 partial · ❌ missing
 - Registration form: ✅ done. The client's form is implemented in `utils/agentApplication.js` (bank details mandatory; company vs individual fields; relative-of-employee question; documents by agent type). Small items left: confirm that contact person / signatory are company-only, and decide whether the declaration needs a signature and date (server timestamp).
 
 ### Sec. 3 — Student progress pipeline ✅ (details open)
+- ✅ **Pipeline reordered per the meeting audit.** Stages are now Application → Visa 15% → Visa 35% → Visa 70% → Arrival → **Medical Examination** → Registration → **Fees Paid** → **Visa 100%**. The agent uploads the fee proof at Registration; the Head of Admission accepts it, which allows the move to Fees Paid. Visa 100% (final endorsement) unlocks the commission invoice. "Pending Fees" no longer exists. Arrival now captures flight number, airport, optional time and an uploaded flight ticket (`POST /applications/:id/arrival-ticket`). At startup, applications at the old Visa 100% without accepted fees move back to Registration ("Pipeline reorder" log line). The paragraphs below describe the earlier order where they differ.
 - ✅ **Pipeline built and merged with the old track.** Each application has a `pipelineStage`: Application → Visa 15% → Visa 35% → Visa 70% → Arrival → Registration → Visa 100%, then fees. The application details page now shows **one** "Student progress" card: the QStudy application review (Submit / Start Review / Reject / Withdraw) on top, then the visa stepper. The student can only move to Visa 15% after the review has started. The old six-step "Admission Milestone Journey" and its forms (campus visit, offer, admission letter, enrollment, tuition deposit) were **removed from the screen**; their backend endpoints, columns and stored data are untouched and can be deleted later. Service: `visaPipelineService.js`; UI: `VisaPipelinePanel.jsx`.
 - ✅ **Who moves it:** for now the **Head of Admission** (and super admin) only. Agents watch it. Rules (our defaults, not yet confirmed by the client): forward one stage at a time, no skipping; back one stage at a time with a reason; frozen once invoiced; draft / rejected / withdrawn applications cannot move.
 - ✅ **Arrival:** the Head of Admission enters who is arriving and the date when moving to Arrival.
@@ -163,14 +164,68 @@ Legend: ✅ done · 🟡 partial · ❌ missing
 | Proof of fee payment | Agent uploads proof; **Head of Admission** checks the payment was received and marks it accepted or rejected. | ✅ Done (#3) |
 | Contract and E-Certificate | **Head of Admission issues the contract**, the **agent uploads the signed copy**, and the **Head of Admission uploads the E-Certificate**. | ✅ Done (Account Manager and Head of Recruitment no longer issue them; certificate file is now required) |
 
-### Still open
-1. **Visa stages:** the client said the Head of Admission handles them for now. Confirm the rules we chose: one stage at a time, back one stage with a reason, no skipping. Is arrival "who and when" enough, or are flight details needed?
+### Still open & Audit Updates
+1. ~~**Visa stages:**~~ Clarified in `meeting_audit_qstudy.md`: Sequence updated to include **Medical Examination** post-arrival and **Fees Paid** before final endorsement (**Visa 100%**). Arrival captures flight details & tickets.
 2. ~~Commission per university only or also per course?~~ Per university. The course list shows the commission per course (tuition x the university rate).
 3. **Is the commission a percentage only, or can it also be a fixed amount per university?** Built as a percentage of tuition only.
 4. **Contract renewal:** how often, and does an expired contract block the agent?
-5. **WhatsApp and live chat:** we built in-portal live chat plus a WhatsApp click-to-chat link. Is that enough, or does the client want WhatsApp Business API notifications? What is the WhatsApp number? Who answers chats, and when?
-6. **Email:** built so every notification is emailed to agents. Which provider (Resend or the client's own SMTP) and from which address (for example no-reply@their domain)? Should some events not email, or should agents be able to opt out?
+5. ~~**WhatsApp and live chat:**~~ Clarified: Client requested a **Dual Chat System** (Option 1: 1-on-1 AM Direct Chat; Option 2: General Helpdesk).
+6. **Email:** built so every notification is emailed to agents. Which provider (Resend or the client's own SMTP) and from which address (for example no-reply@their domain)?
 7. ~~Events, university visits, offer / admission / enrollment / deposit tracking and the old student status funnel~~ — all removed.
-8. **Registration form:** are contact person and signatory company-only? Is a typed name plus date enough as the declaration signature?
-9. **E-Certificate:** number format (we generate `QS-AGT-<year>-<code>`). Is that acceptable?
-10. **Who may see the bypass of the payment block**, and should a reason be recorded? (Assumed yes, with the reason and who bypassed it kept in history.)
+8. ~~**Registration form:**~~ Clarified: Follows physical form (3 steps: Corporate & Contact $\rightarrow$ Declarations & Bank Particulars $\rightarrow$ Document Uploads).
+9. ~~**E-Certificate / Agent ID:**~~ Clarified: Agent User ID uses formula `[3-Letter Agency Code] + [4-Digit Serial Number] + [3-Letter Country Code]` (e.g. `GEA0001IND`).
+10. **Who may see the bypass of the payment block:** Kept in audit history, authorized by Head of Admission / Super Admin only.
+
+---
+
+## 5. Post-Meeting Audit Realignment (Gaps vs. Latest Meeting Audit)
+
+Directives from the latest leadership alignment review (`meeting_audit_qstudy.md`):
+
+### ➕ 5.1 What We Have to ADD
+| Item | Requirement / Gap | Action Required |
+|---|---|---|
+| **Medical Examination Stage** | ✅ Done. Added between Arrival and Registration (`visaPipeline.js`, `VisaPipelinePanel.jsx`, database enum). | — |
+| **Agent User ID Auto-Generator** | Currently using internal UUIDs / arbitrary IDs. Client formula: `[Agency 3L] + [4-Digit Serial] + [Country 3L]`. | Auto-generate unique Agent ID (e.g. `GEA0001IND`) on approval/activation. |
+| **Dual Chat Channels** | Built as a single generic thread per agent where any staff member can reply. | Bifurcate into **Option 1: 1-on-1 AM Direct Chat** and **Option 2: General Helpdesk**. |
+| **University Visibility Rights** | All active universities are visible to all approved agents. | Super Admin toggle matrix to assign which universities/regions an agent can view (Malaysian vs. Foreign). |
+| **Payment Term Due Dates** | Maturity countdown missing on approved invoices. | Add payout due dates (e.g., 14-day or 30-day payment terms from University Payment In). |
+| **Flight Arrival Tracking** | ✅ Done. Flight number, airport, date, optional time and ticket upload. | — |
+| **105 Universities Ingestion** | Manual university creation only. | Data ingestion script to migrate 105 institutions and program catalogs from System QStudy. |
+
+### 🔄 5.2 What We Need to UPDATE
+| Item | Current Implementation | Required Realignment |
+|---|---|---|
+| **Visa Progression Sequence** | ✅ Done. `Fees Paid` now comes before `Visa 100%`; the "Pending Fees" state is removed. | — |
+| **5 Core Roles Hierarchy** | Includes `head_recruitment` and mixed admin permissions. | Consolidate into 5 explicit tiers: **Agent**, **Account Manager**, **Admission Manager**, **Finance/Accounts**, **Super Admin**. |
+| **Agent Registration Form** | Split between invite page and dashboard compliance tab. | Restructure into 3 clear physical form steps: (1) Corporate Details, (2) Legal & Bank Particulars, (3) Document Uploads. |
+| **Audit Log Permissions** | Accessible by Head of Admission & Super Admin. | Restrict strictly to **Super Admin** only. |
+| **Single-Stage Pipeline Counts** | Ensure no dual-bucket display. | Keep strict single-state tracking across all 9 milestones. |
+
+### ❌ 5.3 What We Have to REMOVE
+| Item | Reason for Removal | Status |
+|---|---|---|
+| **Dummy Financial Metrics & Widgets** | Client instruction: *"Do NOT overcomplicate with dummy finance calculations (e.g., avoid artificial 'settled commission vs. pending commission totals' widgets)."* | Remove speculative projection widgets and artificial totals; keep milestone-driven (Submitted $\rightarrow$ University Paid $\rightarrow$ Due $\rightarrow$ Settled). |
+| **"Pending Visa" After Fees Paid** | Confusing status; once fees are verified, application moves directly to final endorsement. | ✅ Done ("Pending Fees" bucket removed with the pipeline reorder). |
+| **Agent Profile Commission Rate** | Commission is set per university, never per agent. | Purge all legacy agent-level commission inputs. |
+| **Legacy Event & Expo Relics** | Leftovers from early `whattoimplement.md` spec. | Confirm full decommissioning of event, expo, and campus visit schemas. |
+| **Agent Visa Progress Editing** | External agents cannot alter percentage milestones. | Verify agents are strictly **View-Only** on the pipeline. |
+
+---
+
+### 📊 5.4 Role & Feature Access Matrix (Sign-Off Deliverable)
+
+| Feature / Module | Agent | Account Manager | Admission Manager | Finance / Accounts | Super Admin |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Agent Profile Registration** | Fill & Submit | View Assigned | Recommend | View Bank Details | Approve & Activate |
+| **Contract & E-Certificate** | Sign & Upload | View Assigned | Upload Certificate | View | Upload / Revoke |
+| **Student Application & Docs** | Create & Upload | Review Assigned | Process & Approve | No Access | View All |
+| **Visa Milestones (15% ➔ 100%)** | **View Only** | View Assigned | **Update Stages** | View Status | Full Edit |
+| **Invoice Submission** | Submit (when eligible)| View Assigned | Verify Eligibility | Process Payout | Full Control |
+| **University Payment In** | No Access | No Access | View Status | **Record Receipt** | Full Control |
+| **Agent Payout & Slip Upload** | View Slip & Date | No Access | View Status | **Mark Paid & Slip**| Full Control |
+| **University & Course Info** | View (Allowed only)| View | Manage Catalog | View Comm % | **Set Visibility Rules**|
+| **Dedicated Direct Chat** | Chat with AM | Chat with Agents | No | No | Monitor |
+| **General Support Chat** | Access | No Access | No Access | No Access | Supervise |
+| **Support Tickets** | Raise Ticket | View Assigned | View Assigned | View Payment Issues| Full Resolution |
+| **System Audit Log** | No Access | No Access | No Access | No Access | **Full Log Access** |

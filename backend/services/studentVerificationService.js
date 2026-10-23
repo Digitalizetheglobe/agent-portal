@@ -56,7 +56,7 @@ const formatVerification = (student) => {
 // Option B (verification only once the student has progressed in the visa pipeline) is off by default.
 // Set VERIFICATION_REQUIRES_ENROLLMENT=true in the backend env to enforce it.
 // "Progressed" = at least one application reached Registration (or Visa 100%).
-const READY_PIPELINE_STAGES = ['Registration', 'Visa100'];
+const READY_PIPELINE_STAGES = ['Registration', 'FeesPaid', 'Visa100'];
 const VERIFICATION_REQUIRES_ENROLLMENT = process.env.VERIFICATION_REQUIRES_ENROLLMENT === 'true';
 
 /**

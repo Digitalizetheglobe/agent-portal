@@ -34,7 +34,7 @@ const formatDate = (d) =>
  * The whole journey of one application in a single track: QStudy's application review first
  * (passed in as children), then the visa pipeline.
  * Head of Admission: moves the student one stage forward (or one back, with a reason) and accepts or
- * rejects the proof of fee payment. Agent: watches the progress and uploads the proof once Visa 100% is reached.
+ * rejects the proof of fee payment. Agent: watches the progress and uploads the proof at Registration.
  */
 const VisaPipelinePanel = ({ application, onChange, children }) => {
   const { user } = useAuth();
@@ -45,6 +45,10 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
   const [remarks, setRemarks] = useState('');
   const [arrivalPerson, setArrivalPerson] = useState('');
   const [arrivalDate, setArrivalDate] = useState('');
+  const [arrivalFlightNumber, setArrivalFlightNumber] = useState('');
+  const [arrivalTime, setArrivalTime] = useState('');
+  const [arrivalAirport, setArrivalAirport] = useState('');
+  const ticketInput = useRef(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [proofFile, setProofFile] = useState(null);
@@ -62,7 +66,9 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
   const invoiced = Boolean(application.isInvoiced);
   const display = getDisplayStageInfo(application);
   const feeStatus = application.feeStatus || 'Pending';
-  const atVisa100 = stage === 'Visa100';
+  const atRegistration = stage === 'Registration';
+  // The fee section is relevant from Registration onwards
+  const feeSectionVisible = stageIndex >= PIPELINE_STAGES.indexOf('Registration');
   // The visa pipeline starts after QStudy has started reviewing the application
   const reviewStarted = !['Draft', 'Submitted'].includes(application.status);
   const mustReviewFirst = stage === 'Application' && !reviewStarted;
@@ -86,6 +92,9 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
     setRemarks('');
     setArrivalPerson(application.arrivalPerson || '');
     setArrivalDate(application.arrivalDate ? String(application.arrivalDate).slice(0, 10) : '');
+    setArrivalFlightNumber(application.arrivalFlightNumber || '');
+    setArrivalTime(application.arrivalTime || '');
+    setArrivalAirport(application.arrivalAirport || '');
     setMoveDialog({ direction, stage: direction === 'forward' ? nextStage : prevStage });
   };
 
@@ -95,14 +104,17 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
       toast.error('Please give a reason for moving the student back');
       return;
     }
-    if (direction === 'forward' && target === 'Arrival' && (!arrivalPerson.trim() || !arrivalDate)) {
-      toast.error('Who is arriving and the arrival date are required');
+    if (direction === 'forward' && target === 'Arrival' && (!arrivalPerson.trim() || !arrivalDate || !arrivalFlightNumber.trim() || !arrivalAirport.trim())) {
+      toast.error('Who is arriving, the date, the flight number and the airport are required');
       return;
     }
     const payload = { stage: target, remarks: remarks.trim() || undefined };
     if (target === 'Arrival' && direction === 'forward') {
       payload.arrivalPerson = arrivalPerson.trim();
       payload.arrivalDate = arrivalDate;
+      payload.arrivalFlightNumber = arrivalFlightNumber.trim();
+      payload.arrivalAirport = arrivalAirport.trim();
+      if (arrivalTime) payload.arrivalTime = arrivalTime;
     }
     const ok = await run(
       () => applicationAPI.updatePipeline(application.id, payload),
@@ -121,6 +133,30 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
     } catch (error) {
       toast.error('Could not open the proof of payment', { description: formatApiError(error) });
     }
+  };
+
+  const viewTicket = async () => {
+    try {
+      const res = await applicationAPI.downloadArrivalTicket(application.id, { inline: true });
+      const type = res.headers['content-type'] || 'application/octet-stream';
+      const blob = res.data instanceof Blob ? res.data : new Blob([res.data], { type });
+      const win = window.open(window.URL.createObjectURL(blob), '_blank');
+      if (!win) toast.error('Pop-up blocked. Please allow pop-ups to view the ticket.');
+    } catch (error) {
+      toast.error('Could not open the arrival ticket', { description: formatApiError(error) });
+    }
+  };
+
+  const pickTicket = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size exceeds 10MB limit');
+      e.target.value = '';
+      return;
+    }
+    await run(() => applicationAPI.submitArrivalTicket(application.id, file), 'Arrival ticket uploaded');
+    e.target.value = '';
   };
 
   const pickProof = (e) => {
@@ -163,7 +199,7 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
     }
   };
 
-  const canUploadProof = isOwnerAgent && atVisa100 && !invoiced && feeStatus !== 'Accepted';
+  const canUploadProof = isOwnerAgent && atRegistration && !invoiced && feeStatus !== 'Accepted';
 
   return (
     <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden" data-testid="visa-pipeline-panel">
@@ -172,8 +208,8 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
           <CardTitle className="text-base font-semibold font-['Outfit'] text-[#111827]">Student progress</CardTitle>
           <CardDescription className="text-xs text-[#6B7280] mt-0.5">
             {canManage
-              ? 'Review the application, then move the student one stage at a time. Visa 100% and confirmed fees let the agent raise a commission invoice.'
-              : 'Updated by QStudy. At Visa 100% you upload the proof of fee payment.'}
+              ? 'Review the application, then move the student one stage at a time. Fees are confirmed before Visa 100%, which lets the agent raise a commission invoice.'
+              : 'Updated by QStudy. You upload the proof of fee payment at Registration.'}
           </CardDescription>
         </div>
         <span className={cn('inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shrink-0', display.style)}>
@@ -186,9 +222,9 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
         {children}
 
         {/* Stage stepper */}
-        <ol className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2">
+        <ol className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
           {PIPELINE_STAGES.map((s, i) => {
-            const done = i < stageIndex || (s === 'Visa100' && feeStatus === 'Accepted' && i === stageIndex);
+            const done = i < stageIndex || (s === 'Visa100' && i === stageIndex);
             const current = i === stageIndex;
             return (
               <li
@@ -201,7 +237,7 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
               >
                 {/* Heading on top, stage name below */}
                 <div className="flex items-start gap-2">
-                  {done || (current && s === 'Visa100' && feeStatus === 'Accepted')
+                  {done
                     ? <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     : <span className="w-3.5 h-3.5 shrink-0 mt-0.5 rounded-full border border-current opacity-50" />}
                   <div className="min-w-0">
@@ -220,7 +256,35 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
           <p className="text-sm text-[#374151]">
             <span className="font-semibold">Arrival:</span> {application.arrivalPerson}
             {application.arrivalDate ? ` on ${formatDate(application.arrivalDate)}` : ''}
+            {application.arrivalFlightNumber ? ` · Flight ${application.arrivalFlightNumber}` : ''}
+            {application.arrivalAirport ? ` · ${application.arrivalAirport}` : ''}
+            {application.arrivalTime ? ` · ${application.arrivalTime}` : ''}
           </p>
+        )}
+
+        {/* Flight ticket / arrival confirmation */}
+        {stageIndex >= PIPELINE_STAGES.indexOf('Arrival') && active && (
+          <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="arrival-ticket">
+            <span className="font-semibold text-[#374151]">Arrival ticket:</span>
+            {application.arrivalTicket ? (
+              <>
+                <span className="text-[#374151] truncate">{application.arrivalTicket.fileName}</span>
+                <Button variant="outline" size="sm" onClick={viewTicket}>
+                  <Eye className="w-3.5 h-3.5 mr-1.5" /> View
+                </Button>
+              </>
+            ) : (
+              <span className="text-[#6B7280]">Not uploaded</span>
+            )}
+            {(isOwnerAgent || canManage) && !invoiced && (
+              <>
+                <input ref={ticketInput} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={pickTicket} />
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => ticketInput.current?.click()}>
+                  <Upload className="w-3.5 h-3.5 mr-1.5" /> {application.arrivalTicket ? 'Replace' : 'Upload'}
+                </Button>
+              </>
+            )}
+          </div>
         )}
 
         {!active && (
@@ -252,7 +316,7 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
         )}
 
         {/* Fees */}
-        {atVisa100 && (
+        {feeSectionVisible && (
           <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4 space-y-3" data-testid="fee-payment-section">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-[#111827]">Fee payment</p>
@@ -338,6 +402,20 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
                 <div className="space-y-1.5">
                   <Label htmlFor="arrivalDate">Arrival date</Label>
                   <Input id="arrivalDate" type="date" value={arrivalDate} onChange={(e) => setArrivalDate(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="arrivalFlightNumber">Flight number</Label>
+                    <Input id="arrivalFlightNumber" value={arrivalFlightNumber} onChange={(e) => setArrivalFlightNumber(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="arrivalTime">Arrival time (optional)</Label>
+                    <Input id="arrivalTime" type="time" value={arrivalTime} onChange={(e) => setArrivalTime(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="arrivalAirport">Arrival airport</Label>
+                  <Input id="arrivalAirport" value={arrivalAirport} onChange={(e) => setArrivalAirport(e.target.value)} />
                 </div>
               </>
             )}

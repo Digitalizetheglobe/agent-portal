@@ -12,7 +12,7 @@ const {
   getApplicationsByAgent
 } = require('../controllers/applicationController');
 const multer = require('multer');
-const { updateStage, submitFeeProof, reviewFeeProof, downloadFeeProof } = require('../controllers/visaPipelineController');
+const { updateStage, submitFeeProof, reviewFeeProof, downloadFeeProof, submitArrivalTicket, downloadArrivalTicket } = require('../controllers/visaPipelineController');
 const { protect, allowStaff, requireActivatedAgent, restrictTo, restrictToStaffRole } = require('../middleware/auth');
 
 // Proof of fee payment: a scan or photo, up to 10MB
@@ -44,6 +44,8 @@ router.patch('/:id/pipeline', restrictToStaffRole('head_admission'), updateStage
 router.post('/:id/fee-proof', restrictTo('agent'), proofUpload.single('file'), submitFeeProof);
 router.patch('/:id/fee-proof/review', restrictToStaffRole('head_admission'), reviewFeeProof);
 router.get('/:id/fee-proof/file', downloadFeeProof);
+router.post('/:id/arrival-ticket', restrictTo('agent', 'admin'), proofUpload.single('file'), submitArrivalTicket);
+router.get('/:id/arrival-ticket/file', downloadArrivalTicket);
 
 // Core CRUD routes
 router.post('/', requireActivatedAgent, createApplication);

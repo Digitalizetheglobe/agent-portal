@@ -1,6 +1,4 @@
 require('dotenv').config();
-// Local secrets (email password, API keys): backend/.env.local overrides .env and is never committed
-require('dotenv').config({ path: require('path').join(__dirname, '.env.local'), override: true });
 
 const express = require('express');
 const cors = require('cors');
@@ -323,6 +321,12 @@ const startServer = async () => {
     // Drop the old one-payoff-per-invoice uniqueness before sync; the model's partial index replaces it.
     await sequelize.query('ALTER TABLE IF EXISTS "Payoffs" DROP CONSTRAINT IF EXISTS "Payoffs_invoiceId_key"');
     await sequelize.query('DROP INDEX IF EXISTS "unique_invoice_payoff"');
+    // New visa pipeline stages (Medical Examination, Fees Paid). The type does not exist yet on a fresh database.
+    for (const value of ['Medical', 'FeesPaid']) {
+      try {
+        await sequelize.query(`ALTER TYPE "enum_Applications_pipelineStage" ADD VALUE IF NOT EXISTS '${value}'`);
+      } catch (e) { /* fresh database: sync creates the type with every value */ }
+    }
     console.log(`🔄 Synchronizing PostgreSQL database schema (alter: ${alter})...`);
     await sequelize.sync({ alter });
     if (!alter) {
@@ -340,6 +344,18 @@ const startServer = async () => {
         if (!payoffColumns[name]) {
           await qi.addColumn('Payoffs', name, { type, allowNull: true });
           console.log(`✅ Added Payoffs.${name}`);
+        }
+      }
+      const applicationColumns = await qi.describeTable('Applications');
+      for (const [name, type] of Object.entries({
+        arrivalFlightNumber: DataTypes.STRING,
+        arrivalTime: DataTypes.STRING,
+        arrivalAirport: DataTypes.STRING,
+        arrivalTicket: DataTypes.JSONB
+      })) {
+        if (!applicationColumns[name]) {
+          await qi.addColumn('Applications', name, { type, allowNull: true });
+          console.log(`✅ Added Applications.${name}`);
         }
       }
       if (!columns.passwordChangedAt) {
@@ -399,6 +415,19 @@ const startServer = async () => {
       if (carried > 0) console.log(`✅ Visa pipeline backfill: ${carried} existing application(s) set to Visa 100% / fees accepted`);
     } catch (error) {
       console.error('❌ Visa pipeline backfill failed:', error.message);
+    }
+
+    // The pipeline now puts Fees Paid before Visa 100%. An application at Visa 100% whose fees were not
+    // accepted yet goes back to Registration (where the proof is uploaded); one with accepted fees stays
+    // at Visa 100%. Safe to repeat: new applications cannot reach Visa 100% without accepted fees.
+    try {
+      const [moved] = await Application.update(
+        { pipelineStage: 'Registration', pipelineUpdatedAt: new Date() },
+        { where: { pipelineStage: 'Visa100', feeStatus: { [require('sequelize').Op.ne]: 'Accepted' } } }
+      );
+      if (moved > 0) console.log(`✅ Pipeline reorder: ${moved} application(s) at Visa 100% without accepted fees moved back to Registration`);
+    } catch (error) {
+      console.error('❌ Pipeline reorder failed:', error.message);
     }
 
     // Campus visits, offers, admission and enrollment were removed. An application left in one of those

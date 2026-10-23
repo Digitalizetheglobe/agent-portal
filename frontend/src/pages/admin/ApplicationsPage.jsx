@@ -207,9 +207,9 @@ const ApplicationsPage = () => {
         [APPLICATION_STATUS.UNDER_REVIEW, APPLICATION_STATUS.SUBMITTED].includes(a.status)
       ).length,
       inVisaProcess: applications.filter(a =>
-        isPipelineActive(a) && ['Visa15', 'Visa35', 'Visa70', 'Arrival', 'Registration'].includes(getDisplayStage(a))
+        isPipelineActive(a) && ['Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration'].includes(getDisplayStage(a))
       ).length,
-      feesPaid: applications.filter(a => getDisplayStage(a) === 'FeesPaid').length
+      feesPaid: applications.filter(a => ['FeesPaid', 'Visa100'].includes(getDisplayStage(a))).length
     };
   }, [applications]);
 

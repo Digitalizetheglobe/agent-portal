@@ -26,9 +26,9 @@ exports.getStats = async (req, res) => {
     const activeAgents = isAdmin ? await User.count({ where: { role: 'agent', status: 'active', ...agentWhere } }) : 0;
 
     const totalStudents = await Student.count({ where: filter });
-    // Students whose fees are confirmed (Visa 100% and fees accepted on at least one application)
+    // Students whose fees are confirmed (Fees Paid or Visa 100% on at least one application)
     const convertedStudents = await Application.count({
-      where: { ...filter, pipelineStage: 'Visa100', feeStatus: 'Accepted' },
+      where: { ...filter, pipelineStage: { [Op.in]: ['FeesPaid', 'Visa100'] } },
       distinct: true,
       col: 'studentId'
     });
@@ -38,7 +38,7 @@ exports.getStats = async (req, res) => {
       : 0;
 
     // 2b. Visa pipeline: every live application counts in exactly one stage, so moving a student on
-    // lowers one count and raises the next. At Visa 100% it is either waiting for fees or fees paid.
+    // lowers one count and raises the next. 
     const pipelineApps = await Application.findAll({
       attributes: ['pipelineStage', 'feeStatus'],
       where: { ...filter, status: { [Op.notIn]: INACTIVE_APPLICATION_STATUSES } },

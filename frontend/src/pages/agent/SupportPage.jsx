@@ -110,13 +110,13 @@ const SupportPage = () => {
       id: 's5',
       category: 'Students & Applications',
       question: 'What are the student stages?',
-      answer: 'Application → Visa 15% → Visa 35% → Visa 70% → Arrival → Registration → Pending Fees → Fees Paid. A student is in only one stage at a time, so the counts on your dashboard never double-count. When the student reaches Arrival, the team records who is arriving and the arrival date.'
+      answer: 'Application → Visa 15% → Visa 35% → Visa 70% → Arrival → Medical Examination → Registration → Fees Paid → Visa 100%. A student is in only one stage at a time, so the counts on your dashboard never double-count. When the student reaches Arrival, the team records who is arriving, the flight details and the arrival date, and you can upload the flight ticket. Visa 100% unlocks your commission invoice.'
     },
     {
       id: 's6',
       category: 'Students & Applications',
       question: 'The student reached Visa 100% — what do I do next?',
-      answer: 'Upload the student\'s proof of fee payment on the application page. The record shows "Pending Fees" until the Head of Admission checks that the payment was received and accepts or rejects the proof. If it is rejected, the reason is shown and you can upload a new proof. Once accepted, the student shows "Fees Paid" and is eligible for a commission invoice.'
+      answer: 'Upload the student\'s proof of fee payment on the application page when the student is at Registration. The Head of Admission checks that the payment was received and accepts or rejects the proof. If it is rejected, the reason is shown and you can upload a new proof. Once accepted, the student moves to Fees Paid, and after Visa 100% is reached you can raise a commission invoice.'
     },
     // Invoices & Payments
     {

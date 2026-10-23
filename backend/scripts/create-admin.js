@@ -1,5 +1,4 @@
 require('dotenv').config();
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env.local'), override: true });
 const { User } = require('../models');
 const { connectDB } = require('../config/db');
 const { passwordProblem } = require('../utils/security');

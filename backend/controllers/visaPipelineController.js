@@ -46,3 +46,22 @@ exports.downloadFeeProof = handle('Download fee proof', async (req, res) => {
   res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
   res.send(Buffer.from(data));
 });
+
+// @desc    Upload the flight ticket / arrival confirmation
+// @route   POST /api/applications/:id/arrival-ticket
+// @access  Private (the agent who owns it, Head of Admission, super admin)
+exports.submitArrivalTicket = handle('Submit arrival ticket', async (req, res) => {
+  const application = await visaPipelineService.submitArrivalTicket(req.params.id, req.file, req.user);
+  res.status(200).json(application);
+});
+
+// @desc    Download the flight ticket / arrival confirmation
+// @route   GET /api/applications/:id/arrival-ticket/file
+// @access  Private (the agent who owns it, staff)
+exports.downloadArrivalTicket = handle('Download arrival ticket', async (req, res) => {
+  const { data, contentType, fileName } = await visaPipelineService.getArrivalTicketFile(req.params.id, req.user);
+  res.setHeader('Content-Type', contentType);
+  const disposition = req.query.inline === 'true' ? 'inline' : 'attachment';
+  res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
+  res.send(Buffer.from(data));
+});
