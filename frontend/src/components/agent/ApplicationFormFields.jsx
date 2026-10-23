@@ -1,5 +1,6 @@
 import React from 'react';
 import { APPLICATION_GROUPS, isFieldRequired } from '../../utils/agentApplication';
+import { COUNTRIES } from '../../utils/countries';
 import { cn } from '../../lib/utils';
 
 const inputClass =
@@ -65,6 +66,22 @@ const ApplicationFormFields = ({ values, onChange, groups, disabled = false }) =
                       >
                         <option value="no">No</option>
                         <option value="yes">Yes</option>
+                      </select>
+                    ) : f.type === 'country' ? (
+                      <select
+                        id={id}
+                        className={inputClass}
+                        value={values[f.key] ?? ''}
+                        onChange={(e) => set(f.key, e.target.value)}
+                        disabled={disabled}
+                        required={required}
+                      >
+                        <option value="">Select country</option>
+                        {COUNTRIES.map((c) => (
+                          <option key={c.code} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))}
                       </select>
                     ) : f.type === 'textarea' ? (
                       <textarea

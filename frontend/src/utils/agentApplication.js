@@ -14,6 +14,7 @@ export const APPLICATION_GROUPS = [
       { key: 'idNumber', label: 'NRIC / Passport number', required: 'individual' },
       { key: 'natureOfBusiness', label: 'Nature of business', required: 'always', type: 'textarea', wide: true, placeholder: 'e.g. Overseas education consultancy' },
       { key: 'fullAddress', label: 'Address', required: 'always', type: 'textarea', wide: true },
+      { key: 'country', label: 'Country', type: 'country', required: 'always' },
       { key: 'region', label: 'Region', required: 'always' },
       { key: 'website', label: 'Website address', required: false, placeholder: 'www.example.com' },
       { key: 'fax', label: 'Fax no', required: false },

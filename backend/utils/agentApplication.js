@@ -1,3 +1,5 @@
+const { isValidCountry } = require('./countries');
+
 // Single source of truth for the agent application form:
 // which fields exist, which are mandatory, and how they are validated.
 //
@@ -8,6 +10,7 @@ const FIELDS = {
   businessRegistrationNumber: { label: 'Company registration number', required: 'company' },
   idNumber: { label: 'NRIC / Passport number', required: 'individual' },
   fullAddress: { label: 'Address', required: 'always' },
+  country: { label: 'Country', required: 'always' },
   region: { label: 'Region', required: 'always' },
   natureOfBusiness: { label: 'Nature of business', required: 'always' },
   contactPerson: { label: 'Contact person', required: 'company' },
@@ -107,6 +110,9 @@ const validateApplication = (data, { mode = 'register', existing = {} } = {}) =>
     }
     const rule = FORMAT_RULES[key];
     if (rule && !rule[0].test(value)) errors.push(rule[1]);
+    if (key === 'country' && !isValidCountry(value)) {
+      errors.push('Country is invalid');
+    }
   }
 
   if (merged.isRelativeOfEmployee === true && isBlank(merged.relativeName) &&

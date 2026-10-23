@@ -242,6 +242,14 @@ export default function SettingsPage() {
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{user?.role}</span>
                       </div>
                     </div>
+                    {user?.role === 'agent' && user?.agentCode && (
+                      <div>
+                        <FieldLabel>Agent ID</FieldLabel>
+                        <div className="h-10 px-3 border border-slate-100 rounded-lg flex items-center bg-slate-50">
+                          <span className="text-xs font-mono font-semibold text-[#042C53]">{user.agentCode}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {user?.role === 'agent' && (

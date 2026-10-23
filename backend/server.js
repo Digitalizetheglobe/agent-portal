@@ -321,6 +321,28 @@ const startServer = async () => {
     // Drop the old one-payoff-per-invoice uniqueness before sync; the model's partial index replaces it.
     await sequelize.query('ALTER TABLE IF EXISTS "Payoffs" DROP CONSTRAINT IF EXISTS "Payoffs_invoiceId_key"');
     await sequelize.query('DROP INDEX IF EXISTS "unique_invoice_payoff"');
+    // Chat channels: before this change a chat was a single thread. Note whether the column exists yet,
+    // so the old messages are sorted into a channel once, right after it is added.
+    const [[{ chatChannelMissing }]] = await sequelize.query(
+      `SELECT (EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ChatMessages')
+         AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ChatMessages' AND column_name = 'channel')) AS "chatChannelMissing"`
+    );
+
+    // Add the column before sync, because the model's new index needs it
+    if (chatChannelMissing) {
+      await sequelize.query(`DO $$ BEGIN CREATE TYPE "enum_ChatMessages_channel" AS ENUM ('direct', 'support'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`);
+      await sequelize.query(`ALTER TABLE "ChatMessages" ADD COLUMN "channel" "enum_ChatMessages_channel" NOT NULL DEFAULT 'direct'`);
+      console.log('✅ Added ChatMessages.channel');
+      // Old messages: a conversation with an agent who has an Account Manager was theirs (direct);
+      // one with an agent who has none was the general helpdesk (support). Done right with the column
+      // so an interrupted start cannot skip it.
+      const [, meta] = await sequelize.query(
+        `UPDATE "ChatMessages" SET "channel" = 'support'
+          WHERE "agentId" IN (SELECT id FROM "Users" WHERE "accountManagerId" IS NULL)`
+      );
+      console.log(`✅ Chat channels: ${meta.rowCount || 0} older message(s) of agents without an Account Manager moved to General Support`);
+    }
+
     // New visa pipeline stages (Medical Examination, Fees Paid). The type does not exist yet on a fresh database.
     for (const value of ['Medical', 'FeesPaid']) {
       try {
@@ -361,6 +383,10 @@ const startServer = async () => {
       if (!columns.passwordChangedAt) {
         await qi.addColumn('Users', 'passwordChangedAt', { type: require('sequelize').DataTypes.DATE, allowNull: true });
         console.log('✅ Added Users.passwordChangedAt');
+      }
+      if (!columns.country) {
+        await qi.addColumn('Users', 'country', { type: DataTypes.STRING, allowNull: true });
+        console.log('✅ Added Users.country');
       }
     }
     console.log('✅ PostgreSQL schema synchronized successfully');

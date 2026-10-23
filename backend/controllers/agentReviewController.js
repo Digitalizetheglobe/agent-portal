@@ -1,10 +1,11 @@
-const { User } = require('../models');
+const { User, sequelize } = require('../models');
 const { createNotification } = require('./notificationController');
 const {
   pickApplicationFields,
   validateApplication,
   missingRequiredDocs
 } = require('../utils/agentApplication');
+const { generateAgentCode, isStandardAgentCode } = require('../utils/agentId');
 
 // Agent onboarding review: the agent submits, then three staff roles sign off in order.
 //
@@ -200,16 +201,16 @@ const ACTIONS = {
     from: ['verified'],
     to: 'approved',
     check: documentsApprovedCheck,
-    apply: (agent, { reviewer, remarks }) => {
+    apply: (agent, { reviewer, remarks, agentCode }) => {
       agent.isVerified = true;
       agent.verificationStatus = 'approved';
-      agent.verificationRemarks = remarks || '';
+      agent.verificationRemarks = remarks || (agentCode ? `Approved (Agent ID: ${agentCode})` : '');
       agent.onboardingDecidedBy = reviewer.id;
       agent.onboardingDecidedAt = new Date();
     },
-    notify: () => ({
+    notify: (remarks, agent) => ({
       title: 'Application approved',
-      message: 'Congratulations! Your application has been approved. QStudy will contact you about your agent agreement.',
+      message: `Congratulations! Your application has been approved (Agent ID: ${agent?.agentCode || ''}). QStudy will contact you about your agent agreement.`,
       type: 'success'
     })
   },
@@ -260,6 +261,82 @@ exports.reviewOnboarding = async (req, res) => {
     }
     const blocker = action.check && await action.check(agent);
     if (blocker) return fail(res, 400, blocker);
+
+    if (req.params.action === 'approve') {
+      let approvalResult;
+      try {
+        approvalResult = await sequelize.transaction(async (t) => {
+          const agentInTx = await User.findOne({
+            where: { id: req.params.id, role: 'agent' },
+            transaction: t,
+            lock: t.LOCK.UPDATE
+          });
+          if (!agentInTx) {
+            const err = new Error('Agent not found');
+            err.statusCode = 404;
+            throw err;
+          }
+
+          if (!action.from.includes(agentInTx.onboardingStatus)) {
+            const err = new Error(`Cannot approve an application that is ${agentInTx.onboardingStatus.replace('_', ' ')}`);
+            err.statusCode = 400;
+            throw err;
+          }
+          const blocker = action.check && await action.check(agentInTx);
+          if (blocker) {
+            const err = new Error(blocker);
+            err.statusCode = 400;
+            throw err;
+          }
+
+          let agentId = agentInTx.agentCode;
+          if (!isStandardAgentCode(agentId)) {
+            agentId = await generateAgentCode(agentInTx, t);
+            agentInTx.agentCode = agentId;
+          }
+
+          const from = agentInTx.onboardingStatus;
+          if (action.apply) action.apply(agentInTx, { reviewer: req.user, remarks, agentCode: agentId });
+          agentInTx.onboardingStatus = action.to;
+
+          const historyRemarks = remarks
+            ? `${remarks} (Agent ID: ${agentId})`
+            : `Assigned Agent ID ${agentId}`;
+
+          addHistory(agentInTx, {
+            action: 'approve',
+            from,
+            to: action.to,
+            by: req.user.id,
+            byName: req.user.name,
+            agentCode: agentId,
+            remarks: historyRemarks
+          });
+
+          await agentInTx.save({ transaction: t });
+          return { agent: agentInTx, agentId };
+        });
+      } catch (err) {
+        if (err.statusCode && err.statusCode < 500) {
+          return fail(res, err.statusCode, err.message);
+        }
+        console.error('Approve onboarding transaction error:', err);
+        return fail(res, 500, err.message || 'Server error');
+      }
+
+      const { agent } = approvalResult;
+
+      if (action.notify) {
+        await createNotification({
+          recipient: agent.id,
+          ...action.notify(remarks, agent),
+          relatedId: agent.id,
+          relatedModel: 'Agent'
+        });
+      }
+
+      return res.status(200).json(agent.toJSON());
+    }
 
     const from = agent.onboardingStatus;
     if (action.apply) action.apply(agent, { reviewer: req.user, remarks });

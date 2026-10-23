@@ -219,9 +219,16 @@ const AgentDashboard = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
-            {getGreeting()}, {user?.name?.split(' ')[0] || 'Partner'}
-          </h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
+              {getGreeting()}, {user?.name?.split(' ')[0] || 'Partner'}
+            </h1>
+            {user?.agentCode && (
+              <span className="text-xs font-mono font-semibold text-[#042C53] bg-[#E6F1FB] border border-[#B5D4F4] px-2.5 py-0.5 rounded-md" data-testid="agent-id-badge">
+                ID: {user.agentCode}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500 mt-1 font-medium">
             Here's what's happening with your students and applications
           </p>

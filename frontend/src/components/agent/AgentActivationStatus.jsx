@@ -81,7 +81,14 @@ const AgentActivationStatus = () => {
               {active ? <Award className="w-5 h-5 text-emerald-600" /> : <FileSignature className="w-5 h-5 text-amber-600" />}
             </div>
             <div>
-              <CardTitle className="text-lg font-['Outfit']">{active ? 'Your account is active' : 'Agent agreement'}</CardTitle>
+              <div className="flex items-center gap-2 flex-wrap">
+                <CardTitle className="text-lg font-['Outfit']">{active ? 'Your account is active' : 'Agent agreement'}</CardTitle>
+                {user?.agentCode && (
+                  <span className="text-xs font-mono font-semibold text-[#042C53] bg-[#E6F1FB] border border-[#B5D4F4] px-2 py-0.5 rounded">
+                    ID: {user.agentCode}
+                  </span>
+                )}
+              </div>
               <CardDescription>
                 {active
                   ? `E-Certificate ${user.eCertificateNumber}${user.activatedAt ? ` · active since ${formatDate(user.activatedAt)}` : ''}. You can submit students.`

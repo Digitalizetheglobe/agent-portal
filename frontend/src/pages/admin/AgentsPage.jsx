@@ -190,7 +190,8 @@ const AgentsPage = () => {
       const matchesSearch =
         agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         agent.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (agent.agencyName && agent.agencyName.toLowerCase().includes(searchQuery.toLowerCase()));
+        (agent.agencyName && agent.agencyName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (agent.agentCode && agent.agentCode.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesFilter =
         currentFilter === 'all' ||
@@ -508,7 +509,14 @@ const AgentsPage = () => {
                               {getInitials(agent.name)}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-[13px] font-medium text-[#111827] truncate">{agent.name}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-[13px] font-medium text-[#111827] truncate">{agent.name}</p>
+                                {agent.agentCode && (
+                                  <span className="text-[10px] font-mono text-[#4B5563] bg-[#F3F4F6] px-1.5 py-0.5 rounded border border-[#E5E7EB]">
+                                    {agent.agentCode}
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[11px] text-[#6B7280] truncate">{agent.agencyName || 'Independent'}</p>
                             </div>
                           </div>
@@ -605,7 +613,14 @@ const AgentsPage = () => {
                     </div>
 
                     <div className="mb-4">
-                      <h4 className="text-[15px] font-semibold text-[#111827] truncate">{agent.name}</h4>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-[15px] font-semibold text-[#111827] truncate">{agent.name}</h4>
+                        {agent.agentCode && (
+                          <span className="text-[10px] font-mono text-[#4B5563] bg-[#F3F4F6] px-1.5 py-0.5 rounded border border-[#E5E7EB]">
+                            {agent.agentCode}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[12px] text-[#6B7280] truncate mt-0.5">{agent.agencyName || 'Independent Agency'}</p>
                       <div className="mt-2">
                         {agent.verificationStatus === 'approved' || agent.isVerified ? (
