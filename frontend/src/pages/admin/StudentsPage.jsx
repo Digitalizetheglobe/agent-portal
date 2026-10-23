@@ -915,23 +915,23 @@ const StudentsPage = () => {
             )}
 
             <div className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-4 font-['Outfit']">Journey Progress</div>
-            <div className="flex items-center mb-6">
+            <div className="flex items-start mb-6">
               {STUDENT_JOURNEY.map((stage, idx) => {
                 const currentIdx = getStudentJourneyIndex(selectedStudent);
-                const isDone = idx < currentIdx;
-                const isActive = idx === currentIdx;
+                const isLast = idx === STUDENT_JOURNEY.length - 1;
+                // The final stage has nothing after it, so reaching it counts as complete
+                const isDone = idx < currentIdx || (isLast && idx === currentIdx);
+                const isActive = idx === currentIdx && !isLast;
                 return (
-                  <React.Fragment key={stage}>
-                    <div className="flex flex-col items-center flex-1">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold border transition-all ${isDone ? 'bg-[#EAF3DE] border-[#C0DD97] text-[#27500A]' : isActive ? 'bg-[#E6F1FB] border-[#85B7EB] text-[#0C447C] ring-4 ring-[#042C53]/5' : 'bg-gray-50 border-[#E5E7EB] text-[#6B7280]'}`}>
-                        {isDone ? <CheckCircle2 size={14} /> : idx + 1}
-                      </div>
-                      <div className={`text-[10px] mt-2 font-semibold text-center ${isDone ? 'text-[#27500A]' : isActive ? 'text-[#0C447C] font-bold' : 'text-[#6B7280]'}`}>{getStageLabel(stage)}</div>
-                    </div>
-                    {idx < STUDENT_JOURNEY.length - 1 && (
-                      <div className={`flex-1 h-0.5 mt-[-18px] ${isDone ? 'bg-[#97C459]' : 'bg-[#F3F4F6]'}`}></div>
+                  <div key={stage} className="flex-1 min-w-0 relative flex flex-col items-center">
+                    {idx > 0 && (
+                      <div className={`absolute top-4 -translate-y-1/2 right-1/2 w-full h-0.5 ${idx <= currentIdx ? 'bg-[#97C459]' : 'bg-[#E5E7EB]'}`}></div>
                     )}
-                  </React.Fragment>
+                    <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold border transition-all ${isDone ? 'bg-[#EAF3DE] border-[#C0DD97] text-[#27500A]' : isActive ? 'bg-[#E6F1FB] border-[#85B7EB] text-[#0C447C] ring-4 ring-[#042C53]/5' : 'bg-gray-50 border-[#E5E7EB] text-[#6B7280]'}`}>
+                      {isDone ? <CheckCircle2 size={14} /> : idx + 1}
+                    </div>
+                    <div className={`text-[10px] leading-tight mt-2 px-0.5 font-semibold text-center break-words ${isDone ? 'text-[#27500A]' : isActive ? 'text-[#0C447C] font-bold' : 'text-[#6B7280]'}`}>{getStageLabel(stage)}</div>
+                  </div>
                 );
               })}
             </div>

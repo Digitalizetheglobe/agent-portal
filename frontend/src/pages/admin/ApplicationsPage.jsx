@@ -209,7 +209,7 @@ const ApplicationsPage = () => {
       inVisaProcess: applications.filter(a =>
         isPipelineActive(a) && ['Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration'].includes(getDisplayStage(a))
       ).length,
-      feesPaid: applications.filter(a => ['FeesPaid', 'Visa100'].includes(getDisplayStage(a))).length
+      feesPaid: applications.filter(a => isPipelineActive(a) && ['FeesPaid', 'Visa100'].includes(getDisplayStage(a))).length
     };
   }, [applications]);
 
@@ -415,7 +415,7 @@ const ApplicationsPage = () => {
                     <TableCell className="py-3.5">
                       <button
                         onClick={() => navigate(isAdmin() ? `/admin/applications/${app.id}` : `/agent/applications/${app.id}`)}
-                        className="text-xs font-bold text-[#042C53] hover:underline text-left"
+                        className="text-xs font-bold text-[#042C53] hover:underline text-left whitespace-nowrap"
                       >
                         {app.applicationNumber || app.id?.slice(-8).toUpperCase()}
                       </button>
@@ -482,7 +482,7 @@ const ApplicationsPage = () => {
 
                     {/* Status */}
                     <TableCell className="py-3.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap border ${getStatusBadgeStyle(app.status)}`}>
+                      <span className={`flex w-fit items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap border ${getStatusBadgeStyle(app.status)}`}>
                         {APPLICATION_STATUS_LABELS[app.status] || app.status}
                       </span>
                       {isPipelineActive(app) && (
@@ -536,7 +536,7 @@ const ApplicationsPage = () => {
                           <Edit2 className="w-3.5 h-3.5" />
                         </Button>
                         {/* Delete button: Only if not invoiced, and agents only if Draft */}
-                        {(!app.isInvoiced && (isAdmin() || app.status === 'Draft')) && (
+                        {(!app.isInvoiced && (isAdmin() || app.status === 'Draft')) ? (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -546,6 +546,8 @@ const ApplicationsPage = () => {
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
+                        ) : (
+                          <span className="h-8 w-8 shrink-0" aria-hidden="true" />
                         )}
                       </div>
                     </TableCell>
