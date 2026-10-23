@@ -2,7 +2,9 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
 // One message in the live chat between an agent and QStudy staff.
-// A conversation is simply all messages with the same agentId.
+// A conversation is all messages with the same agentId and channel:
+//   direct  - the agent and their Account Manager
+//   support - the general helpdesk
 const ChatMessage = sequelize.define('ChatMessage', {
   id: {
     type: DataTypes.UUID,
@@ -20,6 +22,11 @@ const ChatMessage = sequelize.define('ChatMessage', {
     allowNull: false,
     references: { model: 'Users', key: 'id' },
     onDelete: 'CASCADE'
+  },
+  channel: {
+    type: DataTypes.ENUM('direct', 'support'),
+    allowNull: false,
+    defaultValue: 'direct'
   },
   // Who wrote it (the agent, or the staff member who replied)
   senderId: {
@@ -44,7 +51,7 @@ const ChatMessage = sequelize.define('ChatMessage', {
 }, {
   tableName: 'ChatMessages',
   timestamps: true,
-  indexes: [{ fields: ['agentId', 'createdAt'] }]
+  indexes: [{ fields: ['agentId', 'channel', 'createdAt'] }]
 });
 
 module.exports = ChatMessage;

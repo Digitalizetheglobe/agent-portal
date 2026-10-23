@@ -8,10 +8,13 @@ router.use(protect);
 // Everyone: the WhatsApp link
 router.get('/config', chat.config);
 
-// Agent: their own conversation with QStudy
+// Agent: their own conversations, `?channel=direct` (Account Manager, default) or `?channel=support` (helpdesk)
 router.get('/me', restrictTo('agent'), chat.getMine);
 router.post('/me', restrictTo('agent'), chat.sendMine);
 router.get('/me/unread', restrictTo('agent'), chat.unreadMine);
+
+// Staff: which channels they can open (and write in)
+router.get('/access', restrictTo('admin'), chat.access);
 
 // Staff: conversations with agents (Account Managers only see their own agents)
 router.get('/conversations', restrictTo('admin'), chat.conversations);

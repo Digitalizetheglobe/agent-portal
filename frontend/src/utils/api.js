@@ -472,13 +472,15 @@ export const staffAPI = {
 // Live chat APIs
 export const chatAPI = {
   config: () => api.get('/chat/config'),
-  getMine: (after) => api.get('/chat/me', { params: after ? { after } : {} }),
-  sendMine: (body) => api.post('/chat/me', { body }),
+  // channel: 'direct' (agent and their Account Manager) or 'support' (general helpdesk)
+  getMine: (channel, after, markRead = true) => api.get('/chat/me', { params: { channel, ...(after ? { after } : {}), ...(markRead ? {} : { markRead: false }) } }),
+  sendMine: (channel, body) => api.post('/chat/me', { channel, body }),
   unreadMine: () => api.get('/chat/me/unread'),
-  conversations: () => api.get('/chat/conversations'),
-  agents: () => api.get('/chat/agents'),
-  getConversation: (agentId, after) => api.get(`/chat/conversations/${agentId}`, { params: after ? { after } : {} }),
-  reply: (agentId, body) => api.post(`/chat/conversations/${agentId}`, { body })
+  access: () => api.get('/chat/access'),
+  conversations: (channel) => api.get('/chat/conversations', { params: { channel } }),
+  agents: (channel) => api.get('/chat/agents', { params: { channel } }),
+  getConversation: (channel, agentId, after) => api.get(`/chat/conversations/${agentId}`, { params: { channel, ...(after ? { after } : {}) } }),
+  reply: (channel, agentId, body) => api.post(`/chat/conversations/${agentId}`, { channel, body })
 };
 
 // Notification APIs
