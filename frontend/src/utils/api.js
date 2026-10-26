@@ -203,6 +203,7 @@ export const agentAPI = {
   acceptDeclaration: (data) => api.post('/agents/me/declaration', data),
   reviewOnboarding: (id, action, data = {}) => api.patch(`/agents/${id}/onboarding/${action}`, data),
   getById: (id) => api.get(`/agents/${id}`),
+  updateUniversityAccess: (id, data) => api.put(`/agents/${id}/university-access`, data),
   create: (data) => api.post('/agents', data),
   createAdmin: (data) => api.post('/agents/admin', data),
   update: (id, data) => api.put(`/agents/${id}`, data),
@@ -425,6 +426,10 @@ export const payoffAPI = {
   replace: (id, data = {}) => api.post(`/payoffs/${id}/replace`, data),
   // The agent is paid only after the university has paid QStudy
   recordUniversityPayment: (id, data = {}) => api.patch(`/payoffs/${id}/university-payment`, data),
+  // University payments are recorded per university (what each university owes QStudy)
+  getUniversityReceivables: () => api.get('/payoffs/university-receivables'),
+  recordReceivablePayment: (data) => api.post('/payoffs/university-receivables/payments', data),
+  reverseReceivablePayment: (id, data = {}) => api.patch(`/payoffs/university-receivables/payments/${id}/reverse`, data),
   authorizeBypass: (id, data = {}) => api.patch(`/payoffs/${id}/bypass-block`, data),
   downloadSlip: (id, params = {}) => api.get(`/payoffs/${id}/slip`, { params, responseType: 'blob' })
 };
@@ -491,3 +496,9 @@ export const notificationAPI = {
 };
 
 export default api;
+
+// Bulk import of universities and programs from a spreadsheet (rows are sent in small batches)
+export const importAPI = {
+  universities: (rows, dryRun) => api.post('/imports/universities', { rows, dryRun }),
+  programs: (rows, dryRun) => api.post('/imports/programs', { rows, dryRun })
+};

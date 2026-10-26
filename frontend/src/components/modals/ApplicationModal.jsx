@@ -37,7 +37,12 @@ const CURRENCIES = [
   { code: 'GBP', symbol: '£', label: 'GBP (£)' },
   { code: 'EUR', symbol: '€', label: 'EUR (€)' },
   { code: 'CAD', symbol: 'C$', label: 'CAD (C$)' },
-  { code: 'AUD', symbol: 'A$', label: 'AUD (A$)' }
+  { code: 'AUD', symbol: 'A$', label: 'AUD (A$)' },
+  { code: 'MYR', symbol: 'RM', label: 'MYR (RM)' },
+  { code: 'INR', symbol: '₹', label: 'INR (₹)' },
+  { code: 'SGD', symbol: 'S$', label: 'SGD (S$)' },
+  { code: 'NZD', symbol: 'NZ$', label: 'NZD (NZ$)' },
+  { code: 'AED', symbol: 'AED', label: 'AED (AED)' }
 ];
 
 const INTAKE_SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
@@ -75,7 +80,7 @@ const parseCourseFee = (fee) => {
   return value > 0 && isFinite(value) ? value : null;
 };
 
-const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess }) => {
+const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess, defaultUniversityId = '' }) => {
   const { user, isAdmin } = useAuth();
   const {
     students,
@@ -169,12 +174,13 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess })
     } else {
       setFormData({
         ...initialFormState,
+        universityId: defaultUniversityId || '',
         agentId: !isAdmin() ? String(user?.id) : ''
       });
     }
     setStudentSearch('');
     setErrors({});
-  }, [application, open, user, isAdmin]);
+  }, [application, open, user, isAdmin, defaultUniversityId]);
 
   const handleChange = (field, value) => {
     setFormData(prev => {

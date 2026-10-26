@@ -178,7 +178,12 @@ const ComplianceStatus = () => {
           {/* Required documents checklist */}
           {checklist.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Required documents</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Verification Documents</p>
+                <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                  Any 1 document sufficient
+                </span>
+              </div>
               <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {checklist.map(({ type, doc }) => (
                   <li key={type} className="flex items-center gap-2 text-sm">
@@ -189,7 +194,9 @@ const ComplianceStatus = () => {
                   </li>
                 ))}
               </ul>
-              <p className="text-xs text-muted-foreground">All documents in English, scanned as PDF.</p>
+              <p className="text-xs text-muted-foreground">
+                Official policy: Uploading <strong>ANY ONE</strong> of the above documents (Company Profile, Business Registration, or Passport) is sufficient for review and activation.
+              </p>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">

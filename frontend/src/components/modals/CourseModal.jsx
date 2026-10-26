@@ -260,7 +260,7 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
             </div>
             <div>
               <DialogTitle className="text-xl font-bold text-[#111827] font-['Outfit']">
-                {isEditing ? 'Edit Course' : 'Add New Course'}
+                {isEditing ? 'Edit Program' : 'Add New Program'}
               </DialogTitle>
               <DialogDescription className="text-xs text-gray-500 font-medium mt-0.5">
                 {isEditing ? 'Update course specifications and university availability' : 'Add a degree program or study course and assign to partner universities'}

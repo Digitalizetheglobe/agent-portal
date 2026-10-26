@@ -141,6 +141,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/universities', universityRoutes);
 app.use('/api/invoice-reviews', invoiceReviewRoutes);
 app.use('/api/courses', courseRoutes);
+app.use('/api/imports', require('./routes/importRoutes'));
 app.use('/api/payoffs', payoffRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/audit-logs', auditRoutes);
@@ -361,7 +362,9 @@ const startServer = async () => {
         cancelledAt: DataTypes.DATE,
         cancelledBy: DataTypes.UUID,
         cancellationReason: DataTypes.TEXT,
-        replacesPayoffId: DataTypes.UUID
+        replacesPayoffId: DataTypes.UUID,
+        paymentTermDays: DataTypes.INTEGER,
+        payoutDueDate: DataTypes.DATEONLY
       })) {
         if (!payoffColumns[name]) {
           await qi.addColumn('Payoffs', name, { type, allowNull: true });
@@ -384,12 +387,28 @@ const startServer = async () => {
         await qi.addColumn('Users', 'passwordChangedAt', { type: require('sequelize').DataTypes.DATE, allowNull: true });
         console.log('✅ Added Users.passwordChangedAt');
       }
+      if (!columns.universityAccessMode) {
+        await qi.addColumn('Users', 'universityAccessMode', { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'all' });
+        console.log('✅ Added Users.universityAccessMode');
+      }
+      if (!columns.allowedUniversityIds) {
+        await qi.addColumn('Users', 'allowedUniversityIds', { type: DataTypes.JSONB, allowNull: false, defaultValue: [] });
+        console.log('✅ Added Users.allowedUniversityIds');
+      }
       if (!columns.country) {
         await qi.addColumn('Users', 'country', { type: DataTypes.STRING, allowNull: true });
         console.log('✅ Added Users.country');
       }
     }
     console.log('✅ PostgreSQL schema synchronized successfully');
+
+    // Payments recorded the old way (on one payoff) become university payments
+    try {
+      const migrated = await require('./services/universityReceivableService').migrateLegacyPayments();
+      if (migrated) console.log(`✅ Carried over ${migrated} university payment(s) to the new ledger`);
+    } catch (error) {
+      console.error('⚠️  University payment migration failed:', error.message);
+    }
 
     // Say clearly whether notification emails really go out
     const { isEmailConfigured, getEmailProviderName } = require('./utils/email');

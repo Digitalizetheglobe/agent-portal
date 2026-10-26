@@ -7,6 +7,9 @@ const {
   settlePayoff,
   cancelPayoff,
   replacePayoff,
+  getUniversityReceivables,
+  recordUniversityReceivablePayment,
+  reverseUniversityPayment,
   recordUniversityPayment,
   authorizeBypass,
   downloadSlip
@@ -26,6 +29,11 @@ const slipUpload = multer({
 
 // All payoff routes require authentication
 router.use(protect);
+
+// What each university owes QStudy, and the payments that bring it down (must come before /:id)
+router.get('/university-receivables', restrictToStaffRole('accounts', 'head_admission'), getUniversityReceivables);
+router.post('/university-receivables/payments', restrictToStaffRole('accounts', 'head_admission'), recordUniversityReceivablePayment);
+router.patch('/university-receivables/payments/:id/reverse', restrictToStaffRole('accounts', 'head_admission'), reverseUniversityPayment);
 
 // Collection listing (Admin sees all, Agent sees own)
 router.get('/', getPayoffs);

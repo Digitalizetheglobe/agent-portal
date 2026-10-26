@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { Course, University } = require('../models');
 const { sequelize } = require('../config/db');
 const { isUuid } = require('../utils/universityContent');
+const { universityAccessCondition } = require('../utils/universityAccess');
 
 const normalizeCode = (code) => (code ? String(code).trim().toUpperCase() : '');
 
@@ -116,6 +117,23 @@ class CourseService {
       } else {
         where[Op.or] = searchConditions;
       }
+    }
+
+    // Agents only see courses open to all, or offered by a university they are allowed to use
+    const accessCondition = universityAccessCondition(currentUser);
+    if (accessCondition) {
+      const allowed = await University.findAll({ where: accessCondition, attributes: ['id'], raw: true });
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        {
+          [Op.or]: [
+            { universityId: null },
+            { universityId: { [Op.in]: allowed.map(u => u.id) } },
+            sequelize.literal(`"Course"."universityIds" IS NULL OR "Course"."universityIds"::text = '[]'`),
+            ...allowed.map(u => sequelize.literal(`"Course"."universityIds"::text LIKE '%${u.id}%'`))
+          ]
+        }
+      ];
     }
 
     const offset = (Math.max(1, parseInt(page, 10)) - 1) * Math.max(1, parseInt(limit, 10));
@@ -345,4 +363,8 @@ class CourseService {
   }
 }
 
-module.exports = new CourseService();
+const courseService = new CourseService();
+// Shared with the bulk import so it applies the same duplicate rule
+courseService.assertNoAmbiguousDuplicate = assertNoAmbiguousDuplicate;
+
+module.exports = courseService;

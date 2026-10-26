@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import {
   FileCheck,
@@ -77,7 +77,10 @@ const AgentApplicationsPage = () => {
   const [universityFilter, setUniversityFilter] = useState('all');
 
   // Modals & Dialogs
-  const [modalOpen, setModalOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Arriving from a university page (?university=ID) opens the new application form for that university
+  const presetUniversityId = searchParams.get('university') || '';
+  const [modalOpen, setModalOpen] = useState(Boolean(presetUniversityId));
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [applicationToDelete, setApplicationToDelete] = useState(null);
@@ -540,8 +543,12 @@ const AgentApplicationsPage = () => {
       {/* Create / Edit Modal */}
       <ApplicationModal
         open={modalOpen}
-        onOpenChange={setModalOpen}
+        onOpenChange={(open) => {
+          setModalOpen(open);
+          if (!open && presetUniversityId) setSearchParams({}, { replace: true });
+        }}
         application={selectedApplication}
+        defaultUniversityId={presetUniversityId}
         onSuccess={() => loadApplications(currentPage)}
       />
 

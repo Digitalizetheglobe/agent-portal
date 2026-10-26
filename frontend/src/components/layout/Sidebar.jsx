@@ -16,7 +16,6 @@ import {
   BookOpen,
   FileCheck,
   CreditCard,
-  ShieldCheck,
   ScrollText
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -29,54 +28,77 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
 
   // Sections follow the real workflow: people -> admissions -> money.
   const adminSections = [
-    { title: null, links: [
-      { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/admin/news', icon: Newspaper, label: 'News & Updates' },
-    ]},
-    { title: 'People', links: [
-      { to: '/admin/agents', icon: Users, label: 'Agents' },
-      // The team list is for the super admin only
-      ...(user?.role === 'admin' && !user.staffRole ? [{ to: '/admin/team', icon: UsersRound, label: 'Team' }] : []),
-      { to: '/admin/students', icon: GraduationCap, label: 'Students' },
-      { to: '/admin/verification', icon: ShieldCheck, label: 'Student Verification' },
-    ]},
-    { title: 'Admissions', links: [
-      { to: '/admin/universities', icon: Building2, label: 'Universities' },
-      { to: '/admin/courses', icon: BookOpen, label: 'Courses' },
-      { to: '/admin/applications', icon: FileCheck, label: 'Applications' },
-    ]},
-    { title: 'Finance', links: [
-      { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
-      { to: '/admin/payoffs', icon: CreditCard, label: 'Payoffs' },
-    ]},
-    { title: 'Help', links: [
-      { to: '/admin/chat', icon: MessageCircle, label: 'Live Chat' },
-      { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
-      { to: '/admin/settings', icon: Settings, label: 'Settings' },
-      // The audit log is for the Head of Admission and super admin
-      ...(hasStaffRole(user, 'head_admission') ? [{ to: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' }] : []),
-    ]},
+    {
+      title: null, links: [
+        { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        { to: '/admin/news', icon: Newspaper, label: 'News & Updates' },
+      ]
+    },
+    {
+      title: 'Agents & Admissions', links: [
+        { to: '/admin/agents', icon: Users, label: 'Agents' },
+        { to: '/admin/students', icon: GraduationCap, label: 'Students' },
+        { to: '/admin/applications', icon: FileCheck, label: 'Applications' },
+        { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
+      ]
+    },
+    {
+      title: 'Info', links: [
+        { to: '/admin/universities', icon: Building2, label: 'Universities' },
+        { to: '/admin/courses', icon: BookOpen, label: 'Programs' },
+      ]
+    },
+    {
+      title: 'Finance', links: [
+        { to: '/admin/payoffs', icon: CreditCard, label: 'Payoffs' },
+      ]
+    },
+    {
+      title: 'Help', links: [
+        // The team list is for the super admin only
+        ...(user?.role === 'admin' && !user.staffRole ? [{ to: '/admin/team', icon: UsersRound, label: 'Team' }] : []),
+        { to: '/admin/chat', icon: MessageCircle, label: 'Live Chat' },
+        { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
+        { to: '/admin/settings', icon: Settings, label: 'Settings' },
+        // The audit log is strictly for the Super Admin (Vijay requirement)
+        ...(user?.role === 'admin' && (!user.staffRole || user.staffRole === 'super_admin')
+          ? [{ to: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' }]
+          : []),
+      ]
+    },
   ];
 
   const agentSections = [
-    { title: null, links: [
-      { to: '/agent/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/agent/news', icon: Newspaper, label: 'News & Updates' },
-    ]},
-    { title: 'Admissions', links: [
-      { to: '/agent/universities', icon: Building2, label: 'Universities' },
-      { to: '/agent/students', icon: GraduationCap, label: 'Students' },
-      { to: '/agent/applications', icon: FileCheck, label: 'Applications' },
-    ]},
-    { title: 'Finance', links: [
-      { to: '/agent/invoices', icon: FileText, label: 'Invoices' },
-      { to: '/agent/payoffs', icon: CreditCard, label: 'Payoffs' },
-    ]},
-    { title: 'Help', links: [
-      { to: '/agent/chat', icon: MessageCircle, label: 'Live Chat' },
-      { to: '/agent/support', icon: LifeBuoy, label: 'Support' },
-      { to: '/agent/settings', icon: Settings, label: 'Settings' },
-    ]},
+    {
+      title: null, links: [
+        { to: '/agent/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        { to: '/agent/news', icon: Newspaper, label: 'News & Updates' },
+      ]
+    },
+    {
+      title: 'Admissions', links: [
+        { to: '/agent/students', icon: GraduationCap, label: 'Students' },
+        { to: '/agent/applications', icon: FileCheck, label: 'Applications' },
+        { to: '/agent/invoices', icon: FileText, label: 'Invoices' },
+      ]
+    },
+    {
+      title: 'Info', links: [
+        { to: '/agent/universities', icon: Building2, label: 'Universities' },
+      ]
+    },
+    {
+      title: 'Finance', links: [
+        { to: '/agent/payoffs', icon: CreditCard, label: 'Payoffs' },
+      ]
+    },
+    {
+      title: 'Help', links: [
+        { to: '/agent/chat', icon: MessageCircle, label: 'Live Chat' },
+        { to: '/agent/support', icon: LifeBuoy, label: 'Support' },
+        { to: '/agent/settings', icon: Settings, label: 'Settings' },
+      ]
+    },
   ];
 
   const sections = isAdmin() ? adminSections : agentSections;

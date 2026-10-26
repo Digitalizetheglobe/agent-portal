@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { getAuditLogs } = require('../controllers/auditController');
-const { protect, restrictToStaffRole } = require('../middleware/auth');
+const { protect, restrictToSuperAdminOr } = require('../middleware/auth');
 
 router.use(protect);
 
-// The audit log is read-only, and only the Head of Admission and super admin can see it
-router.get('/', restrictToStaffRole('head_admission'), getAuditLogs);
+// The audit log is read-only, and strictly for the Super Admin (Vijay requirement)
+router.get('/', restrictToSuperAdminOr(), getAuditLogs);
 
 module.exports = router;

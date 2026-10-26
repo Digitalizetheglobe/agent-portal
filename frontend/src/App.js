@@ -26,7 +26,6 @@ const AgentStudentsPage = lazy(() => import("./pages/agent/AgentStudentsPage"));
 
 const AdminInvoicesPage = lazy(() => import("./pages/admin/AdminInvoicesPage"));
 const AdminPayoffsPage = lazy(() => import("./pages/admin/AdminPayoffsPage"));
-const AdminStudentVerificationPage = lazy(() => import("./pages/admin/AdminStudentVerificationPage"));
 const AdminSupportPage = lazy(() => import("./pages/admin/AdminSupportPage"));
 const AgentReportPage = lazy(() => import("./pages/admin/AgentReportPage"));
 const AgentDetailPage = lazy(() => import("./pages/admin/AgentDetailPage"));
@@ -75,7 +74,8 @@ function App() {
                   <Route path="courses" element={<CoursesPage />} />
                   <Route path="invoices" element={<AdminInvoicesPage />} />
                   <Route path="payoffs" element={<AdminPayoffsPage />} />
-                  <Route path="verification" element={<AdminStudentVerificationPage />} />
+                  {/* Verification now lives inside the Students page; keep old links working */}
+                  <Route path="verification" element={<Navigate to="/admin/students?tab=queue" replace />} />
                   <Route path="support" element={<AdminSupportPage />} />
                   <Route path="chat" element={<ChatPage />} />
                   <Route path="audit-log" element={<AuditLogPage />} />

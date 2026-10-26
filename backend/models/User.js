@@ -134,6 +134,11 @@ const User = sequelize.define('User', {
   // Sequential agent ID (QS-AG-0001), assigned at registration
   agentCode: { type: DataTypes.STRING, allowNull: true, unique: true },
 
+  // Which universities the agent can see / submit students to (set by Super Admin).
+  // Modes: all | malaysia_only | foreign_only | custom (uses allowedUniversityIds)
+  universityAccessMode: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'all' },
+  allowedUniversityIds: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+
   // ── Agent application (QStudy agent application form) ──
   agentType: {
     type: DataTypes.ENUM('company', 'individual'),

@@ -1,5 +1,7 @@
 const { Op } = require('sequelize');
-const { User } = require('../models');
+const { User, University } = require('../models');
+const { ACCESS_MODES } = require('../utils/universityAccess');
+const { isUuid } = require('../utils/universityContent');
 const { sendEmail, templates } = require('../utils/email');
 const { putObject, getObject, deleteObject, generateStoragePath } = require('../utils/storage');
 const { randomUUID: uuidv4 } = require('crypto');
@@ -61,7 +63,24 @@ exports.getAccountManagers = async (req, res) => {
 exports.getAgents = async (req, res) => {
   try {
     const where = { role: 'agent' };
-    if (isAccountManager(req.user)) where.accountManagerId = req.user.id;
+    if (isAccountManager(req.user)) {
+      where.accountManagerId = req.user.id;
+    } else if (req.query.accountManagerId) {
+      if (req.query.accountManagerId === 'unassigned') {
+        where.accountManagerId = null;
+      } else {
+        where.accountManagerId = req.query.accountManagerId;
+      }
+    }
+    if (req.query.country) {
+      where.country = { [Op.iLike]: req.query.country.trim() };
+    }
+    if (req.query.region) {
+      where.region = { [Op.iLike]: req.query.region.trim() };
+    }
+    if (req.query.status) {
+      where.status = req.query.status;
+    }
     const agents = await User.findAll({
       where,
       include: [accountManagerInclude],
@@ -341,6 +360,42 @@ exports.updateAgent = async (req, res) => {
       success: false,
       detail: 'Server error'
     });
+  }
+};
+
+// @desc    Set which universities an agent may see and submit students to
+// @route   PUT /api/agents/:id/university-access
+// @access  Private (Super Admin only)
+exports.updateUniversityAccess = async (req, res) => {
+  try {
+    const { universityAccessMode, allowedUniversityIds } = req.body;
+    if (!ACCESS_MODES.includes(universityAccessMode)) {
+      return res.status(400).json({ success: false, detail: `Access mode must be one of: ${ACCESS_MODES.join(', ')}` });
+    }
+
+    const agent = await User.findOne({ where: { id: req.params.id, role: 'agent' } });
+    if (!agent) return res.status(404).json({ success: false, detail: 'Agent not found' });
+
+    let ids = [];
+    if (universityAccessMode === 'custom') {
+      if (!Array.isArray(allowedUniversityIds) || !allowedUniversityIds.every(isUuid)) {
+        return res.status(400).json({ success: false, detail: 'Choose universities from the list' });
+      }
+      ids = [...new Set(allowedUniversityIds.map(String))];
+      const found = await University.count({ where: { id: { [Op.in]: ids } } });
+      if (found !== ids.length) {
+        return res.status(400).json({ success: false, detail: 'One or more selected universities no longer exist' });
+      }
+    }
+
+    agent.universityAccessMode = universityAccessMode;
+    agent.allowedUniversityIds = ids;
+    await agent.save();
+
+    res.status(200).json(serializeAgent(await reloadWithManager(agent.id), req.user));
+  } catch (error) {
+    console.error('Update university access error:', error);
+    res.status(500).json({ success: false, detail: 'Server error' });
   }
 };
 

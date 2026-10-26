@@ -1,28 +1,43 @@
 # 📋 QStudy Meeting Audit & Implementation Requirements
 
-**Meeting Context:** Project Review & Requirement Alignment with QStudy Leadership  
-**Attendees:** 
-- **Client (QStudy Leadership / Speaker A & E)**
-- **Technical Lead / PM (Ankush / Speaker B)**
-- **Engineering / Backend Dev (Vijay / Speaker D)**  
-**Target Completion:** Committed for Monday; Initial Matrix & Chart review today / tomorrow (before client's Expo Sun–Tue).
+**Recording:** WhatsApp Audio, 22 Oct 2026, 1:55 PM (about 30 minutes)  
+**Topic:** Walkthrough of the agent portal (admin dashboard, agent onboarding, students, finance, chat, support, audit log), plus migrating the existing university/program portal  
+**Attendees & Roles:** 
+- **Client (QStudy Leadership):** **Vijay** (gives the requirements, reviews the portal)
+- **Developer / Presenter:** **Ankush** (walks through the portal)
+- **Developer / Engineering:** **Anup** (backend, models, Render)  
+**Target Completion:** Committed for Monday; Initial Matrix & Chart review Thursday/Friday (before Vijay's Expo Sun–Tue).
 
 ---
 
 ## 🎯 1. Executive Summary & Immediate Next Action
 
-During the meeting, the client reviewed the live progress, clarified the real-world operational model, removed unnecessary/confusing dummy metrics, and provided direct instructions for the system workflow.
+During the meeting, Vijay (client) reviewed the live progress, clarified the real-world operational model, removed unnecessary/confusing dummy metrics, and provided direct instructions for the system workflow.
 
-### ⚡ Immediate Deliverable Requested by Client Today:
-> *"Why don't you do for me a chart? Admin, super admin, what are things inside? Agent, what are things inside? Account manager, what are the things inside? So then I can correct you today. Tomorrow I'm free, I can correct you... Do an Excel sheet / Access Permissions Matrix."*
-
-A visual diagram and access matrix outlining the **5 core roles** and their exact system rights must be submitted immediately for client validation.
+### ⚡ Immediate Deliverables Requested by Client:
+1. **Role Flowchart & Access Permissions Matrix:**
+   > *"Why don't you do for me a chart? Admin, super admin, what are things inside? Agent, what are things inside? Account manager, what are the things inside? So then I can correct you today. Tomorrow I'm free, I can correct you... Do an Excel sheet / Access Permissions Matrix."*
+2. **Deadline:** Monday completion. Vijay is at an education expo Sunday through Tuesday.
 
 ---
 
-## 👥 2. The 5 Core Roles Architecture
+## 🖥️ 2. Super Admin Dashboard & At A Glance
 
-The client explicitly mandated simplifying the internal structure into 5 distinct roles:
+Vijay clarified that the main dashboard is for **Super Admin only**.
+
+### Dashboard Metrics & Widgets:
+- **Operations Overview:** New students, new applications, invoices raised, settled today, new agents.
+- **At A Glance Realignment:**
+  - Change **"Agents by Region"** $\rightarrow$ **"Agents by Country"**.
+  - Add **"Agents by Account Manager"** (every agent has one dedicated internal account manager).
+- **Visa Progression Pipeline Bar:** Sequential progression (15% $\rightarrow$ 35% $\rightarrow$ 70% $\rightarrow$ Arrival $\rightarrow$ Medical $\rightarrow$ Registration $\rightarrow$ Fees Paid $\rightarrow$ Visa 100%). Remove "Pending fees".
+- **Invoice Overview Pipeline:** Invoice Submission $\rightarrow$ University Payment In $\rightarrow$ Payment Released to Agent.
+
+---
+
+## 👥 3. The 5 Core Roles Architecture
+
+Vijay explicitly mandated simplifying the internal structure into 5 distinct roles:
 
 ```text
 1. Agent (External) 
@@ -39,16 +54,16 @@ The client explicitly mandated simplifying the internal structure into 5 distinc
 ### Role Breakdown:
 1. **Agent (External Partner):**
    - 60+ agents managing student applicants worldwide.
-   - Registers profile, uploads official agency documents, and inputs complete bank information.
-   - Signs contract and receives digital E-Certificate.
+   - Registers profile (Company name first), uploads agency documents (**any one document sufficient**), and inputs complete bank information.
+   - Signs contract (online or upload) and receives digital E-Certificate.
    - Submits student applications and uploads required student documents.
    - **View-only** access to student visa progress stages (cannot manually alter percentages).
    - Submits commission invoices once a student's visa reaches 100% and university fees are confirmed paid.
-   - Accesses university catalogs, course details, brochures, and commission structures assigned to them.
-   - Communicates directly with their assigned Account Manager or General Support.
+   - Accesses the **"Info"** catalog (universities, courses, brochures, commission rates) allowed for them.
+   - Communicates via dedicated chat with their assigned Account Manager or General Support.
 
 2. **Account Manager (Sales Representative - Internal):**
-   - Dedicated manager assigned to specific agents / geographical regions.
+   - Dedicated internal manager assigned to specific agents / countries.
    - First responder to agent applications and new student submissions.
    - Provides personalized support via 1-on-1 direct chat.
    - Reviews incoming student files before forwarding to Admissions.
@@ -62,7 +77,7 @@ The client explicitly mandated simplifying the internal structure into 5 distinc
 4. **Finance / Accounts Department (Internal):**
    - Automatically receives notifications when an agent submits a commission invoice.
    - Monitors university payment status (*"University Payment In"*).
-   - Tracks payout due dates (e.g., 14-day or 30-day payment terms).
+   - Tracks payout due dates (e.g., 14-day or 30-day payment terms from university payment in).
    - Releases commission payments to agents' registered bank accounts and uploads payment slips.
 
 5. **Super Admin (CEO / Leadership):**
@@ -73,7 +88,7 @@ The client explicitly mandated simplifying the internal structure into 5 distinc
 
 ---
 
-## 📊 3. Role & Feature Access Matrix (Requested Deliverable)
+## 📊 4. Role & Feature Access Matrix (Sign-Off Matrix)
 
 | Feature / Module | Agent | Account Manager | Admission Manager | Finance / Accounts | Super Admin |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -84,7 +99,7 @@ The client explicitly mandated simplifying the internal structure into 5 distinc
 | **Invoice Submission** | Submit (when eligible)| View Assigned | Verify Eligibility | Process Payout | Full Control |
 | **University Payment In** | No Access | No Access | View Status | **Record Receipt** | Full Control |
 | **Agent Payout & Slip Upload** | View Slip & Date | No Access | View Status | **Mark Paid & Slip**| Full Control |
-| **University & Course Info** | View (Allowed only)| View | Manage Catalog | View Comm % | **Set Visibility Rules**|
+| **University & Course Info ("Info")** | View (Allowed only)| View | Manage Catalog | View Comm % | **Set Visibility Rules**|
 | **Dedicated Direct Chat** | Chat with AM | Chat with Agents | No | No | Monitor |
 | **General Support Chat** | Access | No Access | No Access | No Access | Supervise |
 | **Support Tickets** | Raise Ticket | View Assigned | View Assigned | View Payment Issues| Full Resolution |
@@ -92,9 +107,9 @@ The client explicitly mandated simplifying the internal structure into 5 distinc
 
 ---
 
-## 🛫 4. Student Visa Progression Lifecycle
+## 🛫 5. Student Visa Progression Lifecycle
 
-The client corrected the workflow stages. The pipeline must advance sequentially without overlapping or double-counting:
+Vijay confirmed the exact sequential visa stages without overlapping or double-counting:
 
 ```text
 [ New Student Application ]
@@ -105,9 +120,9 @@ The client corrected the workflow stages. The pipeline must advance sequentially
           ↓
 [ Visa Progress: 70% ]
           ↓
-[ Student Arrival ] (Flight details / arrival confirmation)
+[ Student Arrival ] (Flight number, airport, date/time, ticket upload)
           ↓
-[ Medical Examination ]
+[ Medical Examination ] (Mandatory post-arrival medical check)
           ↓
 [ University Registration ]
           ↓
@@ -125,101 +140,129 @@ The client corrected the workflow stages. The pipeline must advance sequentially
 ```
 
 > **Client Rules on Visa Tracking:**
-> 1. *Remove "Pending Visa" after fees paid.*
+> 1. *Remove "Pending Visa" / "Pending Fees" after fees paid.* Once fees are accepted, move to Visa 100%.
 > 2. Agents can track progress visually on their dashboard, but **cannot edit** percentages.
 > 3. Each student exists in only one stage at a time (e.g. moving from 35% to 70% decrements 35% counter by 1 and increments 70% by 1).
 
 ---
 
-## 🆔 5. Agent User ID Generation Standard
+## 🗂️ 6. Navigation Hierarchy: "Students Inside Agents" & "Info" Section
 
-The client agreed on a standardized formula to auto-generate unique Agent IDs:
+Vijay gave two specific UI/UX structural instructions:
 
-$$\mathbf{[3\text{-Letter Agency Code}]} + \mathbf{[4\text{-Digit Serial Number}]} + \mathbf{[3\text{-Letter Country Code}]}$$
-
-- **Agency Code:** First 3 letters / initials of the Agency Name (e.g., *Global Education Agency* $\rightarrow$ `GEA`).
-- **Serial Counter:** Sequential padded number starting at `0001`, `0002`, etc.
-- **Country Code:** 3-letter ISO code (e.g., India $\rightarrow$ `IND`, Mauritius $\rightarrow$ `MOU`, Maldives $\rightarrow$ `MLD`).
-- **Example Result:** `GEA0001IND`
+1. **"Students are inside the agents":**
+   - In Admin Student Management, do not keep a disconnected standalone screen.
+   - When clicking on an Agent, under the agent view you see 3 embedded modules:
+     1. **Students** (all students submitted by this agent)
+     2. **Invoices** (all invoices submitted by this agent)
+     3. **Visa Tracking** (visa journey of this agent's students)
+2. **Rename "Admissions" $\rightarrow$ "Info":**
+   - The former "Admissions" catalog is renamed **"Info"**:
+     - University information & profiles
+     - Courses & degree levels
+     - Intake dates & fee structures
+     - Brochures & official URLs
+     - Commission structures
+     - Latest admin updates & news
 
 ---
 
-## 📝 6. Agent Onboarding & Form Specification
+## 🆔 7. Agent User ID Generation Standard
 
-The registration must follow the physical/digital form provided by QStudy (*Partnership Sub-agent Application Form*) bifurcated into 3 clean stages:
+Agreed auto-generation formula for unique Agent IDs:
 
-### Step 1: Corporate & Contact Details
-- Agency / Company Name
+$$\mathbf{[3\text{-Letter Agency Code}]} + \mathbf{[4\text{-Digit Serial Number}]} + \mathbf{[3\text{-Letter Country Code}]}$$
+
+- **Agency Code:** First 3 letters of the Agency Name (e.g., *Global Education Agency* $\rightarrow$ `GEA`).
+- **Serial Counter:** Sequential 4-digit padded number starting at `0001`, `0002`, etc.
+- **Country Code:** 3-letter country code (e.g., India $\rightarrow$ `IND`, Mauritius $\rightarrow$ `MOU`/`MUS`, Maldives $\rightarrow$ `MLD`/`MDV`).
+- **Example Result:** `GEA0001IND`.
+- *Note:* Vijay gave `MOU` and `MLD` as examples. The ISO 3166-1 alpha-3 standards are `MUS` (Mauritius) and `MDV` (Maldives). System should support both standard ISO codes and client aliases.
+
+---
+
+## 📝 8. Agent Onboarding & 3-Step Form Specification
+
+The registration directly models the official client form: [Q Study Agent Application Form 2024 (1).pdf](file:///c:/Users/mestr/Documents/All%20DTG%20Projects/agent-portal/Q%20Study%20Agent%20Application%20Form%202024%20(1).pdf) (*Partnership / Sub-agent Application Form*), bifurcated into 3 clean steps:
+
+### Step 1: Corporate & Contact Details (Company Name First)
+- **Company / Agency Name First**
 - Business Registration Number
 - Registered Official Address & Country
 - Person in Charge (PIC) / Contact Person Name & Designation
-- Authorized Person to Sign Agreements
+- Person Authorized to Sign the Agreement
 - Contact Phone & Official Email
 
 ### Step 2: Legal Declarations & Bank Particulars (Mandatory)
-- **Declarations:** Family member conflict-of-interest check and accuracy declarations.
+- **Declarations:** Family member conflict-of-interest check and declaration of truth.
 - **Bank Information:**
   - Bank Name & Branch Address
   - Beneficiary / Account Holder Name (Company or Individual)
   - Bank Account Number / IBAN
   - SWIFT / BIC Code & Routing / Zip Code
 
-### Step 3: Document Uploads
-- Business Registration Certificate
-- Company Profile / Brochure
-- Passport Copy of Authorized Signatory / Director
+### Step 3: Document Uploads (**Any ONE Sufficient**)
+- **Client Mandate ([12:23]):** **Uploading ANY ONE of the following documents is sufficient** (not all mandatory):
+  - Company Profile / Brochure
+  - Business Registration Certificate
+  - Passport Copy of Authorized Signatory / Director
+- **Drop Agent Application Form Upload:** The agent already fills in all details online; no need to re-upload the blank/printed application form.
 
-### Onboarding Flow:
-1. Agent registers or completes invite link.
-2. Account Manager assigned by region/country.
-3. Verification by Head of Sales $\rightarrow$ Approval by CEO / Head of Admissions.
-4. Agreement sent to Agent $\rightarrow$ Agent signs and uploads signed copy.
-5. Digital Certificate / E-Certificate issued and uploaded by QStudy.
-6. Agent account activated to begin submitting applications.
-
----
-
-## 🏛️ 7. University & Program Database Migration
-
-The client showcased their existing hosted portal (System QStudy) with comprehensive institutional data:
-- **Scope:** 105 Universities, complete program catalogs, degree levels, faculties, tuition fee breakdowns, entry requirements, brochures, awarding bodies, and official URLs.
-- **Instruction:** Do **not** rebuild or re-enter manually; **migrate and ingest the existing data directly** into the new Agent Portal database.
-- **Granular Permissions:** Super Admin must have a toggle matrix to designate which universities/courses each agent or region is permitted to view (e.g. Malaysian institutions vs. Overseas/Foreign institutions).
+### Approval Chain:
+```text
+Agent Submits via Invite Link 
+  → Assigned Account Manager 
+  → Head of Sales / Recruitment (verifies) 
+  → CEO + Accounts Department (approve)
+  → Contract Issued & Signed (online/upload)
+  → Digital E-Certificate Issued
+  → Agent Activated (can submit students)
+```
 
 ---
 
-## 💰 8. Invoicing & Finance Philosophy
+## 🏛️ 9. University & Program Database Migration ("System QStudy")
 
-The client gave strict guidance on finance simplicity:
-- **Do NOT overcomplicate with dummy finance calculations** (e.g., avoid artificial "settled commission vs. pending commission totals" widgets).
-- **Core Requirement:** Milestone-driven tracking of the invoice lifecycle:
-  1. **Invoice Submission:** Date submitted and invoice document.
+Vijay showcased the existing hosted portal (**System Q Study**):
+- **Scope:** 105 Universities, complete program catalogs, faculties, degree levels, tuition fee breakdowns, entry requirements, awarding bodies, downloadable brochures, and official website URLs.
+- **Instruction:** Do **not** rebuild manually; **migrate and ingest the existing data directly** into the new Agent Portal database.
+- **Granular Permissions:** Super Admin has a toggle matrix to designate which universities/courses each agent can view (e.g. Malaysian universities vs. Foreign universities).
+
+---
+
+## 💰 10. Invoicing & Finance Philosophy
+
+Vijay gave strict instructions on keeping finance clean and practical:
+- **Do NOT show dummy finance metrics** (avoid speculative "pending commission vs. settled commission" totals; QStudy uses its own external accounting system).
+- **Core Requirement:** Milestone-driven invoice tracking:
+  1. **Invoice Submitted:** Date submitted, invoice PDF, and eligible applications.
   2. **University Payment In:** Date QStudy received payment from the university.
-  3. **Maturity / Due Date:** Days until payout is due (e.g., 14-day or 30-day terms).
-  4. **Agent Payout:** Date payment released and bank confirmation slip uploaded.
+  3. **Maturity / Due Period:** Countdown of payout terms (e.g., 14-day or 30-day term from University Payment In).
+  4. **Payment Released to Agent:** Date payment released and bank confirmation slip uploaded.
 
 ---
 
-## 💬 9. Communication, Tickets & Audit Logs
+## 💬 11. Communication, Tickets & Audit Logs
 
 1. **Dual Chat System:**
-   - **Option 1 (Direct AM Chat):** Dedicated direct messaging between the agent and their assigned Account Manager.
+   - **Option 1 (Direct AM Chat):** Dedicated 1-on-1 direct messaging between the agent and their assigned Account Manager.
    - **Option 2 (General Helpdesk):** Live chat with general support.
 2. **Support Ticket System:**
-   - Formal ticketing for operational hurdles: login problems, commission queries, document issues, or payment status.
+   - Operational categories: Login, Payment, Commission structure, Documents.
    - Status pipeline: `Open` $\rightarrow$ `In Progress` $\rightarrow$ `Resolved`.
-   - Automated email notification upon ticket creation and replies.
+   - **Client Mandate on Ticket Emails:** **Every notification email must explicitly state the issue description.**
 3. **Audit Log:**
-   - Restricted to Super Admin.
+   - Restricted strictly to **Super Admin**.
    - Records every system modification: action taken, entity affected, user responsible, and exact timestamp.
 
 ---
 
-## ⏱️ 10. Project Milestones & Delivery Schedule
+## ⏱️ 12. Project Milestones & Delivery Schedule
 
 | Milestone | Target Date | Status |
 | :--- | :--- | :--- |
-| **Role Matrix & Architecture Workflow (This Document)** | **Thursday (Today)** | **Ready for Review** |
+| **Role Flowchart & Access Matrix (Excel/Doc)** | **Thursday** | Delivered for Client Validation |
 | **Client Review & Feedback** | **Friday** | Scheduled |
 | **Client at Education Expo** | Sunday – Tuesday | Low Availability |
 | **Full Platform Core Implementation & Demo** | **Monday** | Committed by Dev Team |
+

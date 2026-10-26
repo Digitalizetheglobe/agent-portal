@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import {
   Search, Plus, Download, Flag, User, Mail, Phone,
@@ -46,10 +46,21 @@ const StudentsPage = () => {
   } = useData();
   const navigate = useNavigate();
 
-  // Tab: 'all' (All Students) or 'queue' (Verification Queue)
-  const [activeTab, setActiveTab] = useState('all');
+  // Tab: 'all' (All Students) or 'queue' (Verification). Kept in the URL so links and refreshes land on the right view
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'queue' ? 'queue' : 'all';
+  const setActiveTab = (tab) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (tab === 'queue') next.set('tab', 'queue');
+      else next.delete('tab');
+      return next;
+    }, { replace: true });
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
+  // Which agent registered the student ('all' = everyone); ?agent=<id> pre-selects it
+  const [agentFilter, setAgentFilter] = useState(searchParams.get('agent') || 'all');
   const [countryFilter, setCountryFilter] = useState('all');
   const [universityFilter, setUniversityFilter] = useState('all');
   const [docFilter, setDocFilter] = useState('all');
@@ -90,6 +101,9 @@ const StudentsPage = () => {
       if (debouncedSearch.trim()) {
         params.search = debouncedSearch.trim();
       }
+      if (agentFilter !== 'all') {
+        params.agentId = agentFilter;
+      }
 
       const res = await studentVerificationAPI.getQueue(params);
       if (requestId !== queueRequestIdRef.current) return;
@@ -109,13 +123,17 @@ const StudentsPage = () => {
     } finally {
       if (requestId === queueRequestIdRef.current) setLoadingQueue(false);
     }
-  }, [queuePage, queueLimit, queueStatusFilter, debouncedSearch]);
+  }, [queuePage, queueLimit, queueStatusFilter, debouncedSearch, agentFilter]);
 
   useEffect(() => {
     if (activeTab === 'queue') {
       fetchQueue();
     }
   }, [activeTab, fetchQueue]);
+
+  useEffect(() => {
+    setQueuePage(1);
+  }, [debouncedSearch, agentFilter]);
 
   // Quick initiate from queue
   const handleQuickInitiate = async (studentId) => {
@@ -227,9 +245,28 @@ const StudentsPage = () => {
     }
   };
 
+  const getAgentIdOf = (s) => s?.agentId?.id || s?.agentId?._id || s?.agentId || null;
+
+  // Agents that actually registered students, with how many each, for the agent filter
+  const agentOptions = useMemo(() => {
+    const counts = new Map();
+    students.forEach(s => {
+      const id = s?.agentId?.id || s?.agentId?._id || s?.agentId;
+      if (id) counts.set(String(id), (counts.get(String(id)) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([id, count]) => {
+        const a = agents.find(x => String(x.id || x._id) === id);
+        return { id, count, label: a ? (a.agencyName || a.name) : 'Unknown agent', sub: a?.agentCode };
+      })
+      .sort((x, y) => x.label.localeCompare(y.label));
+  }, [students, agents]);
+
   // Derived Data & Filtering
   const baseFilteredStudents = useMemo(() => {
     return students.filter(s => {
+      if (agentFilter === 'direct' && getAgentIdOf(s)) return false;
+      if (agentFilter !== 'all' && agentFilter !== 'direct' && String(getAgentIdOf(s)) !== String(agentFilter)) return false;
       const name = getStudentName(s).toLowerCase();
       const cf = s.customFields || {};
       const email = (s.email || cf.email || (cf instanceof Map ? cf.get('email') : '') || '').toLowerCase();
@@ -249,7 +286,7 @@ const StudentsPage = () => {
 
       return true;
     });
-  }, [students, searchQuery, countryFilter, universityFilter, docFilter, verificationFilter, getDocStatus, getUniversityName]);
+  }, [students, agentFilter, searchQuery, countryFilter, universityFilter, docFilter, verificationFilter, getDocStatus, getUniversityName]);
 
   const filteredStudents = baseFilteredStudents;
 
@@ -262,7 +299,19 @@ const StudentsPage = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, countryFilter, universityFilter, docFilter, verificationFilter]);
+  }, [searchQuery, agentFilter, countryFilter, universityFilter, docFilter, verificationFilter]);
+
+  // Verification counts per status for the chips (the queue itself is paged server-side)
+  const verificationCounts = useMemo(() => {
+    const counts = { all: 0, Pending: 0, UnderReview: 0, Verified: 0, Rejected: 0 };
+    students.forEach(s => {
+      if (agentFilter === 'direct' ? getAgentIdOf(s) : agentFilter !== 'all' && String(getAgentIdOf(s)) !== String(agentFilter)) return;
+      counts.all += 1;
+      const st = getVerificationStatus(s);
+      if (counts[st] !== undefined) counts[st] += 1;
+    });
+    return counts;
+  }, [students, agentFilter]);
 
   const kpis = useMemo(() => {
     const total = baseFilteredStudents.length;
@@ -404,11 +453,48 @@ const StudentsPage = () => {
           )}
         >
           <Shield className="w-4 h-4" />
-          Verification Queue
+          Verification
           <span className="px-2 py-0.5 rounded-full text-[11px] bg-amber-100 text-amber-800 font-bold">
-            Queue
+            {verificationCounts.Pending + verificationCounts.UnderReview} to review
           </span>
         </button>
+      </div>
+
+      {/* Search and agent filter apply to both views */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+          <input
+            type="text"
+            placeholder="Search by student name, email, or phone…"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-[#D1D5DB] outline-none focus:border-[#042C53] focus:ring-2 focus:ring-[#042C53]/5 transition-all bg-white"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <select
+          className={cn(
+            "text-xs font-semibold px-3 py-2 rounded-lg border bg-white min-w-[200px] flex-1 sm:flex-none outline-none",
+            agentFilter !== 'all' ? "border-[#042C53] text-[#042C53]" : "border-[#D1D5DB]"
+          )}
+          value={agentFilter}
+          onChange={(e) => setAgentFilter(e.target.value)}
+          title="Show only students registered by this agent"
+        >
+          <option value="all">All Agents</option>
+          <option value="direct">Admin / Direct</option>
+          {agentOptions.map(a => (
+            <option key={a.id} value={a.id}>{a.label}{a.sub ? ` (${a.sub})` : ''} · {a.count}</option>
+          ))}
+        </select>
+        {agentFilter !== 'all' && (
+          <button
+            onClick={() => setAgentFilter('all')}
+            className="text-xs text-slate-500 hover:text-slate-800 underline"
+          >
+            Clear agent
+          </button>
+        )}
       </div>
 
       {activeTab === 'all' ? (
@@ -432,16 +518,6 @@ const StudentsPage = () => {
 
           {/* Controls Bar */}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <div className="relative flex-1 min-w-[240px]">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
-              <input
-                type="text"
-                placeholder="Search by student name, email, or phone…"
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-[#D1D5DB] outline-none focus:border-[#042C53] focus:ring-2 focus:ring-[#042C53]/5 transition-all bg-white"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
             <select
               className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[150px] flex-1 sm:flex-none outline-none"
               value={universityFilter}
@@ -571,7 +647,15 @@ const StudentsPage = () => {
                             {docStatus === 'missing' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FCEBEB] text-[#791F1F]">Missing</span>}
                             {docStatus === 'pending' && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-[#FAEEDA] text-[#633806]">Pending</span>}
                           </td>
-                          <td className="px-4 py-3.5 text-xs truncate max-w-[100px]">{getAgentName(s.agentId).split(' ')[0]}</td>
+                          <td className="px-4 py-3.5 text-xs truncate max-w-[140px]" title={getAgentName(s.agentId)}>
+                            <button
+                              className={cn("font-semibold hover:underline text-left truncate max-w-full", getAgentIdOf(s) ? "text-[#042C53]" : "text-slate-500")}
+                              onClick={(e) => { e.stopPropagation(); setAgentFilter(getAgentIdOf(s) ? String(getAgentIdOf(s)) : 'direct'); }}
+                              title="Show only this agent's students"
+                            >
+                              {getAgentName(s.agentId)}
+                            </button>
+                          </td>
                           <td className="px-4 py-3.5 text-xs text-[#6B7280]">{new Date(s.createdAt || s.submittedAt).toLocaleDateString()}</td>
                           <td className="px-4 py-3.5 text-right">
                             <button
@@ -698,11 +782,11 @@ const StudentsPage = () => {
               </span>
               <div className="flex gap-1.5">
                 {[
-                  { label: 'All States', val: 'all' },
-                  { label: 'Pending', val: 'Pending' },
-                  { label: 'Under Review', val: 'UnderReview' },
-                  { label: 'Rejected', val: 'Rejected' },
-                  { label: 'Verified', val: 'Verified' }
+                  { label: 'All States', val: 'all', count: verificationCounts.all },
+                  { label: 'Pending', val: 'Pending', count: verificationCounts.Pending },
+                  { label: 'Under Review', val: 'UnderReview', count: verificationCounts.UnderReview },
+                  { label: 'Rejected', val: 'Rejected', count: verificationCounts.Rejected },
+                  { label: 'Verified', val: 'Verified', count: verificationCounts.Verified }
                 ].map(opt => (
                   <button
                     key={opt.val}
@@ -718,6 +802,12 @@ const StudentsPage = () => {
                     )}
                   >
                     {opt.label}
+                    <span className={cn(
+                      "ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold",
+                      queueStatusFilter === opt.val ? "bg-white/20 text-white" : "bg-white text-slate-500"
+                    )}>
+                      {opt.count}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -742,25 +832,27 @@ const StudentsPage = () => {
             <table className="w-full border-collapse text-sm text-left">
               <thead>
                 <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[25%]">Student</th>
-                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[15%]">Contact</th>
-                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[12%]">Country</th>
-                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[15%]">Verification Status</th>
-                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[15%]">Agent</th>
-                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider text-right w-[18%]">Verification Action</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[22%]">Student</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[13%]">Contact</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[9%]">Country</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[14%]">Agent</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[7%]">Docs</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[13%]">Status</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider w-[9%]">Submitted</th>
+                  <th className="text-[10px] text-[#6B7280] font-bold px-4 py-3 uppercase tracking-wider text-right w-[13%]">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F3F4F6]">
                 {loadingQueue ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-16 text-[#6B7280]">
+                    <td colSpan="8" className="text-center py-16 text-[#6B7280]">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#042C53] mx-auto mb-3"></div>
                       <p className="font-semibold text-xs">Loading verification queue...</p>
                     </td>
                   </tr>
                 ) : queueStudents.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-16 text-[#6B7280]">
+                    <td colSpan="8" className="text-center py-16 text-[#6B7280]">
                       <Shield size={48} className="mx-auto mb-3 opacity-20 text-[#042C53]" />
                       <p className="font-bold text-sm text-slate-800">No students in verification queue</p>
                       <p className="text-xs text-slate-500 mt-0.5">Students will appear here based on their verification status filter.</p>
@@ -788,11 +880,24 @@ const StudentsPage = () => {
                         <td className="px-4 py-3.5 text-xs font-medium text-slate-700">
                           {qs.country || 'N/A'}
                         </td>
-                        <td className="px-4 py-3.5">
-                          {getVerificationBadge(vStatus)}
-                        </td>
                         <td className="px-4 py-3.5 text-xs text-slate-600">
                           {getAgentName(qs.agentId || qs.agent)}
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-slate-600">
+                          {Array.isArray(qs.documents) ? qs.documents.length : 0}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="space-y-1">
+                            {getVerificationBadge(vStatus)}
+                            {vStatus === 'Rejected' && qs.verificationRejectionReason && (
+                              <p className="text-[10px] text-red-500 truncate max-w-[140px]" title={qs.verificationRejectionReason}>
+                                {qs.verificationRejectionReason}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-[#6B7280]">
+                          {qs.createdAt ? new Date(qs.createdAt).toLocaleDateString() : '—'}
                         </td>
                         <td className="px-4 py-3.5 text-right space-x-2">
                           {vStatus === 'Pending' && (

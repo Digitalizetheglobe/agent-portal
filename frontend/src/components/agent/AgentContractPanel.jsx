@@ -88,7 +88,7 @@ const AgentContractPanel = ({ agent }) => {
   const stepDone = { issued: progress.issued, signed: progress.signed, activated: progress.activated };
 
   return (
-    <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden mb-6" data-testid="agent-contract-panel">
+    <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden" data-testid="agent-contract-panel">
       <div className="bg-[#F9FAFB] border-b border-[#E5E7EB] px-4 py-2 flex items-center justify-between">
         <h3 className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider">Contract and E-Certificate</h3>
         <Badge className={cn('border-none text-[10px] h-5', agent.isActivated ? 'bg-[#EAF3DE] text-[#27500A]' : 'bg-[#FAEEDA] text-[#633806]')}>
@@ -97,7 +97,7 @@ const AgentContractPanel = ({ agent }) => {
       </div>
 
       <div className="p-4 space-y-5">
-        <ol className="flex flex-wrap gap-x-6 gap-y-2">
+        <ol className="space-y-2">
           {CONTRACT_STEPS.map((step) => (
             <li key={step.key} className="flex items-center gap-2 text-sm">
               {stepDone[step.key]
@@ -129,8 +129,8 @@ const AgentContractPanel = ({ agent }) => {
             <p className="text-sm font-medium text-[#111827] flex items-center gap-2">
               <FileSignature className="w-4 h-4" /> {renewal ? 'Issue a contract renewal' : 'Issue the agent contract'}
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_200px_auto] gap-2 items-end">
-              <Input ref={inputs.contract} type="file" accept={ACCEPT} onChange={pick(setContractFile)} />
+            <div className="flex flex-col gap-2">
+              <Input className="w-full min-w-0" ref={inputs.contract} type="file" accept={ACCEPT} onChange={pick(setContractFile)} />
               <div>
                 <label className="text-[11px] text-[#6B7280]" htmlFor="contract-expiry">Expires (optional)</label>
                 <Input id="contract-expiry" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
@@ -148,8 +148,8 @@ const AgentContractPanel = ({ agent }) => {
             <p className="text-sm font-medium text-[#111827] flex items-center gap-2">
               <FileSignature className="w-4 h-4" /> Upload the signed contract the agent returned
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
-              <Input ref={inputs.signed} type="file" accept={ACCEPT} onChange={pick(setSignedFile)} />
+            <div className="flex flex-col gap-2">
+              <Input className="w-full min-w-0" ref={inputs.signed} type="file" accept={ACCEPT} onChange={pick(setSignedFile)} />
               <Button onClick={uploadSigned} disabled={!signedFile || busy === 'signed'} className="bg-[#042C53] hover:bg-[#0C447C] text-white">
                 {busy === 'signed' ? 'Uploading...' : 'Upload signed contract'}
               </Button>
@@ -163,8 +163,8 @@ const AgentContractPanel = ({ agent }) => {
             <p className="text-sm font-medium text-[#111827] flex items-center gap-2">
               <Award className="w-4 h-4" /> Upload the E-Certificate and activate the agent
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
-              <Input ref={inputs.cert} type="file" accept={ACCEPT} onChange={pick(setCertFile)} />
+            <div className="flex flex-col gap-2">
+              <Input className="w-full min-w-0" ref={inputs.cert} type="file" accept={ACCEPT} onChange={pick(setCertFile)} />
               <Button onClick={issueCert} disabled={!certFile || busy === 'cert'} className="bg-[#27500A] hover:bg-[#1f3b08] text-white">
                 {busy === 'cert' ? 'Issuing...' : 'Issue E-Certificate'}
               </Button>

@@ -48,6 +48,7 @@ const StudentDetailsPage = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const fetchStudentData = useCallback(async () => {
     if (!id) return;
@@ -113,8 +114,10 @@ const StudentDetailsPage = () => {
   }, [fetchStudentData]);
 
   const agent = useMemo(() => {
-    if (!student?.agentId) return null;
-    return agents.find(a => a.id === student.agentId || a._id === student.agentId);
+    const agentRef = student?.agentId;
+    if (!agentRef) return null;
+    const agentRefId = agentRef.id || agentRef._id || agentRef;
+    return agents.find(a => a.id === agentRefId || a._id === agentRefId) || (typeof agentRef === 'object' ? agentRef : null);
   }, [agents, student?.agentId]);
 
   const requiredDocs = useMemo(() => {
@@ -433,19 +436,19 @@ const StudentDetailsPage = () => {
     const s = (status || '').toLowerCase();
     switch (s) {
       case 'approved':
-        return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 gap-1"><Check className="w-3 h-3" /> Approved</Badge>;
+        return <Badge className="bg-[#EAF3DE] text-[#27500A] border border-[#C0DD97] font-bold gap-1 hover:bg-[#EAF3DE]"><Check className="w-3 h-3" /> Approved</Badge>;
       case 'underreview':
       case 'under_review':
-        return <Badge className="bg-blue-100 text-blue-700 border-blue-200 gap-1"><Clock className="w-3 h-3" /> Under Review</Badge>;
+        return <Badge className="bg-[#E6F1FB] text-[#0C447C] border border-[#B5D4F4] font-bold gap-1 hover:bg-[#E6F1FB]"><Clock className="w-3 h-3" /> Under Review</Badge>;
       case 'correctionrequired':
       case 'correction_required':
-        return <Badge className="bg-amber-100 text-amber-800 border-amber-300 gap-1"><AlertCircle className="w-3 h-3" /> More Information Required</Badge>;
+        return <Badge className="bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] font-bold gap-1 hover:bg-[#FFFBEB]"><AlertCircle className="w-3 h-3" /> More Information Required</Badge>;
       case 'rejected':
-        return <Badge variant="destructive" className="gap-1"><X className="w-3 h-3" /> Rejected</Badge>;
+        return <Badge className="bg-[#FCEBEB] text-[#791F1F] border border-[#F7C1C1] font-bold gap-1 hover:bg-[#FCEBEB]"><X className="w-3 h-3" /> Rejected</Badge>;
       case 'submitted':
       case 'pending':
       default:
-        return <Badge variant="outline" className="text-gray-600 border-gray-200 bg-gray-50 gap-1"><Clock className="w-3 h-3" /> Submitted</Badge>;
+        return <Badge variant="outline" className="text-[#374151] border-[#D1D5DB] bg-[#F3F4F6] font-bold gap-1"><Clock className="w-3 h-3" /> Submitted</Badge>;
     }
   };
 
@@ -538,6 +541,27 @@ const StudentDetailsPage = () => {
     );
   }
 
+  // The facts anyone opening a student needs first
+  const known = (v) => (v && v !== 'Not specified' ? v : null);
+  const keyFacts = [
+    ['Target university', known(getUniversityName(student))],
+    ['Target course', known(getStudentFieldValue('courseInterested', 'courseInterested'))],
+    ['Country of interest', known(getStudentFieldValue('country', 'country'))],
+    ['Referring agent', agent ? (
+      isAdmin() ? (
+        <button onClick={() => navigate(`/admin/agents/${agent.id || agent._id}`)} className="text-[#042C53] hover:underline text-left">
+          {agent.agencyName || agent.name}{agent.agencyName && agent.name ? ` · ${agent.name}` : ''}
+        </button>
+      ) : (agent.agencyName || agent.name)
+    ) : 'Direct registration'],
+    ['Student email', known(getStudentFieldValue('email', 'email'))],
+    ['Student phone number', known(getStudentFieldValue('phone', 'phone'))],
+    ['Education level', known(getStudentFieldValue('education', 'education'))],
+    ['Registered on', formatDate(student.submittedAt || student.createdAt)],
+  ];
+  const extraFields = getFormattedCustomFields();
+  const studentNotes = known(getStudentFieldValue('notes', 'notes'));
+
   return (
     <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-8" data-testid="student-details-page">
       {/* Header */}
@@ -602,6 +626,109 @@ const StudentDetailsPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content - 2 columns */}
         <div className="lg:col-span-2 space-y-8">
+
+          {/* Student Summary: key details at a glance */}
+          <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
+            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
+              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
+                <User className="w-4 h-4 text-[#042C53]" />
+                Student Summary
+              </CardTitle>
+            </CardHeader>
+            <dl className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+              {keyFacts.map(([label, val]) => (
+                <div key={label} className="min-w-0">
+                  <dt className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">{label}</dt>
+                  <dd className="text-sm font-semibold text-[#111827] break-words mt-1">
+                    {val || <span className="text-[#9CA3AF] font-normal">Not provided</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
+
+          {/* Associated Applications Section */}
+          <Card className="border-[#E5E7EB] shadow-sm">
+            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
+                <Briefcase className="w-4 h-4 text-[#042C53]" />
+                Associated Applications
+              </CardTitle>
+              <Badge variant="outline" className="text-xs font-bold bg-[#F9FAFB]">
+                {applications.length} {applications.length === 1 ? 'Application' : 'Applications'}
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-6">
+              {loadingApps ? (
+                <div className="py-8 text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#042C53] mx-auto"></div>
+                  <p className="text-xs text-[#6B7280] mt-2 font-medium">Loading applications...</p>
+                </div>
+              ) : applications.length === 0 ? (
+                <div className="text-center py-10 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
+                  <Briefcase className="w-8 h-8 mx-auto mb-2 text-[#9CA3AF] opacity-40" />
+                  <p className="text-xs font-semibold text-[#6B7280]">No applications linked to this student yet</p>
+                  <p className="text-[11px] text-[#9CA3AF] mt-0.5">Once an application is submitted for this student it will appear here with a link to open it.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-[#E5E7EB] text-[10px] font-bold text-[#6B7280] uppercase tracking-wider bg-[#F9FAFB]">
+                        <th className="py-3 px-3">App Number</th>
+                        <th className="py-3 px-3">University</th>
+                        <th className="py-3 px-3">Course</th>
+                        <th className="py-3 px-3">Level / Intake</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3">Created</th>
+                        <th className="py-3 px-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F3F4F6]">
+                      {applications.map((app) => (
+                        <tr key={app.id || app._id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(isAdmin() ? `/admin/applications/${app.id || app._id}` : `/agent/applications/${app.id || app._id}`)}>
+                          <td className="py-3 px-3">
+                            <button
+                              onClick={() => navigate(isAdmin() ? `/admin/applications/${app.id || app._id}` : `/agent/applications/${app.id || app._id}`)}
+                              className="font-bold text-[#042C53] hover:underline text-left text-xs"
+                            >
+                              {app.applicationNumber || app.id?.slice(-8).toUpperCase() || 'N/A'}
+                            </button>
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-[#111827]">
+                            {app.university?.name || app.universityName || 'University'}
+                          </td>
+                          <td className="py-3 px-3 text-[#4B5563]">
+                            {app.courseName || app.course || 'N/A'}
+                          </td>
+                          <td className="py-3 px-3 text-[#6B7280]">
+                            {app.courseLevel || 'Undergraduate'} · {app.intake || 'N/A'}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                              {app.status || 'Submitted'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-[#6B7280]">
+                            {formatDate(app.createdAt)}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <Button
+                              size="sm"
+                              className="h-7 px-3 text-[11px] font-bold bg-[#042C53] hover:bg-[#0C447C] text-white"
+                              onClick={(e) => { e.stopPropagation(); navigate(isAdmin() ? `/admin/applications/${app.id || app._id}` : `/agent/applications/${app.id || app._id}`) }}
+                            >
+                              View application
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Student Verification Card */}
           <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
@@ -756,181 +883,54 @@ const StudentDetailsPage = () => {
             </CardContent>
           </Card>
 
-          {/* Personal Information Card */}
-          <Card className="border-[#E5E7EB] shadow-sm">
-            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
-              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
-                <User className="w-4 h-4 text-[#042C53]" />
-                Personal Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Full Name</label>
-                  <p className="text-sm font-semibold text-[#111827]">{getStudentFieldValue('name', 'name')}</p>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Email Address</label>
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-3.5 h-3.5 text-[#9CA3AF]" />
-                    <p className="text-sm font-medium text-[#111827]">{getStudentFieldValue('email', 'email')}</p>
+          {/* Additional details: extra form fields and internal notes (least needed, so near the end) */}
+          {(extraFields.length > 0 || studentNotes) && (
+            <Card className="border-[#E5E7EB] shadow-sm">
+              <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
+                <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
+                  <BookOpen className="w-4 h-4 text-[#042C53]" />
+                  Additional Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                {extraFields.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                    {extraFields.map((field, index) => (
+                      <div key={index} className="space-y-1">
+                        <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider capitalize">
+                          {field.key}
+                        </label>
+                        <p className="text-sm font-medium text-[#111827]">{field.value}</p>
+                      </div>
+                    ))}
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Phone Number</label>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 text-[#9CA3AF]" />
-                    <p className="text-sm font-medium text-[#111827]">{getStudentFieldValue('phone', 'phone')}</p>
+                )}
+                {studentNotes && (
+                  <div className="p-4 bg-[#F9FAFB] rounded-lg border border-[#F3F4F6]">
+                    <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block mb-2">Internal Notes</label>
+                    <p className="text-sm text-[#4B5563] leading-relaxed">{studentNotes}</p>
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Country of Interest</label>
-                  <div className="flex items-center gap-2">
-                    <Globe className="w-3.5 h-3.5 text-[#9CA3AF]" />
-                    <span className="text-sm font-medium text-[#111827]">{getStudentFieldValue('country', 'country')}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Display additional custom fields */}
-              {getFormattedCustomFields().length > 0 && (
-                <>
-                  <Separator className="my-6 bg-[#F3F4F6]" />
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                      {getFormattedCustomFields().map((field, index) => (
-                        <div key={index} className="space-y-1">
-                          <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider capitalize">
-                            {field.key}
-                          </label>
-                          <p className="text-sm font-medium text-[#111827]">{field.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Academic Background Card */}
-          <Card className="border-[#E5E7EB] shadow-sm">
-            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4">
-              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
-                <BookOpen className="w-4 h-4 text-[#042C53]" />
-                Academic Background
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Target University</label>
-                  <p className="text-sm font-semibold text-[#111827]">{getUniversityName(student)}</p>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Target Course</label>
-                  <p className="text-sm font-semibold text-[#111827]">{getStudentFieldValue('courseInterested', 'courseInterested')}</p>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Education Level</label>
-                  <p className="text-sm font-medium text-[#111827]">{getStudentFieldValue('education', 'education')}</p>
-                </div>
-              </div>
-              {(getStudentFieldValue('notes', 'notes') && getStudentFieldValue('notes', 'notes') !== 'Not specified') && (
-                <div className="mt-6 p-4 bg-[#F9FAFB] rounded-lg border border-[#F3F4F6]">
-                  <label className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block mb-2">Internal Notes</label>
-                  <p className="text-sm text-[#4B5563] leading-relaxed">{getStudentFieldValue('notes', 'notes')}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Associated Applications Section */}
-          <Card className="border-[#E5E7EB] shadow-sm">
-            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
-                <Briefcase className="w-4 h-4 text-[#042C53]" />
-                Associated Applications
-              </CardTitle>
-              <Badge variant="outline" className="text-xs font-bold bg-[#F9FAFB]">
-                {applications.length} {applications.length === 1 ? 'Application' : 'Applications'}
-              </Badge>
-            </CardHeader>
-            <CardContent className="p-6">
-              {loadingApps ? (
-                <div className="py-8 text-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#042C53] mx-auto"></div>
-                  <p className="text-xs text-[#6B7280] mt-2 font-medium">Loading applications...</p>
-                </div>
-              ) : applications.length === 0 ? (
-                <div className="text-center py-10 bg-[#F9FAFB] rounded-xl border border-dashed border-[#E5E7EB]">
-                  <Briefcase className="w-8 h-8 mx-auto mb-2 text-[#9CA3AF] opacity-40" />
-                  <p className="text-xs font-semibold text-[#6B7280]">No applications linked to this student yet</p>
-                  <p className="text-[11px] text-[#9CA3AF] mt-0.5">Applications submitted for universities will appear here.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-[#E5E7EB] text-[10px] font-bold text-[#6B7280] uppercase tracking-wider bg-[#F9FAFB]">
-                        <th className="py-3 px-3">App Number</th>
-                        <th className="py-3 px-3">University</th>
-                        <th className="py-3 px-3">Course</th>
-                        <th className="py-3 px-3">Level / Intake</th>
-                        <th className="py-3 px-3">Status</th>
-                        <th className="py-3 px-3">Created</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#F3F4F6]">
-                      {applications.map((app) => (
-                        <tr key={app.id || app._id} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-3 px-3">
-                            <button
-                              onClick={() => navigate(isAdmin() ? `/admin/applications/${app.id || app._id}` : `/agent/applications/${app.id || app._id}`)}
-                              className="font-bold text-[#042C53] hover:underline text-left text-xs"
-                            >
-                              {app.applicationNumber || app.id?.slice(-8).toUpperCase() || 'N/A'}
-                            </button>
-                          </td>
-                          <td className="py-3 px-3 font-semibold text-[#111827]">
-                            {app.university?.name || app.universityName || 'University'}
-                          </td>
-                          <td className="py-3 px-3 text-[#4B5563]">
-                            {app.courseName || app.course || 'N/A'}
-                          </td>
-                          <td className="py-3 px-3 text-[#6B7280]">
-                            {app.courseLevel || 'Undergraduate'} · {app.intake || 'N/A'}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
-                              {app.status || 'Submitted'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-[#6B7280]">
-                            {formatDate(app.createdAt)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Verification History Section */}
           <Card className="border-[#E5E7EB] shadow-sm">
-            <CardHeader className="border-b border-[#F3F4F6] px-6 py-4 flex flex-row items-center justify-between space-y-0">
+            <CardHeader onClick={() => setShowHistory(v => !v)} className="cursor-pointer select-none px-6 py-4 flex flex-row items-center justify-between space-y-0" data-testid="audit-trail-toggle">
               <CardTitle className="text-base font-semibold font-['Outfit'] flex items-center gap-2 text-[#111827]">
                 <History className="w-4 h-4 text-[#042C53]" />
                 Verification Audit Trail
               </CardTitle>
-              <Badge variant="outline" className="text-xs font-bold bg-[#F9FAFB]">
-                {verificationHistory.length} {verificationHistory.length === 1 ? 'Record' : 'Records'}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs font-bold bg-[#F9FAFB]">
+                  {verificationHistory.length} {verificationHistory.length === 1 ? 'Record' : 'Records'}
+                </Badge>
+                <span className="text-xs font-semibold text-[#0C447C]">{showHistory ? 'Hide' : 'Show'}</span>
+              </div>
             </CardHeader>
-            <CardContent className="p-6">
+            {showHistory && (
+            <CardContent className="p-6 border-t border-[#F3F4F6]">
               {loadingHistory ? (
                 <div className="py-8 text-center">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#042C53] mx-auto"></div>
@@ -981,26 +981,32 @@ const StudentDetailsPage = () => {
                 </div>
               )}
             </CardContent>
+            )}
           </Card>
 
         </div>
 
         {/* Sidebar - 1 column */}
         <div className="space-y-8">
-          {/* Agent Context */}
-          <Card className="border-[#E5E7EB] shadow-sm bg-white overflow-hidden">
-            <div className="h-2 bg-[#042C53]" />
-            <CardContent className="p-6 space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#EEEDFE] flex items-center justify-center shrink-0">
-                  <Shield className="w-5 h-5 text-[#3C3489]" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Referring Agency</p>
-                  <p className="text-sm font-bold text-[#111827] mt-0.5">{agent?.agencyName || 'Direct Registration'}</p>
-                  <p className="text-[11px] text-[#6B7280]">{agent?.name}</p>
-                </div>
-              </div>
+          {/* Progress: follows the student's applications */}
+          <Card className="border-[#E5E7EB] shadow-sm overflow-hidden">
+            <CardHeader className="bg-[#F9FAFB] border-b border-[#F3F4F6] px-6 py-4">
+              <CardTitle className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Progress</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-3">
+              <span className={cn(
+                "inline-flex text-sm font-bold px-4 py-2 rounded-xl",
+                getStudentStageInfo(student).style
+              )}>
+                {getStudentStageInfo(student).label}
+              </span>
+              <p className="text-xs text-[#6B7280]">
+                A student's progress follows their applications: the furthest visa stage of any live application.
+                Move a student on from the application page.
+              </p>
+              <p className="text-[10px] text-[#9CA3AF] px-1">
+                Last activity: {formatDateTime(student.updatedAt || student.submittedAt)}
+              </p>
             </CardContent>
           </Card>
 
@@ -1083,19 +1089,19 @@ const StudentDetailsPage = () => {
                             <FileText className="w-4 h-4 text-[#6B7280]" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-[#111827] truncate" title={doc.originalFilename}>
-                              {doc.originalFilename}
-                            </p>
-                            <p className="text-[10px] text-[#9CA3AF] font-medium mt-0.5 uppercase">
+                            <p className="text-xs font-bold text-[#111827] uppercase">
                               {doc.category} · {formatFileSize(doc.size)}
+                            </p>
+                            <p className="text-[11px] text-[#6B7280] font-medium mt-0.5 truncate" title={doc.originalFilename}>
+                              {doc.originalFilename}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1 shrink-0">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-[#042C53]"
+                            className="h-7 w-7 rounded-md border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#042C53] hover:text-white hover:border-[#042C53]"
                             onClick={() => handleViewDocument(doc.id || doc._id)}
                             title="Preview"
                           >
@@ -1104,7 +1110,7 @@ const StudentDetailsPage = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 rounded-md text-[#6B7280] hover:text-[#042C53]"
+                            className="h-7 w-7 rounded-md border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#042C53] hover:text-white hover:border-[#042C53]"
                             onClick={() => handleDownloadDocument(doc.id || doc._id, doc.originalFilename)}
                             title="Download"
                           >
@@ -1243,28 +1249,6 @@ const StudentDetailsPage = () => {
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Progress: follows the student's applications */}
-          <Card className="border-[#E5E7EB] shadow-sm overflow-hidden">
-            <CardHeader className="bg-[#F9FAFB] border-b border-[#F3F4F6] px-6 py-4">
-              <CardTitle className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Progress</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-3">
-              <span className={cn(
-                "inline-flex text-sm font-bold px-4 py-2 rounded-xl",
-                getStudentStageInfo(student).style
-              )}>
-                {getStudentStageInfo(student).label}
-              </span>
-              <p className="text-xs text-[#6B7280]">
-                A student's progress follows their applications: the furthest visa stage of any live application.
-                Move a student on from the application page.
-              </p>
-              <p className="text-[10px] text-[#9CA3AF] px-1">
-                Last activity: {formatDateTime(student.updatedAt || student.submittedAt)}
-              </p>
             </CardContent>
           </Card>
         </div>

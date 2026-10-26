@@ -14,6 +14,17 @@ const fail = (statusCode, message) => {
   return err;
 };
 
+const PAYMENT_TERM_OPTIONS = [0, 14, 30];
+const DEFAULT_PAYMENT_TERM_DAYS = 14;
+
+// Payment term and due date are for staff only; agents never see them
+const STAFF_ONLY_FIELDS = ['paymentTermDays', 'payoutDueDate', 'daysUntilDue'];
+const serializePayoff = (payoff, viewer) => {
+  const json = payoff.toJSON();
+  if (viewer?.role === 'agent') STAFF_ONLY_FIELDS.forEach((key) => delete json[key]);
+  return json;
+};
+
 const addHistory = (payoff, user, action, notes) => {
   const history = Array.isArray(payoff.history) ? [...payoff.history] : [];
   history.push({ action, by: user.id, byName: user.name, at: new Date().toISOString(), notes: notes || null });
@@ -111,6 +122,14 @@ class PayoffService {
       where.status = upperStatus;
     }
 
+    // Staff filter: pending payouts due within N days (overdue ones included)
+    const dueWithinDays = parseInt(query.dueWithinDays, 10);
+    if (currentUser.role !== 'agent' && Number.isFinite(dueWithinDays) && dueWithinDays >= 0) {
+      const limitDate = new Date(Date.now() + dueWithinDays * 86400000).toISOString().slice(0, 10);
+      where.status = 'PENDING';
+      where.payoutDueDate = { [Op.ne]: null, [Op.lte]: limitDate };
+    }
+
     // 3. Search Filter
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
@@ -132,7 +151,14 @@ class PayoffService {
         {
           model: Invoice,
           as: 'invoice',
-          attributes: ['id', 'invoiceNumber', 'amount', 'commissionRate', 'status', 'financeReviewStatus']
+          attributes: ['id', 'invoiceNumber', 'amount', 'commissionRate', 'status', 'financeReviewStatus'],
+          include: [{
+            model: Application,
+            as: 'applications',
+            attributes: ['id', 'universityId', 'studentId'],
+            required: false,
+            include: [{ model: University, as: 'university', attributes: ['id', 'name', 'country'] }]
+          }]
         },
         {
           model: User,
@@ -153,7 +179,13 @@ class PayoffService {
       page: parsedPage,
       limit: parsedLimit,
       totalPages,
-      payoffs: rows.map(p => p.toJSON()),
+      payoffs: rows.map(p => {
+        const json = serializePayoff(p, currentUser);
+        const apps = p.invoice?.applications || [];
+        json.university = apps[0]?.university ? { id: apps[0].university.id, name: apps[0].university.name, country: apps[0].university.country } : null;
+        json.studentCount = new Set(apps.map(a => String(a.studentId))).size;
+        return json;
+      }),
       pagination: {
         total: count,
         page: parsedPage,
@@ -217,7 +249,7 @@ class PayoffService {
     }
     await assertCanAccessAgent(currentUser, payoff.agentId);
 
-    return payoff.toJSON();
+    return serializePayoff(payoff, currentUser);
   }
 
   /**
@@ -245,58 +277,10 @@ class PayoffService {
   }
 
   /**
-   * Record that the university has paid QStudy. This unlocks paying the agent. The payment is in the
-   * payoff's currency, so USD stays USD and RM stays RM.
+   * University payments are recorded per university, not per payoff: see universityReceivableService.
    */
-  async recordUniversityPayment(id, data = {}, currentUser) {
-    this._requireUniversityPaymentRole(currentUser);
-
-    const amount = parseFloat(data.amount);
-    if (isNaN(amount) || !isFinite(amount) || amount <= 0) {
-      throw fail(400, 'The amount the university paid must be greater than 0.');
-    }
-    const reference = typeof data.reference === 'string' ? data.reference.trim() : '';
-    if (!reference) throw fail(400, 'A payment reference is required.');
-
-    let receivedAt = new Date();
-    if (data.receivedAt) {
-      receivedAt = new Date(data.receivedAt);
-      if (isNaN(receivedAt.getTime())) throw fail(400, 'The date the payment was received is not valid.');
-      if (receivedAt.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
-        throw fail(400, 'The date the payment was received cannot be in the future.');
-      }
-    }
-
-    const payoff = await Payoff.findByPk(id);
-    if (!payoff) throw fail(404, 'Payoff not found');
-    if (payoff.status !== 'PENDING') throw fail(400, `A ${payoff.status.toLowerCase()} payoff cannot take a university payment.`);
-
-    // The currency of the university payment is the payoff's currency
-    if (data.currency && String(data.currency).toUpperCase() !== String(payoff.currency).toUpperCase()) {
-      throw fail(400, `This payoff is in ${payoff.currency}, so the university payment must be recorded in ${payoff.currency}. ` +
-        'If the university paid in another currency, correct the currency on the applications first.');
-    }
-
-    const firstTime = !payoff.universityPaidAt;
-    payoff.universityPaidAmount = Math.round(amount * 100) / 100;
-    payoff.universityPaidAt = receivedAt;
-    payoff.universityPaymentReference = reference;
-    payoff.universityPaymentNotes = typeof data.notes === 'string' && data.notes.trim() ? data.notes.trim() : null;
-    payoff.universityPaymentRecordedBy = currentUser.id;
-    payoff.universityPaymentRecordedAt = new Date();
-    addHistory(payoff, currentUser, firstTime ? 'UNIVERSITY_PAYMENT_RECORDED' : 'UNIVERSITY_PAYMENT_UPDATED',
-      `${payoff.currency} ${payoff.universityPaidAmount.toFixed(2)} received. Ref: ${reference}`);
-    await payoff.save();
-
-    if (firstTime) {
-      await this._notifyStaff(['accounts', 'head_admission'], currentUser.id, {
-        title: 'University payment recorded',
-        message: `The university paid QStudy for payoff ${payoff.payoffNumber}. The agent can now be paid.`,
-        relatedId: payoff.id
-      });
-    }
-
-    return await this.getPayoffById(payoff.id, currentUser);
+  async recordUniversityPayment() {
+    throw fail(400, 'Record university payments from the Awaiting University Payment tab, per university.');
   }
 
   /**

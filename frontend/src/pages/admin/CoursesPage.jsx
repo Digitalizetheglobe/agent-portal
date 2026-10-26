@@ -12,8 +12,10 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
-  Globe
+  Globe,
+  Upload
 } from 'lucide-react';
+import ImportModal from '../../components/modals/ImportModal';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { hasStaffRole } from '../../utils/staffRoles';
@@ -86,6 +88,7 @@ const CoursesPage = () => {
 
   // Modals & Dialogs
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState(null);
@@ -220,24 +223,34 @@ const CoursesPage = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-[#111827] font-['Outfit']">Target Courses</h1>
+            <h1 className="text-2xl font-bold text-[#111827] font-['Outfit']">Programs</h1>
             <Badge className="bg-[#042C53]/10 text-[#042C53] border-none font-semibold">
               {totalCount} Total
             </Badge>
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            Manage degree courses and study programs available for student registrations
+            Manage the degree programs available for student registrations
           </p>
         </div>
 
         {canManage && (
-          <Button
-            onClick={handleOpenAdd}
-            className="bg-[#042C53] hover:bg-[#042C53]/90 text-white font-semibold text-xs px-4 h-10 shadow-sm"
-            data-testid="add-course-btn"
-          >
-            <Plus className="w-4 h-4 mr-2" /> Add New Course
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+              className="font-semibold text-xs px-4 h-10 border-[#042C53]/30 text-[#042C53]"
+              data-testid="import-programs-btn"
+            >
+              <Upload className="w-4 h-4 mr-2" /> Import from file
+            </Button>
+            <Button
+              onClick={handleOpenAdd}
+              className="bg-[#042C53] hover:bg-[#042C53]/90 text-white font-semibold text-xs px-4 h-10 shadow-sm"
+              data-testid="add-course-btn"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Add New Program
+            </Button>
+          </div>
         )}
       </div>
 
@@ -424,7 +437,7 @@ const CoursesPage = () => {
                       {hasActiveFilters
                         ? 'No courses match your search or filters'
                         : canManage
-                          ? 'Click "Add New Course" to add courses to your portal catalog'
+                          ? 'Click "Add New Program" or "Import from file" to add programs to your portal catalog'
                           : 'No courses have been added to the catalog yet'}
                     </p>
                   </TableCell>
@@ -615,6 +628,8 @@ const CoursesPage = () => {
           </div>
         )}
       </Card>
+
+      <ImportModal open={importOpen} onOpenChange={setImportOpen} kind="programs" onImported={() => loadCourses(1)} />
 
       {/* Course Modal */}
       <CourseModal

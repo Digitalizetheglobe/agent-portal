@@ -38,7 +38,7 @@ exports.removeBrochure = handle('Remove brochure', async (req, res) => {
 // @route   GET /api/universities/:id/brochures/:brochureId
 // @access  Private (all)
 exports.downloadBrochure = handle('Download brochure', async (req, res) => {
-  const { data, contentType, fileName } = await universityContentService.getBrochureFile(req.params.id, req.params.brochureId);
+  const { data, contentType, fileName } = await universityContentService.getBrochureFile(req.params.id, req.params.brochureId, req.user);
   res.setHeader('Content-Type', contentType);
   const disposition = req.query.inline === 'true' ? 'inline' : 'attachment';
   res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
@@ -49,7 +49,7 @@ exports.downloadBrochure = handle('Download brochure', async (req, res) => {
 // @route   GET /api/universities/:id/updates
 // @access  Private (all)
 exports.listUpdates = handle('List university updates', async (req, res) => {
-  res.status(200).json(await universityContentService.listUpdates(req.params.id));
+  res.status(200).json(await universityContentService.listUpdates(req.params.id, req.user));
 });
 
 // @desc    Publish an update (agents are notified unless notifyAgents is false)

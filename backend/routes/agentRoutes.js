@@ -12,7 +12,8 @@ const {
   deleteVerificationDocument,
   verifyAgent,
   getAccountManagers,
-  downloadVerificationDocument
+  downloadVerificationDocument,
+  updateUniversityAccess
 } = require('../controllers/agentController');
 const { submitOnboarding, reviewOnboarding, acceptDeclaration } = require('../controllers/agentReviewController');
 const {
@@ -64,6 +65,7 @@ router.get('/:id', getAgent);
 router.post('/', restrictToSuperAdminOr('account_manager', 'head_recruitment'), createAgent);
 router.post('/admin', restrictToSuperAdminOr(), createAdmin);
 router.put('/:id', restrictToSuperAdminOr('account_manager', 'head_recruitment', 'head_admission'), updateAgent);
+router.put('/:id/university-access', restrictToSuperAdminOr(), updateUniversityAccess);
 router.delete('/:id', restrictToSuperAdminOr(), deleteAgent);
 router.patch('/:id/verify', restrictToStaffRole('head_recruitment', 'head_admission'), verifyAgent);
 router.get('/:id/documents/:docId', downloadVerificationDocument);

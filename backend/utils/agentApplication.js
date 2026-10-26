@@ -136,15 +136,26 @@ const DOC_ALIASES = {
 
 /**
  * Required document types the agent still has to provide.
+ * Vijay mandate (transcript [12:23]): Uploading ANY ONE document out of
+ * (Company Profile, Business Registration Certificate, or Director Passport) is sufficient.
  * With approvedOnly, a document only counts once staff approved it.
  */
 const missingRequiredDocs = (agentType, documents = [], { approvedOnly = false } = {}) => {
-  const required = REQUIRED_DOCS[agentType] || [];
   const docs = (Array.isArray(documents) ? documents : []).filter(d => !approvedOnly || d.status === 'approved');
-  return required.filter((type) => {
-    const accepted = [type, ...(DOC_ALIASES[type] || [])];
-    return !docs.some(d => accepted.includes(d.docType));
-  });
+  if (agentType === 'company') {
+    const companyAccepted = [
+      'Company Profile',
+      'Business Registration Certificate',
+      'Business License',
+      'Director Passport',
+      'Identity'
+    ];
+    const hasAnyCompanyDoc = docs.some(d => companyAccepted.includes(d.docType));
+    return hasAnyCompanyDoc ? [] : ['Company Profile, Business Registration, or Director Passport'];
+  }
+  const individualAccepted = ['Passport', 'Identity'];
+  const hasPassport = docs.some(d => individualAccepted.includes(d.docType));
+  return hasPassport ? [] : ['Passport'];
 };
 
 // Bank details are hidden from staff who have no business with payouts.

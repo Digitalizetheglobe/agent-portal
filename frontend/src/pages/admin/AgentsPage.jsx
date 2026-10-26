@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   Plus,
   Send,
@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   Users,
+  UserCheck,
   Download,
   ChevronRight,
   Mail,
@@ -31,8 +32,12 @@ import {
   Clock,
   Building2,
   Hash,
+  Filter,
+  RotateCcw,
+  GraduationCap,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { agentAPI } from '../../utils/api';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
@@ -99,6 +104,7 @@ const PAGE_SIZE = 10;
 
 const AgentsPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     agents,
     deleteAgent,
@@ -111,7 +117,12 @@ const AgentsPage = () => {
   } = useData();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentFilter, setCurrentFilter] = useState('all');
+  const [currentFilter, setCurrentFilter] = useState(searchParams.get('status') || 'all');
+  const [countryFilter, setCountryFilter] = useState(searchParams.get('country') || 'all');
+  const [managerFilter, setManagerFilter] = useState(searchParams.get('accountManagerId') || 'all');
+  const [regionFilter, setRegionFilter] = useState(searchParams.get('region') || 'all');
+  const [accountManagers, setAccountManagers] = useState([]);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [reviewTarget, setReviewTarget] = useState({ agent: null, action: null });
@@ -123,6 +134,64 @@ const AgentsPage = () => {
   const [agentInDrawer, setAgentInDrawer] = useState(null);
   const [displayMode, setDisplayMode] = useState('table');
   const [page, setPage] = useState(1);
+
+  // Load account managers for filtering
+  useEffect(() => {
+    agentAPI.getAccountManagers?.()
+      .then(res => setAccountManagers(Array.isArray(res.data) ? res.data : []))
+      .catch(err => console.error('Failed to fetch account managers:', err));
+  }, []);
+
+  // Sync state if URL query params change (e.g. navigation from Dashboard)
+  useEffect(() => {
+    const c = searchParams.get('country');
+    if (c !== null && c !== countryFilter) setCountryFilter(c);
+    const m = searchParams.get('accountManagerId');
+    if (m !== null && m !== managerFilter) setManagerFilter(m);
+    const r = searchParams.get('region');
+    if (r !== null && r !== regionFilter) setRegionFilter(r);
+    const s = searchParams.get('status');
+    if (s !== null && s !== currentFilter) setCurrentFilter(s);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // Compute unique countries from agents list with counts
+  const availableCountries = useMemo(() => {
+    const counts = {};
+    agents.forEach(a => {
+      const c = a.country?.trim();
+      if (c) counts[c] = (counts[c] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [agents]);
+
+  // Compute unique regions from agents list with counts
+  const availableRegions = useMemo(() => {
+    const counts = {};
+    agents.forEach(a => {
+      const r = a.region?.trim();
+      if (r) counts[r] = (counts[r] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [agents]);
+
+  // Compute agent counts per account manager
+  const amCounts = useMemo(() => {
+    const counts = { unassigned: 0 };
+    agents.forEach(a => {
+      const id = a.accountManagerId || a.accountManager?.id;
+      if (!id) {
+        counts.unassigned++;
+      } else {
+        counts[id] = (counts[id] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [agents]);
 
   const stats = getStats();
 
@@ -187,24 +256,64 @@ const AgentsPage = () => {
 
   const filteredAgents = useMemo(() => {
     return processedAgents.filter(agent => {
-      const matchesSearch =
-        agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        agent.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (agent.agencyName && agent.agencyName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (agent.agentCode && agent.agentCode.toLowerCase().includes(searchQuery.toLowerCase()));
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q ||
+        agent.name.toLowerCase().includes(q) ||
+        agent.email.toLowerCase().includes(q) ||
+        (agent.agencyName && agent.agencyName.toLowerCase().includes(q)) ||
+        (agent.agentCode && agent.agentCode.toLowerCase().includes(q)) ||
+        (agent.country && agent.country.toLowerCase().includes(q)) ||
+        (agent.region && agent.region.toLowerCase().includes(q));
 
-      const matchesFilter =
+      const matchesStatus =
         currentFilter === 'all' ||
         (currentFilter === 'approved' && (agent.verificationStatus === 'approved' || agent.isVerified)) ||
         (currentFilter === 'pending' && !agent.isVerified && agent.verificationStatus !== 'rejected') ||
         (currentFilter === 'rejected' && agent.verificationStatus === 'rejected');
 
-      return matchesSearch && matchesFilter;
-    });
-  }, [processedAgents, searchQuery, currentFilter]);
+      const matchesCountry =
+        countryFilter === 'all' ||
+        (agent.country && agent.country.toLowerCase() === countryFilter.toLowerCase());
 
-  // Back to page 1 whenever the filter/search changes
-  useEffect(() => { setPage(1); }, [searchQuery, currentFilter]);
+      const matchesRegion =
+        regionFilter === 'all' ||
+        (agent.region && agent.region.toLowerCase() === regionFilter.toLowerCase());
+
+      const matchesManager =
+        managerFilter === 'all' ||
+        (managerFilter === 'unassigned' && !agent.accountManagerId && !agent.accountManager?.id) ||
+        agent.accountManagerId === managerFilter ||
+        agent.accountManager?.id === managerFilter;
+
+      return matchesSearch && matchesStatus && matchesCountry && matchesRegion && matchesManager;
+    });
+  }, [processedAgents, searchQuery, currentFilter, countryFilter, regionFilter, managerFilter]);
+
+  // Back to page 1 and sync query params whenever filters change
+  useEffect(() => {
+    setPage(1);
+    const params = {};
+    if (countryFilter !== 'all') params.country = countryFilter;
+    if (managerFilter !== 'all') params.accountManagerId = managerFilter;
+    if (regionFilter !== 'all') params.region = regionFilter;
+    if (currentFilter !== 'all') params.status = currentFilter;
+    setSearchParams(params, { replace: true });
+  }, [searchQuery, currentFilter, countryFilter, managerFilter, regionFilter, setSearchParams]);
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setCurrentFilter('all');
+    setCountryFilter('all');
+    setManagerFilter('all');
+    setRegionFilter('all');
+  };
+
+  const hasActiveFilters =
+    Boolean(searchQuery.trim()) ||
+    currentFilter !== 'all' ||
+    countryFilter !== 'all' ||
+    managerFilter !== 'all' ||
+    regionFilter !== 'all';
 
   const totalPages = Math.max(1, Math.ceil(filteredAgents.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -291,8 +400,8 @@ const AgentsPage = () => {
     });
   };
 
-  const handleAgentDetails = (agent) => {
-    navigate(`/admin/agents/${agent.id}`);
+  const handleAgentDetails = (agent, tab = 'students') => {
+    navigate(`/admin/agents/${agent.id}?tab=${tab}`);
   };
 
   const handlePerformanceReport = (agent) => {
@@ -412,57 +521,158 @@ const AgentsPage = () => {
         </Card>
       )}
 
-      {/* Controls */}
-      <div className="flex flex-col md:flex-row items-center gap-4">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
-          <Input
-            placeholder="Search by name, agency, or email…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 h-10 border-[#E5E7EB] bg-white text-sm placeholder:text-[#9CA3AF] focus-visible:ring-[#042C53]/10"
-          />
-        </div>
-        <div className="flex bg-white border border-[#E5E7EB] rounded-lg p-1 gap-1 overflow-x-auto w-full md:w-auto">
-          {['all', 'approved', 'pending', 'rejected'].map((f) => (
-            <button
-              key={f}
-              onClick={() => setCurrentFilter(f)}
-              className={cn(
-                "px-3 py-1.5 text-[12px] font-medium rounded-md transition-all whitespace-nowrap",
-                currentFilter === f
-                  ? "bg-[#E6F1FB] text-[#0C447C]"
-                  : "text-[#6B7280] hover:bg-gray-50"
-              )}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)} ({f === 'all' ? agents.length : f === 'pending' ? agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length : f === 'approved' ? agents.filter(a => a.verificationStatus === 'approved' || a.isVerified).length : agents.filter(a => a.verificationStatus === 'rejected').length})
-            </button>
-          ))}
+      {/* Controls & Filter Toolbar */}
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 shadow-sm space-y-3">
+        {/* Row 1: Search & Layout Mode */}
+        <div className="flex flex-col md:flex-row items-center gap-3">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
+            <Input
+              placeholder="Search by name, agent ID, agency, email, country…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-10 border-[#E5E7EB] bg-[#F9FAFB] text-sm placeholder:text-[#9CA3AF] focus-visible:ring-[#042C53]/10"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
+            {/* View Mode Toggle */}
+            <div className="flex bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg p-1 gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setDisplayMode('table')}
+                className={cn(
+                  "h-8 w-8 p-0 rounded-md transition-all",
+                  displayMode === 'table' ? "bg-white text-[#0C447C] shadow-sm font-bold" : "text-[#6B7280] hover:bg-gray-100"
+                )}
+                title="Table view"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setDisplayMode('grid')}
+                className={cn(
+                  "h-8 w-8 p-0 rounded-md transition-all",
+                  displayMode === 'grid' ? "bg-white text-[#0C447C] shadow-sm font-bold" : "text-[#6B7280] hover:bg-gray-100"
+                )}
+                title="Grid cards view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex bg-white border border-[#E5E7EB] rounded-lg p-1 gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setDisplayMode('table')}
-            className={cn(
-              "h-8 w-8 p-0 rounded-md transition-all",
-              displayMode === 'table' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-[#6B7280] hover:bg-gray-50 hover:text-[#0C447C]"
-            )}
-          >
-            <List className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setDisplayMode('grid')}
-            className={cn(
-              "h-8 w-8 p-0 rounded-md transition-all",
-              displayMode === 'grid' ? "bg-[#E6F1FB] text-[#0C447C] shadow-sm" : "text-[#6B7280] hover:bg-gray-50 hover:text-[#0C447C]"
-            )}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </Button>
+        {/* Row 2: Filter Selectors (Status, Country, Account Manager, Region, Clear) */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+          {/* Status Tabs */}
+          <div className="flex bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg p-0.5 gap-0.5 overflow-x-auto">
+            {['all', 'approved', 'pending', 'rejected'].map((f) => (
+              <button
+                key={f}
+                onClick={() => setCurrentFilter(f)}
+                className={cn(
+                  "px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all whitespace-nowrap",
+                  currentFilter === f
+                    ? "bg-white text-[#0C447C] shadow-sm"
+                    : "text-[#6B7280] hover:text-[#111827]"
+                )}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-4 w-[1px] bg-slate-200 hidden sm:block mx-1" />
+
+          {/* Filter: Agents by Country */}
+          <div className="relative flex items-center min-w-[160px]">
+            <Globe className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <select
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              className={cn(
+                "w-full pl-8 pr-7 h-8 border rounded-lg text-xs font-medium appearance-none transition-colors cursor-pointer",
+                countryFilter !== 'all'
+                  ? "bg-[#E6F1FB] border-[#0C447C]/30 text-[#0C447C] font-semibold"
+                  : "bg-white border-[#E5E7EB] text-slate-700 hover:border-slate-300"
+              )}
+            >
+              <option value="all">🌍 All Countries ({agents.length})</option>
+              {availableCountries.map(c => (
+                <option key={c.name} value={c.name}>
+                  {c.name} ({c.count})
+                </option>
+              ))}
+            </select>
+            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 rotate-90 pointer-events-none" />
+          </div>
+
+          {/* Filter: Agents by Account Manager */}
+          <div className="relative flex items-center min-w-[180px]">
+            <UserCheck className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <select
+              value={managerFilter}
+              onChange={(e) => setManagerFilter(e.target.value)}
+              className={cn(
+                "w-full pl-8 pr-7 h-8 border rounded-lg text-xs font-medium appearance-none transition-colors cursor-pointer",
+                managerFilter !== 'all'
+                  ? "bg-[#EEEDFE] border-[#534AB7]/30 text-[#3C3489] font-semibold"
+                  : "bg-white border-[#E5E7EB] text-slate-700 hover:border-slate-300"
+              )}
+            >
+              <option value="all">👤 All Account Managers</option>
+              <option value="unassigned">Unassigned ({amCounts.unassigned || 0})</option>
+              {accountManagers.map(m => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({amCounts[m.id] || 0})
+                </option>
+              ))}
+            </select>
+            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 rotate-90 pointer-events-none" />
+          </div>
+
+          {/* Filter: Agents by Region */}
+          <div className="relative flex items-center min-w-[150px]">
+            <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <select
+              value={regionFilter}
+              onChange={(e) => setRegionFilter(e.target.value)}
+              className={cn(
+                "w-full pl-8 pr-7 h-8 border rounded-lg text-xs font-medium appearance-none transition-colors cursor-pointer",
+                regionFilter !== 'all'
+                  ? "bg-[#FEF3C7] border-[#92400E]/30 text-[#92400E] font-semibold"
+                  : "bg-white border-[#E5E7EB] text-slate-700 hover:border-slate-300"
+              )}
+            >
+              <option value="all">📍 All Regions</option>
+              {availableRegions.map(r => (
+                <option key={r.name} value={r.name}>
+                  {r.name} ({r.count})
+                </option>
+              ))}
+            </select>
+            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 rotate-90 pointer-events-none" />
+          </div>
+
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetFilters}
+              className="h-8 px-2.5 text-xs font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 gap-1"
+            >
+              <RotateCcw className="w-3 h-3" /> Reset filters
+            </Button>
+          )}
+
+          <span className="text-[11px] text-slate-400 ml-auto hidden lg:inline">
+            Showing <strong className="text-slate-700">{filteredAgents.length}</strong> of {agents.length} agents
+          </span>
         </div>
       </div>
 
@@ -476,13 +686,14 @@ const AgentsPage = () => {
             <Table>
               <TableHeader>
                 <TableRow className="bg-[#F9FAFB] hover:bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 pl-6 w-[26%]">Agent</TableHead>
-                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Status</TableHead>
-                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[12%]">Registrations</TableHead>
+                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 pl-6 w-[22%]">Agent</TableHead>
+                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 w-[14%]">Country / Region</TableHead>
+                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 w-[14%]">Account Manager</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Status</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Registrations</TableHead>
                   <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">In visa process</TableHead>
-                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Fees paid</TableHead>
-                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[10%]">Conv. Rate</TableHead>
-                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3  text-center w-[8%]">Actions</TableHead>
+                  <TableHead className="text-[10px] text-center font-semibold text-[#6B7280] uppercase py-3 w-[8%]">Conv. Rate</TableHead>
+                  <TableHead className="text-[10px] font-semibold text-[#6B7280] uppercase py-3 text-center w-[8%]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -510,7 +721,13 @@ const AgentsPage = () => {
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
-                                <p className="text-[13px] font-medium text-[#111827] truncate">{agent.name}</p>
+                                <Link
+                                  to={`/admin/agents/${agent.id}?tab=students`}
+                                  className="text-[13px] font-medium text-[#111827] hover:text-[#0C447C] hover:underline truncate"
+                                  title="View agent's students, invoices & visa progress"
+                                >
+                                  {agent.name}
+                                </Link>
                                 {agent.agentCode && (
                                   <span className="text-[10px] font-mono text-[#4B5563] bg-[#F3F4F6] px-1.5 py-0.5 rounded border border-[#E5E7EB]">
                                     {agent.agentCode}
@@ -520,6 +737,25 @@ const AgentsPage = () => {
                               <p className="text-[11px] text-[#6B7280] truncate">{agent.agencyName || 'Independent'}</p>
                             </div>
                           </div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-1.5 text-xs text-[#111827] font-medium">
+                            <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">{agent.country || 'Not specified'}</span>
+                          </div>
+                          {agent.region && (
+                            <p className="text-[10px] text-[#6B7280] pl-5 truncate">{agent.region}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          {agent.accountManager ? (
+                            <div className="flex items-center gap-1.5 text-xs text-[#0C447C] font-medium">
+                              <UserCheck className="w-3.5 h-3.5 text-[#0C447C] shrink-0" />
+                              <span className="truncate">{agent.accountManager.name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 italic">Unassigned</span>
+                          )}
                         </TableCell>
                         <TableCell className="py-3 text-center">
                           {agent.verificationStatus === 'approved' || agent.isVerified ? (
@@ -532,7 +768,6 @@ const AgentsPage = () => {
                         </TableCell>
                         <TableCell className="py-3 text-center text-[13px] text-[#111827]">{agent.registrations}</TableCell>
                         <TableCell className="py-3 text-center text-[13px] text-[#111827]">{agent.confirmed}</TableCell>
-                        <TableCell className="py-3 text-center text-[13px] text-[#111827]">{agent.converted}</TableCell>
                         <TableCell className={cn("py-3 text-center text-[13px] font-medium", rateColor)}>{agent.convRate}</TableCell>
                         <TableCell className="py-3 pr-6 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -614,7 +849,15 @@ const AgentsPage = () => {
 
                     <div className="mb-4">
                       <div className="flex items-center gap-1.5">
-                        <h4 className="text-[15px] font-semibold text-[#111827] truncate">{agent.name}</h4>
+                        <h4 className="text-[15px] font-semibold text-[#111827] truncate">
+                          <Link
+                            to={`/admin/agents/${agent.id}?tab=students`}
+                            className="hover:text-[#0C447C] hover:underline"
+                            title="View agent's students, invoices & visa progress"
+                          >
+                            {agent.name}
+                          </Link>
+                        </h4>
                         {agent.agentCode && (
                           <span className="text-[10px] font-mono text-[#4B5563] bg-[#F3F4F6] px-1.5 py-0.5 rounded border border-[#E5E7EB]">
                             {agent.agentCode}
@@ -622,13 +865,23 @@ const AgentsPage = () => {
                         )}
                       </div>
                       <p className="text-[12px] text-[#6B7280] truncate mt-0.5">{agent.agencyName || 'Independent Agency'}</p>
-                      <div className="mt-2">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
                         {agent.verificationStatus === 'approved' || agent.isVerified ? (
                           <Badge className="bg-[#EAF3DE] text-[#27500A] border-none text-[10px] font-medium h-5">Approve</Badge>
                         ) : agent.verificationStatus === 'rejected' ? (
                           <Badge className="bg-[#FCEBEB] text-[#791F1F] border-none text-[10px] font-medium h-5">Rejected</Badge>
                         ) : (
                           <Badge className="bg-[#FAEEDA] text-[#633806] border-none text-[10px] font-medium h-5">Pending Review</Badge>
+                        )}
+                        {agent.country && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            <Globe className="w-3 h-3 text-slate-400" /> {agent.country}
+                          </span>
+                        )}
+                        {agent.accountManager && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#0C447C] bg-[#E6F1FB] px-2 py-0.5 rounded border border-[#0C447C]/20">
+                            <UserCheck className="w-3 h-3" /> {agent.accountManager.name}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -780,7 +1033,8 @@ const AgentsPage = () => {
                 <DrawerSection title="Agency information" icon={Building2}>
                   <DrawerField icon={Building2} label="Agency name" value={agentInDrawer.agencyName} />
                   <DrawerField icon={Hash} label="Registration #" value={agentInDrawer.businessRegistrationNumber} />
-                  <DrawerField icon={Globe} label="Region" value={agentInDrawer.region} />
+                  <DrawerField icon={Globe} label="Country" value={agentInDrawer.country} />
+                  <DrawerField icon={MapPin} label="Region" value={agentInDrawer.region} />
                   <DrawerField icon={User} label="Account manager" value={agentInDrawer.accountManager?.name || 'Unassigned'} />
                   <DrawerField icon={MapPin} label="Address" value={agentInDrawer.fullAddress} wide />
                 </DrawerSection>
@@ -822,6 +1076,14 @@ const AgentsPage = () => {
                       {agentInDrawer.registrations > drawerStudents.length && (
                         <p className="text-[11px] text-[#6B7280] pt-2">Showing latest {drawerStudents.length} of {agentInDrawer.registrations}</p>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAgentDetails(agentInDrawer, 'students')}
+                        className="w-full mt-3 text-xs font-semibold text-[#0C447C] border-[#0C447C]/30 hover:bg-[#E6F1FB]"
+                      >
+                        <GraduationCap className="w-3.5 h-3.5 mr-1.5" /> View All Students & Visa Progress
+                      </Button>
                     </div>
                   )}
                 </DrawerSection>
@@ -872,10 +1134,10 @@ const AgentsPage = () => {
                   />
                   <div className="flex gap-2">
                     <Button
-                      className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-xs h-10"
-                      onClick={() => handleAgentDetails(agentInDrawer)}
+                      className="flex-1 bg-[#042C53] hover:bg-[#0C447C] text-xs h-10 font-semibold"
+                      onClick={() => handleAgentDetails(agentInDrawer, 'students')}
                     >
-                      Full details
+                      <GraduationCap className="w-3.5 h-3.5 mr-1.5" /> Students & Invoices
                     </Button>
                     <Button
                       variant="outline"

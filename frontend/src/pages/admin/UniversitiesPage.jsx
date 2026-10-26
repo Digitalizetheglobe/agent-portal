@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import {
@@ -7,9 +7,6 @@ import {
   Search,
   Globe,
   MapPin,
-  Mail,
-  User,
-  ExternalLink,
   Edit2,
   Trash2,
   Power,
@@ -18,7 +15,9 @@ import {
   Filter,
   Eye,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Upload,
+  AlertTriangle
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -53,6 +52,8 @@ import {
   AlertDialogTitle
 } from '../../components/ui/alert-dialog';
 import UniversityModal from '../../components/modals/UniversityModal';
+import ImportModal from '../../components/modals/ImportModal';
+import UniversityLogo from '../../components/university/UniversityLogo';
 import { universityAPI, formatApiError } from '../../utils/api';
 import { countries } from '../../lib/countries';
 import { toast } from 'sonner';
@@ -76,6 +77,8 @@ const UniversitiesPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('');
+  const [commissionFilter, setCommissionFilter] = useState('all');
+  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, countries: 0, missingCommission: 0 });
   // The API only sees the settled text; requestIdRef drops responses from superseded requests
   const [debouncedSearch, flushSearch] = useDebouncedValue(searchQuery);
   const [debouncedCity, flushCity] = useDebouncedValue(cityFilter);
@@ -83,6 +86,7 @@ const UniversitiesPage = () => {
 
   // Modals & Dialogs
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedUniversity, setSelectedUniversity] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [universityToDelete, setUniversityToDelete] = useState(null);
@@ -106,6 +110,7 @@ const UniversitiesPage = () => {
       if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
       if (countryFilter && countryFilter !== 'all') params.country = countryFilter;
       if (debouncedCity.trim()) params.city = debouncedCity.trim();
+      if (commissionFilter === 'missing') params.commission = 'missing';
 
       const response = await universityAPI.getAll(params);
       if (requestId !== requestIdRef.current) return;
@@ -116,6 +121,7 @@ const UniversitiesPage = () => {
         setTotalCount(data.total || 0);
         setTotalPages(data.totalPages || 1);
         setCurrentPage(data.page || 1);
+        if (data.stats) setStats(data.stats);
       } else if (Array.isArray(data)) {
         setUniversities(data);
         const countHeader = response.headers['x-total-count'];
@@ -131,7 +137,7 @@ const UniversitiesPage = () => {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, countryFilter, debouncedCity, limit]);
+  }, [debouncedSearch, statusFilter, countryFilter, debouncedCity, commissionFilter, limit]);
 
   useEffect(() => {
     loadUniversities(1);
@@ -150,6 +156,7 @@ const UniversitiesPage = () => {
     setCountryFilter('all');
     setCityFilter('');
     flushCity('');
+    setCommissionFilter('all');
   };
 
   // Status toggle handler
@@ -198,14 +205,6 @@ const UniversitiesPage = () => {
     }
   };
 
-  // Stats calculation
-  const stats = useMemo(() => {
-    const active = universities.filter(u => u.status === 'active').length;
-    const inactive = universities.filter(u => u.status === 'inactive').length;
-    const distinctCountries = new Set(universities.map(u => u.country)).size;
-    return { active, inactive, distinctCountries };
-  }, [universities]);
-
   return (
     <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6" data-testid="admin-universities-page">
       {/* Top Header */}
@@ -219,46 +218,64 @@ const UniversitiesPage = () => {
           </p>
         </div>
         {canManage && (
-          <Button
-            onClick={() => {
-              setSelectedUniversity(null);
-              setModalOpen(true);
-            }}
-            className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-sm gap-2"
-          >
-            <Plus className="w-4 h-4" /> Add University
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+              className="text-xs font-bold h-10 px-4 rounded-lg gap-2 border-[#042C53]/30 text-[#042C53]"
+            >
+              <Upload className="w-4 h-4" /> Import from file
+            </Button>
+            <Button
+              onClick={() => {
+                setSelectedUniversity(null);
+                setModalOpen(true);
+              }}
+              className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-sm gap-2"
+            >
+              <Plus className="w-4 h-4" /> Add University
+            </Button>
+          </div>
         )}
       </div>
 
-      {/* KPI Cards */}
+      {/* Catalog at a glance */}
       <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="border-[#E5E7EB] bg-white shadow-none">
           <CardContent className="p-4">
-            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Total Institutions</p>
-            <p className="text-2xl font-semibold text-[#111827] mt-1">{totalCount}</p>
-            <p className="text-[10px] font-medium text-blue-600 mt-1">Global partner network</p>
+            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Universities</p>
+            <p className="text-2xl font-semibold text-[#111827] mt-1">{stats.total}</p>
+            <p className="text-[10px] font-medium text-blue-600 mt-1">in {stats.countries} {stats.countries === 1 ? 'country' : 'countries'}</p>
           </CardContent>
         </Card>
         <Card className="border-[#E5E7EB] bg-white shadow-none">
           <CardContent className="p-4">
-            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Active Universities</p>
+            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Active</p>
             <p className="text-2xl font-semibold text-[#27500A] mt-1">{stats.active}</p>
-            <p className="text-[10px] font-medium text-[#27500A] mt-1">Accepting applications</p>
+            <p className="text-[10px] font-medium text-[#27500A] mt-1">accepting applications</p>
           </CardContent>
         </Card>
+        <button
+          type="button"
+          onClick={() => setCommissionFilter((v) => (v === 'missing' ? 'all' : 'missing'))}
+          className={`text-left rounded-xl border transition-colors ${
+            commissionFilter === 'missing' ? 'border-[#633806] ring-1 ring-[#633806] bg-[#FAEEDA]/50' : 'border-[#E5E7EB] bg-white hover:border-[#FAC775]'
+          }`}
+          title="Show only universities with no commission rate"
+        >
+          <div className="p-4">
+            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">No commission rate</p>
+            <p className={`text-2xl font-semibold mt-1 ${stats.missingCommission ? 'text-[#633806]' : 'text-[#27500A]'}`}>{stats.missingCommission}</p>
+            <p className={`text-[10px] font-medium mt-1 ${stats.missingCommission ? 'text-[#633806]' : 'text-gray-500'}`}>
+              {stats.missingCommission ? 'invoices are blocked until set' : 'all active universities have one'}
+            </p>
+          </div>
+        </button>
         <Card className="border-[#E5E7EB] bg-white shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Inactive</p>
             <p className="text-2xl font-semibold text-[#6B7280] mt-1">{stats.inactive}</p>
-            <p className="text-[10px] font-medium text-gray-500 mt-1">Archived or paused</p>
-          </CardContent>
-        </Card>
-        <Card className="border-[#E5E7EB] bg-white shadow-none">
-          <CardContent className="p-4">
-            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Partner Countries</p>
-            <p className="text-2xl font-semibold text-[#042C53] mt-1">{stats.distinctCountries}</p>
-            <p className="text-[10px] font-medium text-purple-600 mt-1">Destinations available</p>
+            <p className="text-[10px] font-medium text-gray-500 mt-1">paused or archived</p>
           </CardContent>
         </Card>
       </div>
@@ -315,7 +332,7 @@ const UniversitiesPage = () => {
               <Button type="submit" size="sm" className="bg-[#042C53] hover:bg-[#0C447C] text-xs h-9 px-4">
                 Filter
               </Button>
-              {(searchQuery || statusFilter !== 'all' || countryFilter !== 'all' || cityFilter) && (
+              {(searchQuery || statusFilter !== 'all' || countryFilter !== 'all' || cityFilter || commissionFilter !== 'all') && (
                 <Button type="button" variant="ghost" size="sm" onClick={handleResetFilters} className="text-xs h-9">
                   Reset
                 </Button>
@@ -327,13 +344,14 @@ const UniversitiesPage = () => {
 
       {/* University Table */}
       <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-              <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Institution</TableHead>
-              <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Code</TableHead>
+              <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider whitespace-nowrap">University</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Location</TableHead>
-              <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Contact</TableHead>
+              <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-center">Programs</TableHead>
+              <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-center">Applications</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Commission</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-center">Status</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-right">Actions</TableHead>
@@ -352,37 +370,28 @@ const UniversitiesPage = () => {
                 <TableCell colSpan={7} className="text-center py-16 text-gray-500">
                   <Building2 size={40} className="mx-auto mb-3 opacity-20" />
                   <p className="font-semibold text-sm text-gray-700">No universities found</p>
-                  <p className="text-xs text-gray-400 mt-1">Try adjusting your filters or search keywords</p>
-                  <Button
-                    onClick={() => {
-                      setSelectedUniversity(null);
-                      setModalOpen(true);
-                    }}
-                    size="sm"
-                    className="mt-4 bg-[#042C53] hover:bg-[#0C447C] text-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Add First University
-                  </Button>
+                  <p className="text-xs text-gray-400 mt-1">Try adjusting your filters or search keywords, or import a list from a file</p>
+                  {canManage && (
+                    <Button
+                      onClick={() => {
+                        setSelectedUniversity(null);
+                        setModalOpen(true);
+                      }}
+                      size="sm"
+                      className="mt-4 bg-[#042C53] hover:bg-[#0C447C] text-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Add First University
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
               universities.map((uni) => (
                 <TableRow key={uni.id} className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB] transition-colors">
-                  {/* Name & Logo */}
+                  {/* Name, code and website */}
                   <TableCell className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      {uni.logoUrl ? (
-                        <img
-                          src={uni.logoUrl}
-                          alt={uni.name}
-                          className="w-9 h-9 rounded-lg object-contain bg-gray-50 border border-gray-200"
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
-                      ) : (
-                        <div className="w-9 h-9 rounded-lg bg-[#E6F1FB] flex items-center justify-center text-[#0C447C] font-bold text-xs uppercase">
-                          {uni.name.substring(0, 2)}
-                        </div>
-                      )}
+                      <UniversityLogo university={uni} size="sm" />
                       <div className="min-w-0">
                         <button
                           onClick={() => navigate(`/admin/universities/${uni.id}`)}
@@ -390,57 +399,64 @@ const UniversitiesPage = () => {
                         >
                           {uni.name}
                         </button>
-                        {uni.website && (
-                          <a
-                            href={uni.website.startsWith('http') ? uni.website : `https://${uni.website}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] text-gray-400 hover:text-gray-600 flex items-center gap-1 mt-0.5"
-                          >
-                            <Globe size={11} /> {uni.website.replace(/^https?:\/\//, '')}
-                          </a>
-                        )}
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-400 whitespace-nowrap">
+                          {uni.code && <span className="font-mono font-semibold uppercase text-gray-500">{uni.code}</span>}
+                          {uni.website && (
+                            <a
+                              href={uni.website.startsWith('http') ? uni.website : `https://${uni.website}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:text-gray-600 flex items-center gap-1"
+                            >
+                              <Globe size={11} /> {uni.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </TableCell>
-
-                  {/* Code */}
-                  <TableCell className="px-6 py-4">
-                    <Badge variant="outline" className="font-mono text-[10px] font-bold tracking-wider uppercase bg-gray-50 text-gray-700 border-gray-200">
-                      {uni.code || 'N/A'}
-                    </Badge>
                   </TableCell>
 
                   {/* Location */}
                   <TableCell className="px-6 py-4">
-                    <div className="text-xs font-medium text-gray-800">
-                      {uni.city ? `${uni.city}, ` : ''}{uni.country}
+                    <div className="text-xs font-medium text-gray-800 flex items-center gap-1.5 whitespace-nowrap">
+                      <MapPin size={12} className="text-gray-400 shrink-0" />
+                      <span>{uni.city ? `${uni.city}, ` : ''}{uni.country}</span>
                     </div>
                   </TableCell>
 
-                  {/* Contact */}
-                  <TableCell className="px-6 py-4">
-                    {uni.contactEmail || uni.contactPerson ? (
-                      <div className="space-y-0.5">
-                        {uni.contactPerson && (
-                          <div className="text-xs font-semibold text-gray-900 flex items-center gap-1.5">
-                            <User size={12} className="text-gray-400" /> {uni.contactPerson}
-                          </div>
-                        )}
-                        {uni.contactEmail && (
-                          <div className="text-[11px] text-gray-500 flex items-center gap-1.5">
-                            <Mail size={12} className="text-gray-400" /> {uni.contactEmail}
-                          </div>
-                        )}
+                  {/* What the catalog holds for this university */}
+                  <TableCell className="px-6 py-4 text-center whitespace-nowrap">
+                    <span className="text-sm font-bold text-[#042C53] tabular-nums">{uni.programCount ?? 0}</span>
+                    <span className="text-xs text-gray-500"> {uni.programCount === 1 ? 'program' : 'programs'}</span>
+                    {(uni.brochures || []).length > 0 && (
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        {(uni.brochures || []).length} {(uni.brochures || []).length === 1 ? 'brochure' : 'brochures'}
                       </div>
-                    ) : (
-                      <span className="text-xs text-gray-400">Not specified</span>
                     )}
                   </TableCell>
 
-                  {/* Commission */}
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-gray-900 tabular-nums">
-                    {uni.commissionRate != null ? `${uni.commissionRate}%` : <span className="text-gray-400 font-normal">Not set</span>}
+                  {/* Applications */}
+                  <TableCell className="px-6 py-4 text-center text-sm font-bold text-gray-900 tabular-nums">
+                    {uni.applicationCount ?? 0}
+                  </TableCell>
+
+                  {/* Commission: a missing rate blocks invoice approval, so it stands out */}
+                  <TableCell className="px-6 py-4">
+                    {uni.commissionRate != null ? (
+                      <span className="text-sm font-bold text-gray-900 tabular-nums whitespace-nowrap">{uni.commissionRate}%</span>
+                    ) : canManage ? (
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedUniversity(uni); setModalOpen(true); }}
+                        className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-[#633806] bg-[#FAEEDA] hover:bg-[#FAC775]/60 px-2.5 py-1 rounded-md"
+                      >
+                        <AlertTriangle size={12} /> Set rate
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-[#633806]">
+                        <AlertTriangle size={12} /> Not set
+                      </span>
+                    )}
                   </TableCell>
 
                   {/* Status */}
@@ -511,6 +527,7 @@ const UniversitiesPage = () => {
             )}
           </TableBody>
         </Table>
+        </div>
 
         {/* Pagination Bar */}
         {totalCount > 0 && (
@@ -541,6 +558,8 @@ const UniversitiesPage = () => {
           </div>
         )}
       </div>
+
+      <ImportModal open={importOpen} onOpenChange={setImportOpen} kind="universities" onImported={() => loadUniversities(1)} />
 
       {/* University Create / Edit Modal */}
       <UniversityModal

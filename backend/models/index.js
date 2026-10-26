@@ -13,6 +13,7 @@ const Application = require('./Application');
 const Course = require('./Course');
 const CommissionSnapshot = require('./CommissionSnapshot');
 const Payoff = require('./Payoff');
+const UniversityPayment = require('./UniversityPayment');
 const AgentInvite = require('./AgentInvite');
 const AuditLog = require('./AuditLog');
 const UniversityUpdate = require('./UniversityUpdate');
@@ -98,6 +99,10 @@ User.hasMany(AgentInvite, { foreignKey: 'createdBy', as: 'sentInvites', onDelete
 AgentInvite.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 AgentInvite.belongsTo(User, { foreignKey: 'accountManagerId', as: 'accountManager', onDelete: 'SET NULL' });
 
+// University payments to QStudy
+University.hasMany(UniversityPayment, { foreignKey: 'universityId', as: 'payments' });
+UniversityPayment.belongsTo(University, { foreignKey: 'universityId', as: 'university' });
+
 // University <-> UniversityUpdate (news and scholarship updates)
 University.hasMany(UniversityUpdate, { foreignKey: 'universityId', as: 'updates', onDelete: 'CASCADE' });
 UniversityUpdate.belongsTo(University, { foreignKey: 'universityId', as: 'university' });
@@ -128,6 +133,7 @@ module.exports = {
   Course,
   CommissionSnapshot,
   Payoff,
+  UniversityPayment,
   AgentInvite
 };
 

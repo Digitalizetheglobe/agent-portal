@@ -112,6 +112,17 @@ const Payoff = sequelize.define('Payoff', {
     allowNull: true
   },
 
+  // Payment term agreed for paying the agent once the university has paid (0 = immediate, 14 or 30 days).
+  // The due date is the day the university payment was received plus the term. Staff only: never sent to agents.
+  paymentTermDays: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  payoutDueDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+
   // Exception: the Head of Admission (or super admin) lets the agent be paid before the university
   // has paid, with a note. Accounts can then settle.
   blockBypassedBy: {
@@ -183,6 +194,12 @@ Payoff.prototype.toJSON = function() {
   values.netAmount = parseFloat(values.netAmount) || 0;
   if (values.universityPaidAmount !== null && values.universityPaidAmount !== undefined) {
     values.universityPaidAmount = parseFloat(values.universityPaidAmount);
+  }
+  // Days until the agent payout is due (negative = overdue). Only meaningful while the payoff is pending.
+  values.daysUntilDue = null;
+  if (values.payoutDueDate && values.status === 'PENDING') {
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    values.daysUntilDue = Math.round((Date.parse(values.payoutDueDate) - Date.parse(todayUtc)) / 86400000);
   }
   // Convenience flags for the screens
   values.universityPaid = Boolean(values.universityPaidAt);

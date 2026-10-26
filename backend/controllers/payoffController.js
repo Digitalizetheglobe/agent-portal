@@ -1,4 +1,43 @@
 const payoffService = require('../services/payoffService');
+const receivableService = require('../services/universityReceivableService');
+
+const sendError = (res, label, error) => {
+  console.error(label, error);
+  res.status(error.statusCode || 500).json({ success: false, detail: error.message || 'Server error' });
+};
+
+// @desc    What each university owes QStudy, grouped by university and currency
+// @route   GET /api/payoffs/university-receivables
+// @access  Private (Accounts, Head of Admission, super admin)
+exports.getUniversityReceivables = async (req, res) => {
+  try {
+    res.status(200).json(await receivableService.getReceivables(req.user));
+  } catch (error) {
+    sendError(res, 'Get university receivables error:', error);
+  }
+};
+
+// @desc    Record a payment from a university
+// @route   POST /api/payoffs/university-receivables/payments
+// @access  Private (Accounts, Head of Admission, super admin)
+exports.recordUniversityReceivablePayment = async (req, res) => {
+  try {
+    res.status(201).json(await receivableService.recordPayment(req.body, req.user));
+  } catch (error) {
+    sendError(res, 'Record university payment error:', error);
+  }
+};
+
+// @desc    Reverse a university payment entered by mistake
+// @route   PATCH /api/payoffs/university-receivables/payments/:id/reverse
+// @access  Private (Accounts, Head of Admission, super admin)
+exports.reverseUniversityPayment = async (req, res) => {
+  try {
+    res.status(200).json(await receivableService.reversePayment(req.params.id, req.body, req.user));
+  } catch (error) {
+    sendError(res, 'Reverse university payment error:', error);
+  }
+};
 
 // @desc    Get all payoffs (with status filter, search, pagination)
 // @route   GET /api/payoffs

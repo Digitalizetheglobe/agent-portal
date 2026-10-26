@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { hasStaffRole } from '../../utils/staffRoles';
@@ -31,8 +31,9 @@ import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import { Label } from '../../components/ui/label';
 import PayoffSettlementModal from '../../components/modals/PayoffSettlementModal';
-import { UniversityPaymentDialog, PaymentExceptionDialog } from '../../components/modals/PayoffPaymentDialogs';
-import { getPayoffPaymentState, PAYOFF_PAYMENT_STATE_INFO, currencyLabel } from '../../utils/invoiceStage';
+import { PaymentExceptionDialog } from '../../components/modals/PayoffPaymentDialogs';
+import UniversityReceivablesTab from '../../components/payoffs/UniversityReceivablesTab';
+import { getPayoffPaymentState, PAYOFF_PAYMENT_STATE_INFO, currencyLabel, getPayoutDueInfo, formatMoney } from '../../utils/invoiceStage';
 import { payoffAPI, invoiceReviewAPI, formatApiError } from '../../utils/api';
 import { FinancialStatusBadge } from '../../components/common/FinancialStatusBadge';
 import { formatCurrency, formatFinancialDate } from '../../utils/financialFormatters';
@@ -49,11 +50,13 @@ const AdminPayoffsPage = () => {
   const canAuthorizeException = hasStaffRole(user, 'head_admission');
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [dueSoonOnly, setDueSoonOnly] = useState(false);
   const [selectedPayoff, setSelectedPayoff] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   
-  // University payment / exception dialogs
-  const [universityPaymentPayoff, setUniversityPaymentPayoff] = useState(null);
+  // What each university owes QStudy, and the exception dialog
+  const [receivables, setReceivables] = useState([]);
+  const [receivablesLoading, setReceivablesLoading] = useState(true);
   const [exceptionPayoff, setExceptionPayoff] = useState(null);
 
   // Settle modal state
@@ -70,6 +73,23 @@ const AdminPayoffsPage = () => {
   const [payoffDetail, setPayoffDetail] = useState(null);
   const [reviewHistory, setReviewHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const loadReceivables = useCallback(async () => {
+    if (!canRecordUniversityPayment) {
+      setReceivablesLoading(false);
+      return;
+    }
+    try {
+      const { data } = await payoffAPI.getUniversityReceivables();
+      setReceivables(data.universities || []);
+    } catch (err) {
+      toast.error('Failed to load university payments', { description: formatApiError(err) });
+    } finally {
+      setReceivablesLoading(false);
+    }
+  }, [canRecordUniversityPayment]);
+
+  useEffect(() => { loadReceivables(); }, [loadReceivables]);
 
   const handleOpenSettlement = (payoff) => {
     setPayoffToSettle(payoff);
@@ -147,8 +167,14 @@ const AdminPayoffsPage = () => {
       .map(p => p.invoiceId?.id || p.invoiceId)
   ), [payoffs]);
 
+  const dueSoonCount = useMemo(
+    () => (payoffs || []).filter(p => p.status === 'PENDING' && p.daysUntilDue != null && p.daysUntilDue <= 7).length,
+    [payoffs]
+  );
+
   const filteredPayoffs = useMemo(() => {
     return (payoffs || []).filter(p => {
+      if (dueSoonOnly && !(p.status === 'PENDING' && p.daysUntilDue != null && p.daysUntilDue <= 7)) return false;
       const term = searchTerm.toLowerCase();
       const pNum = p.payoffNumber?.toLowerCase() || '';
       const invNum = (p.invoiceId?.invoiceNumber || p.invoiceNumber || '')?.toLowerCase();
@@ -157,28 +183,43 @@ const AdminPayoffsPage = () => {
       const ref = (p.settlementReference || '')?.toLowerCase();
       return pNum.includes(term) || invNum.includes(term) || agentName.includes(term) || agencyName.includes(term) || ref.includes(term);
     });
-  }, [payoffs, searchTerm]);
+  }, [payoffs, searchTerm, dueSoonOnly]);
+
+  // An amount per currency, never added across currencies: [{ currency, amount }]
+  const sumByCurrency = (items, getCurrency, getAmount) => {
+    const totals = new Map();
+    items.forEach((item) => {
+      const cur = String(getCurrency(item) || 'USD').toUpperCase();
+      totals.set(cur, (totals.get(cur) || 0) + (Number(getAmount(item)) || 0));
+    });
+    return [...totals.entries()].map(([currency, amount]) => ({ currency, amount })).filter((t) => t.amount > 0.005);
+  };
+
+  const isReadyToPay = (p) => p.status === 'PENDING' && (p.universityPaid || p.blockBypassed);
+
+  const dueList = useMemo(() => (
+    filteredPayoffs
+      .filter(isReadyToPay)
+      .sort((a, b) => (a.daysUntilDue ?? Infinity) - (b.daysUntilDue ?? Infinity))
+  ), [filteredPayoffs]);
 
   const stats = useMemo(() => {
     const list = payoffs || [];
-    const pending = list.filter(p => p.status === 'PENDING');
+    const ready = list.filter(isReadyToPay);
     const settled = list.filter(p => p.status === 'SETTLED');
-    const cancelled = list.filter(p => p.status === 'CANCELLED');
-
-    const totalVolume = list.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
-    const pendingVolume = pending.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
-    const settledVolume = settled.reduce((sum, p) => sum + Number(p.netAmount || p.grossCommission || 0), 0);
-
+    const owing = receivables.filter(r => !r.done);
+    const agentsDue = new Set(ready.map(p => p.agentId?.id || p.agentId)).size;
     return {
-      total: list.length,
-      totalVolume,
-      pendingCount: pending.length,
-      pendingVolume,
+      owedByUniversities: sumByCurrency(owing, r => r.currency, r => r.balance),
+      universitiesOwing: owing.length,
+      readyToPay: sumByCurrency(ready, p => p.currency, p => p.netAmount || p.grossCommission),
+      agentsDue,
+      paidOut: sumByCurrency(settled, p => p.currency, p => p.netAmount || p.grossCommission),
       settledCount: settled.length,
-      settledVolume,
-      cancelledCount: cancelled.length
+      overdue: list.filter(p => p.status === 'PENDING' && p.daysUntilDue != null && p.daysUntilDue < 0).length,
+      dueSoon: list.filter(p => p.status === 'PENDING' && p.daysUntilDue != null && p.daysUntilDue >= 0 && p.daysUntilDue <= 7).length
     };
-  }, [payoffs]);
+  }, [payoffs, receivables]);
 
   const getPayoffBadge = (status) => (
     <FinancialStatusBadge status={status || 'PENDING'} size="md" />
@@ -191,6 +232,7 @@ const AdminPayoffsPage = () => {
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider whitespace-nowrap">Payoff #</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider whitespace-nowrap">Invoice #</TableHead>
+            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider whitespace-nowrap">University</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider whitespace-nowrap">Payee / Agent</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider whitespace-nowrap">Gross Commission</TableHead>
             <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider whitespace-nowrap">Net Amount</TableHead>
@@ -202,7 +244,7 @@ const AdminPayoffsPage = () => {
         <TableBody>
           {list.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center py-20 text-[#6B7280]">
+              <TableCell colSpan={9} className="text-center py-20 text-[#6B7280]">
                 <div className="flex flex-col items-center gap-3">
                   <CreditCard className="w-10 h-10 opacity-20" />
                   <p className="text-sm font-medium">No payoffs found in this view.</p>
@@ -224,6 +266,10 @@ const AdminPayoffsPage = () => {
                     <span className="whitespace-nowrap">{invoice.invoiceNumber || 'N/A'}</span>
                   </TableCell>
                   <TableCell className="px-6 py-4">
+                    <span className="block text-xs font-semibold text-[#111827]">{payoff.university?.name || 'N/A'}</span>
+                    {payoff.studentCount > 0 && <span className="text-[11px] text-[#6B7280]">{payoff.studentCount} {payoff.studentCount === 1 ? 'student' : 'students'}</span>}
+                  </TableCell>
+                  <TableCell className="px-6 py-4">
                     <div className="flex flex-col items-center">
                       <span className="font-semibold text-[#111827] text-center truncate">{agent.agencyName || agent.name || 'Unknown agent'}</span>
                       <span className="text-[11px] text-[#6B7280] text-center truncate">{agent.email}</span>
@@ -242,6 +288,14 @@ const AdminPayoffsPage = () => {
                         {PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(payoff)].label}
                       </span>
                     )}
+                    {(() => {
+                      const due = getPayoutDueInfo(payoff);
+                      return due && (
+                        <span className={`mt-1.5 flex w-fit mx-auto items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${due.style}`}>
+                          {due.label}
+                        </span>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center">
                     {payoff.status === 'SETTLED' ? (
@@ -255,16 +309,6 @@ const AdminPayoffsPage = () => {
                   </TableCell>
                   <TableCell className="px-6 py-4 text-center">
                     <div className="flex items-center justify-center gap-1.5">
-                      {isPending && canRecordUniversityPayment && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="btn-financial-action text-[#042C53] border-[#C7D2FE] hover:bg-[#E6F1FB]"
-                          onClick={() => setUniversityPaymentPayoff(payoff)}
-                        >
-                          {payoff.universityPaid ? 'Edit university payment' : 'University paid'}
-                        </Button>
-                      )}
                       {isPending && canAuthorizeException && payoff.paymentBlocked && (
                         <Button
                           size="sm"
@@ -340,79 +384,110 @@ const AdminPayoffsPage = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* Cash-flow snapshot: money is shown in the currency it is paid in */}
       <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { label: 'Pending Settlement', val: `$${(stats.pendingVolume / 1000).toFixed(1)}k`, sub: `${stats.pendingCount} pending payoffs`, color: '#633806' },
-          { label: 'Settled Commission', val: `$${(stats.settledVolume / 1000).toFixed(1)}k`, sub: `${stats.settledCount} confirmed wire transfers`, color: '#27500A' },
-          { label: 'Cancelled Payoffs', val: stats.cancelledCount, sub: 'Voided liabilities', color: '#791F1F' },
-          { label: 'Total Volume', val: `$${(stats.totalVolume / 1000).toFixed(1)}k`, sub: `${stats.total} total payoffs`, color: '#111827' }
+          { label: 'Unpaid by universities', money: stats.owedByUniversities, sub: `${stats.universitiesOwing} ${stats.universitiesOwing === 1 ? 'university owes' : 'universities owe'} QStudy`, color: '#633806' },
+          { label: 'Ready to pay agents', money: stats.readyToPay, sub: `across ${stats.agentsDue} ${stats.agentsDue === 1 ? 'agent' : 'agents'}`, color: '#0C447C' },
+          { label: 'Paid out to agents', money: stats.paidOut, sub: `${stats.settledCount} settled with bank slips`, color: '#27500A' },
+          { label: 'Due soon / overdue', count: stats.dueSoon + stats.overdue, sub: `${stats.overdue} overdue · ${stats.dueSoon} due within 7 days`, color: stats.overdue ? '#791F1F' : '#633806' }
         ].map((kpi, i) => (
           <Card key={i} className="border-[#E5E7EB] bg-white shadow-none">
             <CardContent className="p-4">
               <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">{kpi.label}</p>
-              <p className="text-2xl font-bold text-[#111827] mt-1 font-['Outfit']">{kpi.val}</p>
+              {kpi.count !== undefined ? (
+                <p className="text-2xl font-bold text-[#111827] mt-1 font-['Outfit']">{kpi.count}</p>
+              ) : kpi.money.length === 0 ? (
+                <p className="text-2xl font-bold text-[#9CA3AF] mt-1 font-['Outfit']">—</p>
+              ) : (
+                <div className="mt-1 space-y-0.5">
+                  {kpi.money.map((m) => (
+                    <p key={m.currency} className="text-xl font-bold text-[#111827] font-['Outfit'] tabular-nums">{formatMoney(m.amount, m.currency)}</p>
+                  ))}
+                </div>
+              )}
               <p className="text-[10px] font-semibold mt-1" style={{ color: kpi.color }}>{kpi.sub}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative w-full md:w-96">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
-        <Input
-          placeholder="Search by payoff #, invoice #, agency, or UTR..."
-          className="pl-9 h-10 border-[#E5E7EB] text-sm focus-visible:ring-[#042C53]/10 bg-white"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      {/* Search and due-date filter */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
+          <Input
+            placeholder="Search by payoff #, invoice #, agency, or UTR..."
+            className="pl-9 h-10 border-[#E5E7EB] text-sm focus-visible:ring-[#042C53]/10 bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setDueSoonOnly(v => !v)}
+          className={`h-10 px-3 rounded-lg border text-xs font-semibold whitespace-nowrap transition-colors ${
+            dueSoonOnly ? 'border-[#633806] bg-[#FAEEDA] text-[#633806]' : 'border-[#E5E7EB] bg-white text-[#4B5563] hover:bg-[#F9FAFB]'
+          }`}
+        >
+          Due within 7 days ({dueSoonCount})
+        </button>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="pending" className="w-full">
-        <TabsList className="bg-transparent h-auto p-0 gap-6 border-b border-[#E5E7EB] w-full justify-start rounded-none">
+      {/* Tabs: the three stages of the money, then everything */}
+      <Tabs defaultValue={canRecordUniversityPayment ? 'awaiting' : 'due'} className="w-full">
+        <TabsList className="bg-transparent h-auto p-0 gap-6 border-b border-[#E5E7EB] w-full justify-start rounded-none overflow-x-auto">
+          {canRecordUniversityPayment && (
           <TabsTrigger
-            value="pending"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#27500A] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#27500A] transition-all capitalize flex items-center gap-1.5"
+            value="awaiting"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#633806] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#633806] transition-all flex items-center gap-1.5 whitespace-nowrap"
           >
-            Pending Settlement ({filteredPayoffs.filter(p => p.status === 'PENDING').length})
-            {stats.pendingCount > 0 && (
-              <Badge className="bg-[#FAEEDA] text-[#633806] border-[#FAC775] text-[10px] px-1.5 py-0 font-bold">
-                Action Required
-              </Badge>
-            )}
+            1. Awaiting University Payment ({receivables.filter(r => !r.done).length})
+          </TabsTrigger>
+          )}
+          <TabsTrigger
+            value="due"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0C447C] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#0C447C] transition-all flex items-center gap-1.5 whitespace-nowrap"
+          >
+            {canRecordUniversityPayment ? '2. ' : ''}Agent Payment Due ({dueList.length})
           </TabsTrigger>
           <TabsTrigger
-            value="settled"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
+            value="done"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#27500A] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#27500A] transition-all flex items-center gap-1.5 whitespace-nowrap"
           >
-            Settled Offline ({filteredPayoffs.filter(p => p.status === 'SETTLED').length})
-          </TabsTrigger>
-          <TabsTrigger
-            value="cancelled"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
-          >
-            Cancelled ({filteredPayoffs.filter(p => p.status === 'CANCELLED').length})
+            {canRecordUniversityPayment ? '3. ' : ''}Agent Payment Done ({filteredPayoffs.filter(p => p.status === 'SETTLED').length})
           </TabsTrigger>
           <TabsTrigger
             value="all"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all flex items-center gap-1.5 whitespace-nowrap"
           >
-            All Payoffs ({filteredPayoffs.length})
+            All Payoffs & History ({filteredPayoffs.length})
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pending" className="mt-6">
-          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'PENDING')} />
+        {canRecordUniversityPayment && (
+          <TabsContent value="awaiting" className="mt-6">
+            {receivablesLoading ? (
+              <div className="py-16 text-center text-sm text-[#6B7280]">Loading university balances...</div>
+            ) : (
+              <UniversityReceivablesTab
+                rows={receivables}
+                canRecord={canRecordUniversityPayment}
+                canAuthorizeException={canAuthorizeException}
+                onAllowException={setExceptionPayoff}
+                searchTerm={searchTerm}
+                onChanged={async () => { await loadReceivables(); if (fetchPayoffs) await fetchPayoffs(); }}
+              />
+            )}
+          </TabsContent>
+        )}
+
+        <TabsContent value="due" className="mt-6">
+          <PayoffTable list={dueList} />
         </TabsContent>
 
-        <TabsContent value="settled" className="mt-6">
+        <TabsContent value="done" className="mt-6">
           <PayoffTable list={filteredPayoffs.filter(p => p.status === 'SETTLED')} />
-        </TabsContent>
-
-        <TabsContent value="cancelled" className="mt-6">
-          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'CANCELLED')} />
         </TabsContent>
 
         <TabsContent value="all" className="mt-6">
@@ -420,11 +495,6 @@ const AdminPayoffsPage = () => {
         </TabsContent>
       </Tabs>
 
-      <UniversityPaymentDialog
-        open={!!universityPaymentPayoff}
-        onOpenChange={(open) => !open && setUniversityPaymentPayoff(null)}
-        payoff={universityPaymentPayoff}
-      />
       <PaymentExceptionDialog
         open={!!exceptionPayoff}
         onOpenChange={(open) => !open && setExceptionPayoff(null)}
@@ -570,6 +640,19 @@ const AdminPayoffsPage = () => {
                         <Row label="Date received">{p.universityPaidAt ? format(new Date(p.universityPaidAt), 'dd MMM yyyy') : 'N/A'}</Row>
                         <Row label="Reference"><span className="font-mono">{p.universityPaymentReference || 'N/A'}</span></Row>
                         {p.universityPaymentNotes && <Row label="Notes">{p.universityPaymentNotes}</Row>}
+                        {p.payoutDueDate && (
+                          <>
+                            <Row label="Payment term">{p.paymentTermDays === 0 ? 'Immediate' : `${p.paymentTermDays} days`}</Row>
+                            <Row label="Agent payout due">
+                              {format(new Date(`${String(p.payoutDueDate).slice(0, 10)}T00:00:00`), 'dd MMM yyyy')}
+                              {getPayoutDueInfo(p) && (
+                                <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold ${getPayoutDueInfo(p).style}`}>
+                                  {getPayoutDueInfo(p).label}
+                                </span>
+                              )}
+                            </Row>
+                          </>
+                        )}
                       </div>
                     ) : p.blockBypassed ? (
                       <div className="rounded-xl border border-[#D5D2F7] bg-[#EEEDFE]/50 px-4 py-3 text-xs text-[#3C3489]">

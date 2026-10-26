@@ -3,6 +3,7 @@ const { Application, Student, University, User, Invoice, Course } = require('../
 const { parseCourseTuitionFee } = require('../utils/tuitionUtils');
 const admissionTrackingService = require('./admissionTrackingService');
 const { scopeWhereToAgents, assertCanAccessAgent } = require('../utils/agentScope');
+const { assertCanAccessUniversity } = require('../utils/universityAccess');
 
 // Allowed status enum values
 const ALLOWED_STATUSES = [
@@ -163,6 +164,9 @@ class ApplicationService {
       err.statusCode = 404;
       throw err;
     }
+
+    // 4a. Agents can only submit to universities they are authorised for
+    if (currentUser.role === 'agent') assertCanAccessUniversity(currentUser, university);
 
     // 4b. Course comes from the catalog; name, level and tuition are derived from it
     const catalogCourse = await resolveCatalogCourse(courseId, university.id);
@@ -375,6 +379,7 @@ class ApplicationService {
         err.statusCode = 404;
         throw err;
       }
+      if (universityChanged && currentUser.role === 'agent') assertCanAccessUniversity(currentUser, uni);
       application.universityId = universityId;
     }
 

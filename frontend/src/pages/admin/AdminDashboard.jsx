@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import PipelineSummary from '../../components/application/PipelineSummary';
 import { getFunnelLabel } from '../../utils/studentProgress';
 import { getRoleLabel } from '../../utils/staffRoles';
 import { ONBOARDING_STATUS } from '../../utils/onboarding';
+import { cn } from '../../lib/utils';
 import {
   Users,
   GraduationCap,
@@ -17,10 +18,14 @@ import {
   FileCheck,
   XCircle,
   AlertTriangle,
-  Building2
+  Building2,
+  Globe,
+  ArrowUpRight,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { agentAPI } from '../../utils/api';
 import { formatCurrency } from '../../utils/financialFormatters';
 import { TodayPanel, HistoryPanel, FILTERS, isSameDay } from '../../components/dashboard/WorkTimeline';
 
@@ -51,6 +56,60 @@ const AdminDashboard = () => {
     queueRequested.current = true;
     fetchVerificationQueue?.();
   }, [initialized, fetchVerificationQueue]);
+
+  const [accountManagers, setAccountManagers] = useState([]);
+  useEffect(() => {
+    agentAPI.getAccountManagers?.()
+      .then(res => setAccountManagers(Array.isArray(res.data) ? res.data : []))
+      .catch(err => console.error('Failed to load AMs for dashboard', err));
+  }, []);
+
+  const agentsByCountry = useMemo(() => {
+    const map = {};
+    agents.forEach(a => {
+      const c = a.country?.trim() || 'Not specified';
+      map[c] = (map[c] || 0) + 1;
+    });
+    return Object.entries(map)
+      .map(([country, count]) => ({
+        country,
+        count,
+        percent: agents.length > 0 ? Math.round((count / agents.length) * 100) : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [agents]);
+
+  const agentsByManager = useMemo(() => {
+    const counts = { unassigned: 0 };
+    agents.forEach(a => {
+      const id = a.accountManagerId || a.accountManager?.id;
+      if (!id) {
+        counts.unassigned++;
+      } else {
+        counts[id] = (counts[id] || 0) + 1;
+      }
+    });
+
+    const list = accountManagers.map(m => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      count: counts[m.id] || 0,
+      percent: agents.length > 0 ? Math.round(((counts[m.id] || 0) / agents.length) * 100) : 0
+    })).sort((a, b) => b.count - a.count);
+
+    if (counts.unassigned > 0) {
+      list.push({
+        id: 'unassigned',
+        name: 'Unassigned Agents',
+        email: 'Requires manager assignment',
+        count: counts.unassigned,
+        percent: agents.length > 0 ? Math.round((counts.unassigned / agents.length) * 100) : 0,
+        isUnassigned: true
+      });
+    }
+    return list;
+  }, [agents, accountManagers]);
 
   const staffRole = user?.staffRole || 'super_admin';
   const today = new Date();
@@ -215,7 +274,7 @@ const AdminDashboard = () => {
         toApprove && A(UserCheck, '#EAF3DE', '#27500A', toApprove, 'agent applications ready for your approval', '/admin/agents'),
         invoicesUnderReview && A(FileText, '#E6F1FB', '#0C447C', invoicesUnderReview, 'invoices waiting for your review', '/admin/invoices'),
         feeProofsToReview && A(FileCheck, '#FFF7ED', '#B45309', feeProofsToReview, 'fee payment proofs to accept or reject', '/admin/applications'),
-        pendingVerifications && A(ShieldCheck, '#EEEDFE', '#534AB7', pendingVerifications, 'student documents waiting for verification', '/admin/verification'),
+        pendingVerifications && A(ShieldCheck, '#EEEDFE', '#534AB7', pendingVerifications, 'student documents waiting for verification', '/admin/students?tab=queue'),
         applicationsToReview && A(ClipboardList, '#EEEDFE', '#534AB7', applicationsToReview, 'applications to review', '/admin/applications'),
       ],
       glance: [
@@ -269,7 +328,7 @@ const AdminDashboard = () => {
         correctionRequired && A(FileText, '#FCEBEB', '#791F1F', correctionRequired, 'invoices waiting for agents to correct', '/admin/invoices'),
         invoicesUnderReview && A(ClipboardList, '#E6F1FB', '#0C447C', invoicesUnderReview, 'invoices waiting for review', '/admin/invoices'),
         pendingPayoffs.length && A(Wallet, '#FFF7ED', '#B45309', pendingPayoffs.length, 'payoffs pending settlement', '/admin/payoffs'),
-        pendingVerifications && A(UserCheck, '#EEEDFE', '#534AB7', pendingVerifications, 'student verifications pending', '/admin/verification'),
+        pendingVerifications && A(UserCheck, '#EEEDFE', '#534AB7', pendingVerifications, 'student verifications pending', '/admin/students?tab=queue'),
         pendingAgents && A(Users, '#FEF3C7', '#92400E', pendingAgents, 'agents pending approval', '/admin/agents'),
       ],
       glance: [
@@ -308,8 +367,148 @@ const AdminDashboard = () => {
         <div className="mb-2">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">At a glance</span>
         </div>
-        <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+        <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           {view.glance.map(g => <KpiCard key={g.title} {...g} />)}
+        </div>
+
+        {/* ── At a Glance Breakdown: Agents by Country & Agents by Account Manager ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+          {/* Card 1: Agents by Country */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-all">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-[#E6F1FB] flex items-center justify-center text-[#0C447C]">
+                  <Globe className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 font-['Outfit']">Agents by Country</h3>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    {agentsByCountry.length} {agentsByCountry.length === 1 ? 'country' : 'countries'} · {agents.length} total agents
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/admin/agents"
+                className="text-xs font-semibold text-[#0C447C] hover:underline flex items-center gap-1 group"
+              >
+                View all <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </Link>
+            </div>
+
+            {agentsByCountry.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">No agents registered yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {agentsByCountry.slice(0, 5).map((item) => (
+                  <Link
+                    key={item.country}
+                    to={`/admin/agents?country=${encodeURIComponent(item.country)}`}
+                    className="block group"
+                  >
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-medium text-slate-700 group-hover:text-[#0C447C] transition-colors flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#0C447C]" />
+                        {item.country}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 font-mono">{item.count}</span>
+                        <span className="text-[10px] text-slate-400">({item.percent}%)</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-[#0C447C] h-1.5 rounded-full transition-all duration-500 group-hover:bg-[#185FA5]"
+                        style={{ width: `${Math.max(item.percent, 4)}%` }}
+                      />
+                    </div>
+                  </Link>
+                ))}
+                {agentsByCountry.length > 5 && (
+                  <Link
+                    to="/admin/agents"
+                    className="block text-center text-[11px] font-semibold text-slate-500 hover:text-[#0C447C] pt-2"
+                  >
+                    + {agentsByCountry.length - 5} more countries in filter
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Agents by Account Manager */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-all">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-[#EEEDFE] flex items-center justify-center text-[#534AB7]">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 font-['Outfit']">Agents by Account Manager</h3>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Dedicated managers for global agent partners
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/admin/team"
+                className="text-xs font-semibold text-[#534AB7] hover:underline flex items-center gap-1 group"
+              >
+                Team <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </Link>
+            </div>
+
+            {agentsByManager.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">No account managers configured yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {agentsByManager.slice(0, 5).map((am) => (
+                  <Link
+                    key={am.id}
+                    to={am.isUnassigned ? '/admin/agents?accountManagerId=unassigned' : `/admin/agents?accountManagerId=${am.id}`}
+                    className="block group"
+                  >
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className={cn(
+                        "font-medium transition-colors flex items-center gap-1.5",
+                        am.isUnassigned
+                          ? "text-amber-700 font-semibold"
+                          : "text-slate-700 group-hover:text-[#534AB7]"
+                      )}>
+                        <span className={cn(
+                          "w-1.5 h-1.5 rounded-full",
+                          am.isUnassigned ? "bg-amber-500" : "bg-[#534AB7]"
+                        )} />
+                        {am.name}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 font-mono">{am.count}</span>
+                        <span className="text-[10px] text-slate-400">({am.percent}%)</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-1.5 rounded-full transition-all duration-500",
+                          am.isUnassigned
+                            ? "bg-amber-500"
+                            : "bg-[#534AB7] group-hover:bg-[#3C3489]"
+                        )}
+                        style={{ width: `${Math.max(am.percent, 4)}%` }}
+                      />
+                    </div>
+                  </Link>
+                ))}
+                {agentsByManager.length > 5 && (
+                  <Link
+                    to="/admin/team"
+                    className="block text-center text-[11px] font-semibold text-slate-500 hover:text-[#534AB7] pt-2"
+                  >
+                    + {agentsByManager.length - 5} more team members
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <HistoryPanel events={events} filters={view.filters} />

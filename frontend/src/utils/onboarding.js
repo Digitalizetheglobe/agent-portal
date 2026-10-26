@@ -124,7 +124,7 @@ export const DOC_TYPE_OPTIONS = [
   'Other',
 ];
 
-// Checklist of required documents with the best matching upload for each
+// Checklist of documents with the best matching upload for each
 export const getDocChecklist = (agent) =>
   (REQUIRED_DOCS[agent?.agentType] || []).map((type) => {
     const accepted = [type, ...(DOC_ALIASES[type] || [])];
@@ -132,6 +132,17 @@ export const getDocChecklist = (agent) =>
     const doc = matches.find((d) => d.status === 'approved') || matches[matches.length - 1] || null;
     return { type, doc };
   });
+
+// Vijay rule (transcript [12:23]): Uploading ANY ONE of Company Profile, Business Reg, or Passport is sufficient
+export const hasSufficientDocs = (agent) => {
+  const docs = agent?.verificationDocuments || [];
+  if (agent?.agentType === 'individual') {
+    return docs.some((d) => ['Passport', 'Identity'].includes(d.docType));
+  }
+  return docs.some((d) =>
+    ['Company Profile', 'Business Registration Certificate', 'Business License', 'Director Passport', 'Identity'].includes(d.docType)
+  );
+};
 
 export const HISTORY_LABELS = {
   submitted: 'Application submitted',

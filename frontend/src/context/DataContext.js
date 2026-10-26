@@ -402,6 +402,9 @@ export const DataProvider = ({ children }) => {
   const issueAgentCertificate = (id, file) =>
     runAgentContractAction(id, () => agentAPI.issueCertificate(id, file), 'Failed to issue E-Certificate');
 
+  const updateAgentUniversityAccess = (id, data) =>
+    runAgentContractAction(id, () => agentAPI.updateUniversityAccess(id, data), 'Failed to save university access');
+
   const viewAgentDocument = async (agentId, docId, download = agentAPI.downloadDocument) => {
     try {
       toast.loading('Opening document...');
@@ -663,19 +666,6 @@ export const DataProvider = ({ children }) => {
       return response.data;
     } catch (error) {
       toast.error('Failed to settle payoff', { description: formatApiError(error) });
-      throw error;
-    }
-  };
-
-  // Record that the university paid QStudy (unlocks paying the agent)
-  const recordUniversityPayment = async (id, data) => {
-    try {
-      const response = await payoffAPI.recordUniversityPayment(id, data);
-      await fetchPayoffs();
-      toast.success('University payment recorded');
-      return response.data;
-    } catch (error) {
-      toast.error('Failed to record the university payment', { description: formatApiError(error) });
       throw error;
     }
   };
@@ -1053,11 +1043,11 @@ export const DataProvider = ({ children }) => {
     viewAgentDocument,
     viewAgentContractFile,
     viewPayoffSlip,
-    recordUniversityPayment,
     authorizePaymentException,
     issueAgentContract,
     uploadSignedAgentContract,
     issueAgentCertificate,
+    updateAgentUniversityAccess,
     // News & updates operations
     fetchNews,
     createNews,

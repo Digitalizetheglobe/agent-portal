@@ -33,7 +33,7 @@ const PAGE_SIZE = 25;
  */
 const AuditLogPage = () => {
   const { user } = useAuth();
-  const allowed = hasStaffRole(user, 'head_admission');
+  const allowed = user?.role === 'admin' && (!user.staffRole || user.staffRole === 'super_admin');
 
   const [filters, setFilters] = useState({ search: '', entityType: '', action: '', from: '', to: '' });
   const [applied, setApplied] = useState(filters);

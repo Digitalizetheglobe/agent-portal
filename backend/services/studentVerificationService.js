@@ -109,11 +109,12 @@ class StudentVerificationService {
 
   async getVerificationQueue(query, currentUser) {
     requireAdmin(currentUser);
-    const { status, search, page = 1, limit = 20 } = query || {};
+    const { status, search, agentId, page = 1, limit = 20 } = query || {};
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
     const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
     const offset = (parsedPage - 1) * parsedLimit;
     const where = {};
+    if (agentId) where.agentId = String(agentId);
     await scopeWhereToAgents(where, currentUser);
     if (status) {
       if (!VERIFICATION_STATUSES.includes(status)) {

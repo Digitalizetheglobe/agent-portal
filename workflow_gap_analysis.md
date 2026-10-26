@@ -172,33 +172,37 @@ Legend: ✅ done · 🟡 partial · ❌ missing
 5. ~~**WhatsApp and live chat:**~~ Clarified: Client requested a **Dual Chat System** (Option 1: 1-on-1 AM Direct Chat; Option 2: General Helpdesk).
 6. **Email:** built so every notification is emailed to agents. Which provider (Resend or the client's own SMTP) and from which address (for example no-reply@their domain)?
 7. ~~Events, university visits, offer / admission / enrollment / deposit tracking and the old student status funnel~~ — all removed.
-8. ~~**Registration form:**~~ Clarified: Follows physical form (3 steps: Corporate & Contact $\rightarrow$ Declarations & Bank Particulars $\rightarrow$ Document Uploads).
-9. ~~**E-Certificate / Agent ID:**~~ Clarified: Agent User ID uses formula `[3-Letter Agency Code] + [4-Digit Serial Number] + [3-Letter Country Code]` (e.g. `GEA0001IND`).
+8. ~~**Registration form:**~~ Clarified: Follows the physical form ([Q Study Agent Application Form 2024 (1).pdf](file:///c:/Users/mestr/Documents/All%20DTG%20Projects/agent-portal/Q%20Study%20Agent%20Application%20Form%202024%20(1).pdf)), bifurcated into 3 steps: Corporate & Contact [Company name first] $\rightarrow$ Declarations & Bank Particulars $\rightarrow$ Document Uploads [**any 1 document sufficient; drop blank form upload**].
+9. ~~**E-Certificate / Agent ID:**~~ Clarified: Agent User ID uses formula `[3-Letter Agency Code] + [4-Digit Serial Number] + [3-Letter Country Code]` (e.g. `GEA0001IND`). Note: Vijay gave examples `MOU`/`MLD`; standard ISO uses `MUS`/`MDV`.
 10. **Who may see the bypass of the payment block:** Kept in audit history, authorized by Head of Admission / Super Admin only.
 
 ---
 
 ## 5. Post-Meeting Audit Realignment (Gaps vs. Latest Meeting Audit)
 
-Directives from the latest leadership alignment review (`meeting_audit_qstudy.md`):
+Directives from the latest leadership alignment review (`meeting_audit_qstudy.md`) and the 22 Oct meeting transcript with Vijay (client):
 
 ### ➕ 5.1 What We Have to ADD
 | Item | Requirement / Gap | Action Required |
 |---|---|---|
 | **Medical Examination Stage** | ✅ Done. Added between Arrival and Registration (`visaPipeline.js`, `VisaPipelinePanel.jsx`, database enum). | — |
-| **Agent User ID Auto-Generator** | ✅ Done. Auto-generates standardized Agent ID ([Agency 3L] + [4-Digit Serial] + [Country 3L], e.g. `GEA0001IND`) on Head of Admission approval inside a transaction with `pg_advisory_xact_lock`. Registration leaves code null until approval. Backfill script provided at `backend/scripts/backfill_agent_ids.js` (supports `--dry-run`, lists agents missing a country). | — |
+| **Agent User ID Auto-Generator** | ✅ Done. Auto-generates standardized Agent ID ([Agency 3L] + [4-Digit Serial] + [Country 3L], e.g. `GEA0001IND`) on Head of Admission approval inside a transaction with `pg_advisory_xact_lock`. Registration leaves code null until approval. Backfill script provided at `backend/scripts/backfill_agent_ids.js` (supports `--dry-run`, lists agents missing a country). | Support client aliases (`MOU`, `MLD`). |
 | **Dual Chat Channels** | ✅ Done. Two channels per agent: **My Account Manager** (direct, the agent and their own Account Manager; super admin can read but not reply) and **General Support** (helpdesk; answered by the Head of Admission and the super admin, a client-approved departure from the matrix). Other staff roles have no chat access, as in the access matrix. Agents without an Account Manager can only use General Support. Unread counts and notifications are per channel. Older messages stay in the direct channel, or move to General Support for agents with no Account Manager (one time, at the next server start). | Tell the client the helpdesk is staffed by Head of Admission + super admin. |
 | **University Visibility Rights** | All active universities are visible to all approved agents. | Super Admin toggle matrix to assign which universities/regions an agent can view (Malaysian vs. Foreign). |
 | **Payment Term Due Dates** | Maturity countdown missing on approved invoices. | Add payout due dates (e.g., 14-day or 30-day payment terms from University Payment In). |
 | **Flight Arrival Tracking** | ✅ Done. Flight number, airport, date, optional time and ticket upload. | — |
 | **105 Universities Ingestion** | Manual university creation only. | Data ingestion script to migrate 105 institutions and program catalogs from System QStudy. |
+| **Dashboard Widgets Realignment** | Currently shows "Agents by Region". | Change to **"Agents by Country"** and add **"Agents by Account Manager"**; restrict dashboard to Super Admin only. |
+| **Students Inside Agents View** | Standalone student management exists. | Under Agent detail view in Admin, embed 3 sub-views: **Students**, **Invoices**, and **Visa Tracking**. |
+| **Ticket Email Notification Details** | Notification emails currently only notify of updates. | Ensure ticket notification emails explicitly include the issue description. |
 
 ### 🔄 5.2 What We Need to UPDATE
 | Item | Current Implementation | Required Realignment |
 |---|---|---|
 | **Visa Progression Sequence** | ✅ Done. `Fees Paid` now comes before `Visa 100%`; the "Pending Fees" state is removed. | — |
 | **5 Core Roles Hierarchy** | Includes `head_recruitment` and mixed admin permissions. | Consolidate into 5 explicit tiers: **Agent**, **Account Manager**, **Admission Manager**, **Finance/Accounts**, **Super Admin**. |
-| **Agent Registration Form** | Split between invite page and dashboard compliance tab. | Restructure into 3 clear physical form steps: (1) Corporate Details, (2) Legal & Bank Particulars, (3) Document Uploads. |
+| **Agent Registration Form & Documents** | Split form; requires all documents. | Restructure into 3 clean steps (Company name first; Bank & Declarations; Documents). **Uploading ANY ONE document is sufficient** (Company Profile, Business Registration, or Passport). |
+| **Menu Renaming** | Main navigation shows "Admissions". | Rename "Admissions" tab to **"Info"** (catalog for universities, courses, fees, brochures, commission, updates). |
 | **Audit Log Permissions** | Accessible by Head of Admission & Super Admin. | Restrict strictly to **Super Admin** only. |
 | **Single-Stage Pipeline Counts** | Ensure no dual-bucket display. | Keep strict single-state tracking across all 9 milestones. |
 
@@ -208,6 +212,8 @@ Directives from the latest leadership alignment review (`meeting_audit_qstudy.md
 | **Dummy Financial Metrics & Widgets** | Client instruction: *"Do NOT overcomplicate with dummy finance calculations (e.g., avoid artificial 'settled commission vs. pending commission totals' widgets)."* | Remove speculative projection widgets and artificial totals; keep milestone-driven (Submitted $\rightarrow$ University Paid $\rightarrow$ Due $\rightarrow$ Settled). |
 | **"Pending Visa" After Fees Paid** | Confusing status; once fees are verified, application moves directly to final endorsement. | ✅ Done ("Pending Fees" bucket removed with the pipeline reorder). |
 | **Agent Profile Commission Rate** | Commission is set per university, never per agent. | Purge all legacy agent-level commission inputs. |
+| **Mandatory Upload of All Documents** | Client confirmed ANY ONE document is enough. | Relax document requirement to at least one valid agency document. |
+| **Agent Application Form Upload** | Data is entered directly into the 3-step digital form. | Remove redundant blank/filled application form upload field. |
 | **Legacy Event & Expo Relics** | Leftovers from early `whattoimplement.md` spec. | Confirm full decommissioning of event, expo, and campus visit schemas. |
 | **Agent Visa Progress Editing** | External agents cannot alter percentage milestones. | Verify agents are strictly **View-Only** on the pipeline. |
 
@@ -224,7 +230,7 @@ Directives from the latest leadership alignment review (`meeting_audit_qstudy.md
 | **Invoice Submission** | Submit (when eligible)| View Assigned | Verify Eligibility | Process Payout | Full Control |
 | **University Payment In** | No Access | No Access | View Status | **Record Receipt** | Full Control |
 | **Agent Payout & Slip Upload** | View Slip & Date | No Access | View Status | **Mark Paid & Slip**| Full Control |
-| **University & Course Info** | View (Allowed only)| View | Manage Catalog | View Comm % | **Set Visibility Rules**|
+| **University & Course Info ("Info")** | View (Allowed only)| View | Manage Catalog | View Comm % | **Set Visibility Rules**|
 | **Dedicated Direct Chat** | Chat with AM | Chat with Agents | No | No | Monitor |
 | **General Support Chat** | Access | No Access | No Access | No Access | Supervise |
 | **Support Tickets** | Raise Ticket | View Assigned | View Assigned | View Payment Issues| Full Resolution |

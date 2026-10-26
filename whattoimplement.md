@@ -1,6 +1,8 @@
 # 🌍 QStudy Agent Portal — Detailed Product Documentation
 
-A comprehensive digital platform designed to empower external education agents, expand student reach, and efficiently fill seats across QStudy seminars, expos, and admission events worldwide.
+> [!IMPORTANT]
+> **Operational Alignment Update (22 Oct 2026 Review with Vijay):**
+> Following the live walkthrough with QStudy Leadership (Vijay), the system focus is centered on **International Student Applications & Visa Tracking (EMGS)**, **Granular 5-Role Permissions**, **Standardized Agent IDs**, and **105 Universities Migration from System QStudy**. Legacy seminar/event seat-booking concepts have been decommissioned. See [Section 10](#-10-audit-gaps--implementation-action-plan-qstudy-meeting-alignment) and [meeting_audit_qstudy.md](meeting_audit_qstudy.md) for current implementation requirements.
 
 ---
 
@@ -519,7 +521,7 @@ This system lays the foundation for **long-term growth, automation, and global e
 
 # 🔍 10. Audit Gaps & Implementation Action Plan (QStudy Meeting Alignment)
 
-Based on the strategic review with QStudy Leadership documented in `meeting_audit_qstudy.md`, the platform workflow requires immediate realignment with real-world Malaysian international education operations (EMGS), role restructuring, and removal of misleading dummy metrics.
+Based on the strategic review with QStudy Leadership (Vijay, client; Ankush & Anup, developers) documented in `meeting_audit_qstudy.md` and the 22 Oct 2026 transcript, the platform workflow is aligned with real-world Malaysian international education operations (EMGS), role restructuring, and removal of misleading dummy metrics.
 
 ---
 
@@ -535,7 +537,7 @@ Based on the strategic review with QStudy Leadership documented in `meeting_audi
    - **Requirement:** Client mandated a strict, predictable auto-generation formula for unique Agent IDs:
      $$\mathbf{[3\text{-Letter Agency Code}]} + \mathbf{[4\text{-Digit Serial Number}]} + \mathbf{[3\text{-Letter Country Code}]}$$
      *(e.g., Global Education Agency in India $\rightarrow$ `GEA0001IND`).*
-   - **Action:** Implemented auto-generation utility upon agent onboarding approval based on agency initials, sequential serial count, and ISO 3166-1 alpha-3 country code. Backfill script created at `backend/scripts/backfill_agent_ids.js`.
+   - **Action:** Implemented auto-generation utility upon agent onboarding approval based on agency initials, sequential serial count, and 3-letter country code (with support for client aliases like `MOU`/`MLD` alongside standard ISO `MUS`/`MDV`). Backfill script created at `backend/scripts/backfill_agent_ids.js`.
 
 3. **Dual Chat System (Dedicated AM Direct Chat vs. General Helpdesk)** *(done)*
    - **Current State:** Single pooled chat room per agent where any internal staff member can reply.
@@ -555,8 +557,17 @@ Based on the strategic review with QStudy Leadership documented in `meeting_audi
    - **Current State:** Captures only minimal arrival date text.
    - **Requirement:** Capture full flight arrival logistics (flight number, date, arrival time, airport) and uploaded arrival confirmation / ticket proof.
 
-7. **105 Universities Migration Script / Tool**
-   - **Requirement:** Ingest and migrate the existing 105 university profiles, faculties, degree levels, and program catalogs directly from System QStudy into the Agent Portal database.
+7. **105 Universities Migration Script / Tool ("System QStudy")**
+   - **Requirement:** Ingest and migrate the existing 105 university profiles, faculties, degree levels, awarding bodies, URLs, brochures, and program catalogs directly from System QStudy into the Agent Portal database.
+
+8. **Dashboard Widgets Realignment & Super Admin Restriction**
+   - **Requirement:** Main dashboard is strictly for **Super Admin only**. Replace "Agents by Region" with **"Agents by Country"** and add **"Agents by Account Manager"** breakdown.
+
+9. **Navigation Hierarchy: "Students Inside Agents"**
+   - **Requirement:** Under Admin Agent details, embed 3 sub-views: **Students**, **Invoices**, and **Visa Tracking**.
+
+10. **Support Ticket Emails with Issue Description**
+    - **Requirement:** Every ticket notification email sent to staff and agents must explicitly state the issue description.
 
 ---
 
@@ -572,21 +583,24 @@ Based on the strategic review with QStudy Leadership documented in `meeting_audi
    - **Current State:** Mixed staff roles (`account_manager`, `head_recruitment`, `head_admission`, `accounts`, `super_admin`).
    - **Requirement:** Re-align strictly with the 5 core tiers confirmed by QStudy:
      1. **Agent (External):** Registers, submits students, uploads documents, **view-only** visa progress, submits invoices once unlocked.
-     2. **Account Manager (Internal Sales):** Assigned SPOC for agents/regions, first reviewer of student files, 1-on-1 direct chat.
+     2. **Account Manager (Internal Sales):** Assigned SPOC for agents/countries, first reviewer of student files, 1-on-1 direct chat.
      3. **Admission Manager (Internal Operations):** Verifies applications, **sole authority** to update visa pipeline ($15\% \rightarrow 100\%$), approves fee proof, manages university catalogs.
      4. **Finance / Accounts Department (Internal):** Records university payment receipt, tracks payment due dates, releases commission to agent bank accounts with payment slip.
      5. **Super Admin (CEO / Leadership):** Full dashboard oversight, user management & assignments, **University Visibility Rights**, and **System Audit Log**.
 
 3. **3-Stage Agent Registration & Onboarding Form**
-   - **Update:** Restructure the onboarding stepper to mirror the official *Partnership Sub-agent Application Form*:
-     - **Step 1: Corporate & Contact Details:** Agency name, business registration number, registered official address, country, PIC name & designation, authorized signatory, phone, and official email.
+   - **Update:** Restructure the onboarding stepper to mirror the official [Q Study Agent Application Form 2024 (1).pdf](file:///c:/Users/mestr/Documents/All%20DTG%20Projects/agent-portal/Q%20Study%20Agent%20Application%20Form%202024%20(1).pdf) (*Partnership / Sub-agent Application Form*):
+     - **Step 1: Corporate & Contact Details:** **Company Name first**, business registration number, registered official address, country, PIC name & designation, authorized signatory, phone, and official email.
      - **Step 2: Legal Declarations & Bank Particulars:** Family conflict-of-interest check, accuracy declarations, Bank Name, branch address, beneficiary name, Account Number / IBAN, SWIFT / BIC, and routing code.
-     - **Step 3: Document Uploads:** Business Registration Certificate, Company Profile / Brochure, Passport copy of Authorized Signatory.
+     - **Step 3: Document Uploads:** **ANY ONE document is sufficient** (Company Profile / Brochure, Business Registration Certificate, or Passport copy of Authorized Signatory / Director). Drop separate blank form upload.
 
-4. **Audit Log Access Restriction**
+4. **Menu Renaming: "Admissions" $\rightarrow$ "Info"**
+   - **Update:** Rename the catalog menu item from "Admissions" to **"Info"** (universities, courses, intake dates, brochures, commission structure, fee structure, admin updates).
+
+5. **Audit Log Access Restriction**
    - **Update:** Restrict audit log browsing exclusively to **Super Admin** (removing access from operational managers).
 
-5. **Strict Single-Stage Counter Integrity**
+6. **Strict Single-Stage Counter Integrity**
    - **Update:** Dashboard counters must strictly increment/decrement so an application exists in only one stage at any time without double-counting.
 
 ---
@@ -603,10 +617,13 @@ Based on the strategic review with QStudy Leadership documented in `meeting_audi
 3. **Remove Agent-Level Commission Rates**
    - Commission is defined on the university/program level, never on an individual agent's profile. Purge any legacy agent-level commission fields.
 
-4. **Decommission Legacy Event / Seminar / Expo Code**
+4. **Remove Mandatory Upload of All Documents & Blank Application Form Upload**
+   - Client confirmed **any 1 document is enough**. Remove the requirement for all documents and drop the application form PDF upload.
+
+5. **Decommission Legacy Event / Seminar / Expo Code**
    - Purge any remaining database schemas, routes, or UI components related to the earlier event seat-booking and campus visit concepts.
 
-5. **Remove Agent Edit Permissions on Visa Pipeline**
+6. **Remove Agent Edit Permissions on Visa Pipeline**
    - Agents have **zero edit rights** over visa percentages. Ensure frontend percentage sliders/pickers are entirely disabled/view-only for external agents.
 
 ---
@@ -622,7 +639,7 @@ Based on the strategic review with QStudy Leadership documented in `meeting_audi
 | **Invoice Submission** | Submit (when eligible)| View Assigned | Verify Eligibility | Process Payout | Full Control |
 | **University Payment In** | No Access | No Access | View Status | **Record Receipt** | Full Control |
 | **Agent Payout & Slip Upload** | View Slip & Date | No Access | View Status | **Mark Paid & Slip**| Full Control |
-| **University & Course Info** | View (Allowed only)| View | Manage Catalog | View Comm % | **Set Visibility Rules**|
+| **University & Course Info ("Info")** | View (Allowed only)| View | Manage Catalog | View Comm % | **Set Visibility Rules**|
 | **Dedicated Direct Chat** | Chat with AM | Chat with Agents | No | No | Monitor |
 | **General Support Chat** | Access | No Access | No Access | No Access | Supervise |
 | **Support Tickets** | Raise Ticket | View Assigned | View Assigned | View Payment Issues| Full Resolution |

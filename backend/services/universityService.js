@@ -1,7 +1,8 @@
 const { Op } = require('sequelize');
-const { University, Application } = require('../models');
+const { University, Application, Course, UniversityUpdate } = require('../models');
 const applicationService = require('./applicationService');
 const { scopeWhereToAgents } = require('../utils/agentScope');
+const { scopeWhereToUniversityAccess, assertCanAccessUniversity } = require('../utils/universityAccess');
 
 const { parseCommissionRate } = require('../utils/commission');
 const { parseFees } = require('../utils/universityContent');
@@ -27,6 +28,52 @@ const FIELD_LABELS = {
 };
 
 const ALLOWED_STATUSES = ['active', 'inactive'];
+
+// Active programs a university offers (including programs open to every university), and its news
+// and scholarships, so the lists can show what is inside each university without opening it
+const catalogCounts = async (universityIds) => {
+  const counts = new Map(universityIds.map((id) => [String(id), { programCount: 0, updateCount: 0, scholarshipCount: 0 }]));
+  if (universityIds.length === 0) return counts;
+
+  const openToAll = await Course.count({
+    where: {
+      status: 'active',
+      [Op.or]: [
+        { universityId: null },
+        sequelize.literal(`"Course"."universityIds" IS NULL OR "Course"."universityIds"::text = '[]'`)
+      ]
+    }
+  });
+
+  await Promise.all(universityIds.map(async (id) => {
+    const specific = await Course.count({
+      where: {
+        status: 'active',
+        universityId: { [Op.ne]: null },
+        [Op.or]: [
+          { universityId: id },
+          sequelize.literal(`"Course"."universityIds"::text LIKE '%${id}%'`)
+        ]
+      }
+    });
+    counts.get(String(id)).programCount = specific + openToAll;
+  }));
+
+  const updates = await UniversityUpdate.findAll({
+    attributes: ['universityId', 'type', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+    where: { universityId: { [Op.in]: universityIds } },
+    group: ['universityId', 'type'],
+    raw: true
+  });
+  updates.forEach((row) => {
+    const entry = counts.get(String(row.universityId));
+    if (!entry) return;
+    const n = parseInt(row.count, 10) || 0;
+    entry.updateCount += n;
+    if (row.type === 'scholarship') entry.scholarshipCount += n;
+  });
+  return counts;
+};
 
 class UniversityService {
   /**
@@ -140,7 +187,8 @@ class UniversityService {
       search,
       status,
       country,
-      city
+      city,
+      commission
     } = query;
 
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -169,6 +217,11 @@ class UniversityService {
       where.city = { [Op.iLike]: `%${city.trim()}%` };
     }
 
+    // Needs attention: no commission rate yet (an invoice cannot be approved without it)
+    if (commission === 'missing') {
+      where.commissionRate = null;
+    }
+
     // 4. Search filter across the university's information: name, code, location, contact, website,
     // description and commission (a number such as 10 also matches a 10% commission)
     if (search && search.trim()) {
@@ -189,6 +242,9 @@ class UniversityService {
         ...(Number.isFinite(asNumber) ? [{ commissionRate: asNumber }] : [])
       ];
     }
+
+    // 5. Agents only see the universities they are allowed to work with
+    scopeWhereToUniversityAccess(where, currentUser);
 
     const { count, rows } = await University.findAndCountAll({
       where,
@@ -220,18 +276,39 @@ class UniversityService {
       });
     }
 
+    // The program / news counts and the totals are for the catalog screens only (they ask for the envelope);
+    // dropdowns that just need names skip these extra queries
+    const withDetails = query.envelope === 'true' || query.format === 'envelope';
+    const catalog = withDetails ? await catalogCounts(rows.map(u => u.id)) : new Map();
+
     const formattedUniversities = rows.map(u => {
       const json = u.toJSON();
       json.applicationCount = countMap.get(u.id) || 0;
+      if (withDetails) Object.assign(json, catalog.get(String(u.id)));
       return json;
     });
+
+    // Totals over the whole catalog (not just this page) for the cards at the top
+    const everyUniversity = !withDetails ? [] : await University.findAll({
+      where: scopeWhereToUniversityAccess({}, currentUser),
+      attributes: ['status', 'country', 'commissionRate'],
+      raw: true
+    });
+    const stats = !withDetails ? null : {
+      total: everyUniversity.length,
+      active: everyUniversity.filter(u => u.status === 'active').length,
+      inactive: everyUniversity.filter(u => u.status === 'inactive').length,
+      countries: new Set(everyUniversity.map(u => (u.country || '').trim().toLowerCase()).filter(Boolean)).size,
+      missingCommission: everyUniversity.filter(u => u.status === 'active' && (u.commissionRate === null || u.commissionRate === undefined)).length
+    };
 
     return {
       total: count,
       page: parsedPage,
       limit: parsedLimit,
       totalPages: Math.ceil(count / parsedLimit) || 1,
-      universities: formattedUniversities
+      universities: formattedUniversities,
+      stats
     };
   }
 
@@ -246,6 +323,7 @@ class UniversityService {
       err.statusCode = 404;
       throw err;
     }
+    assertCanAccessUniversity(currentUser, university);
 
     const countWhere = { universityId: id };
     if (currentUser && currentUser.role === 'agent') {
@@ -256,6 +334,7 @@ class UniversityService {
 
     const result = university.toJSON();
     result.applicationCount = applicationCount;
+    Object.assign(result, (await catalogCounts([university.id])).get(String(university.id)));
     return result;
   }
 

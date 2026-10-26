@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Coins, FileText, Megaphone, Plus, Trash2, Pencil, Eye, Download, Upload } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Coins, FileText, Megaphone, Plus, Trash2, Pencil, Eye, Download, Upload, GraduationCap, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { universityAPI, formatApiError } from '../../utils/api';
 import { Button } from '../ui/button';
@@ -29,8 +29,11 @@ const cardClass = 'border-[#E5E7EB] bg-white shadow-none';
 /**
  * Fee structure, courses with what the student pays and what the agent earns, brochures,
  * and news / scholarship updates. Everyone can read; only `canManage` (Head of Admission) can change.
+ * `show` picks the section to display: 'programs', 'news', 'fees' (fees and brochures), 'all', or null for none
+ * (the data stays loaded, so switching tabs on the page is instant).
  */
-const UniversityContent = ({ university, canManage, onChanged }) => {
+const UniversityContent = ({ university, canManage, onChanged, show = 'all' }) => {
+  const visible = (name) => show === 'all' || show === name;
   const id = university.id;
   const fees = Array.isArray(university.fees) ? university.fees : [];
   const brochures = Array.isArray(university.brochures) ? university.brochures : [];
@@ -42,6 +45,8 @@ const UniversityContent = ({ university, canManage, onChanged }) => {
   const [uploading, setUploading] = useState(false);
   const [brochureTitle, setBrochureTitle] = useState('');
   const fileRef = useRef(null);
+  const [programSearch, setProgramSearch] = useState('');
+  const [levelFilter, setLevelFilter] = useState('all');
 
   const load = useCallback(async () => {
     try {
@@ -141,10 +146,17 @@ const UniversityContent = ({ university, canManage, onChanged }) => {
   };
 
   const { courses, commissionRate } = courseData;
+  const levels = useMemo(() => [...new Set(courses.map((c) => c.level).filter(Boolean))].sort(), [courses]);
+  const filteredCourses = useMemo(() => {
+    const q = programSearch.trim().toLowerCase();
+    return courses.filter((c) => (levelFilter === 'all' || c.level === levelFilter)
+      && (!q || [c.name, c.code, c.department].some((v) => (v || '').toLowerCase().includes(q))));
+  }, [courses, programSearch, levelFilter]);
 
   return (
     <div className="space-y-6">
       {/* News and scholarships */}
+      {visible('news') && (
       <Card className={cardClass}>
         <CardHeader className="border-b border-gray-100 px-6 py-4 flex flex-row items-center justify-between">
           <div>
@@ -249,8 +261,10 @@ const UniversityContent = ({ university, canManage, onChanged }) => {
           ))}
         </CardContent>
       </Card>
+      )}
 
       {/* Fees */}
+      {visible('fees') && (
       <Card className={cardClass}>
         <CardHeader className="border-b border-gray-100 px-6 py-4">
           <CardTitle className={sectionTitle}><Coins size={18} className="text-[#042C53]" /> Fee structure</CardTitle>
@@ -281,34 +295,57 @@ const UniversityContent = ({ university, canManage, onChanged }) => {
           )}
         </CardContent>
       </Card>
+      )}
 
-      {/* Courses, tuition and commission */}
+      {/* Programs, tuition and commission */}
+      {visible('programs') && (
       <Card className={cardClass}>
         <CardHeader className="border-b border-gray-100 px-6 py-4">
-          <CardTitle className={sectionTitle}><FileText size={18} className="text-[#042C53]" /> Courses, tuition and commission</CardTitle>
+          <CardTitle className={sectionTitle}><GraduationCap size={18} className="text-[#042C53]" /> Programs ({courses.length})</CardTitle>
           <CardDescription className="text-xs text-gray-500 mt-0.5">
             Tuition is what the student pays.{' '}
             {commissionRate > 0 ? `Commission is ${commissionRate}% of tuition.` : 'No commission rate is set for this university yet.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
+          {courses.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 px-6 py-3 border-b border-gray-100 bg-[#F9FAFB]">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Input value={programSearch} onChange={(e) => setProgramSearch(e.target.value)} placeholder="Search programs, codes or faculty..." className="h-9 pl-9 text-xs bg-white" />
+              </div>
+              {levels.length > 1 && (
+                <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className="h-9 rounded-md border border-gray-200 bg-white px-2 text-xs">
+                  <option value="all">All levels</option>
+                  {levels.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              )}
+              <span className="text-[11px] text-gray-500">{filteredCourses.length} of {courses.length}</span>
+            </div>
+          )}
           {courses.length === 0 ? (
-            <p className="p-6 text-sm text-gray-500">No courses listed.</p>
+            <p className="p-6 text-sm text-gray-500">No programs listed yet.</p>
+          ) : filteredCourses.length === 0 ? (
+            <p className="p-6 text-sm text-gray-500">No program matches your search.</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Course</TableHead>
+                  <TableHead>Program</TableHead>
                   <TableHead>Level</TableHead>
+                  <TableHead>Faculty</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead>Tuition (student pays)</TableHead>
                   <TableHead>Commission</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {courses.map((course) => (
+                {filteredCourses.map((course) => (
                   <TableRow key={course.id}>
                     <TableCell className="font-medium">{course.name}{course.code ? <span className="text-gray-400"> · {course.code}</span> : null}</TableCell>
                     <TableCell>{course.level || '-'}</TableCell>
+                    <TableCell className="text-gray-600">{course.department || '-'}</TableCell>
+                    <TableCell className="text-gray-600">{course.duration || '-'}</TableCell>
                     <TableCell>{tuitionLabel(course.tuitionFee)}</TableCell>
                     <TableCell>{course.commissionAmount != null ? money(course.commissionAmount) : '-'}</TableCell>
                   </TableRow>
@@ -318,8 +355,10 @@ const UniversityContent = ({ university, canManage, onChanged }) => {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Brochures */}
+      {visible('fees') && (
       <Card className={cardClass}>
         <CardHeader className="border-b border-gray-100 px-6 py-4">
           <CardTitle className={sectionTitle}><FileText size={18} className="text-[#042C53]" /> Brochures</CardTitle>
@@ -356,6 +395,7 @@ const UniversityContent = ({ university, canManage, onChanged }) => {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 };

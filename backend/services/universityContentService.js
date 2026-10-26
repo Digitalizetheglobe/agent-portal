@@ -6,6 +6,7 @@ const { putObject, getObject, deleteObject, generateStoragePath } = require('../
 const { parseCourseTuitionFee } = require('../utils/tuitionUtils');
 const { isUuid, fail } = require('../utils/universityContent');
 const { notifyAgents } = require('../controllers/notificationController');
+const { assertCanAccessUniversity } = require('../utils/universityAccess');
 
 // What the Head of Admission publishes about a university besides its basic details:
 // courses with what the student pays and what the agent earns, brochures, and news / scholarship updates.
@@ -39,6 +40,7 @@ class UniversityContentService {
    */
   async getCourses(universityId, currentUser) {
     const university = await loadUniversity(universityId);
+    assertCanAccessUniversity(currentUser, university);
 
     const where = {
       [Op.or]: [
@@ -137,8 +139,9 @@ class UniversityContentService {
     return university.toJSON();
   }
 
-  async getBrochureFile(universityId, brochureId) {
+  async getBrochureFile(universityId, brochureId, currentUser) {
     const university = await loadUniversity(universityId);
+    assertCanAccessUniversity(currentUser, university);
     const brochures = Array.isArray(university.brochures) ? university.brochures : [];
     const brochure = brochures.find((b) => b.id === brochureId);
     if (!brochure) {
@@ -188,8 +191,8 @@ class UniversityContentService {
     return out;
   }
 
-  async listUpdates(universityId) {
-    await loadUniversity(universityId);
+  async listUpdates(universityId, currentUser) {
+    assertCanAccessUniversity(currentUser, await loadUniversity(universityId));
     const updates = await UniversityUpdate.findAll({
       where: { universityId },
       order: [['publishedAt', 'DESC']]

@@ -89,8 +89,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const isAdmin = () => user?.role === 'admin';
-  const isAgent = () => user?.role === 'agent';
+  // Stable identities: pages list these in useCallback/useEffect deps, so a new function
+  // on every provider render would refetch their data each time.
+  const role = user?.role;
+  const isAdmin = useCallback(() => role === 'admin', [role]);
+  const isAgent = useCallback(() => role === 'agent', [role]);
 
   const updateUser = useCallback((userData) => {
     setUser(userData);
