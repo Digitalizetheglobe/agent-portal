@@ -18,7 +18,7 @@ const COPY = {
   programs: {
     title: 'Import programs',
     noun: 'programs',
-    help: 'One row per program. Put the university code or name in the University column (several separated by ;). Leave it empty for a program open to all universities. Import the universities first.',
+    help: 'One row per program and university. Put the university code or name in the University column, with that university\'s own price. A program several universities offer is one row for each. Import the universities first.',
   },
 };
 
@@ -168,11 +168,6 @@ const ImportModal = ({ open, onOpenChange, kind, onImported }) => {
                 <div className="rounded-lg bg-white border border-[#E5E7EB] py-2"><p className="text-xl font-bold text-[#0C447C]">{summary.updated}</p><p className="text-[10px] uppercase tracking-wider text-[#6B7280]">{phase === 'done' ? 'Updated' : 'Updates'}</p></div>
                 <div className="rounded-lg bg-white border border-[#E5E7EB] py-2"><p className={`text-xl font-bold ${summary.errors.length ? 'text-[#791F1F]' : 'text-[#6B7280]'}`}>{summary.errors.length}</p><p className="text-[10px] uppercase tracking-wider text-[#6B7280]">Skipped</p></div>
               </div>
-              {kind === 'programs' && summary.openToAll > 0 && (
-                <p className="text-[11px] text-[#633806] bg-[#FAEEDA] rounded-lg p-2">
-                  {summary.openToAll} new {summary.openToAll === 1 ? 'program has' : 'programs have'} no university, so {summary.openToAll === 1 ? 'it is' : 'they are'} open to all universities. Check the University column if that is not intended.
-                </p>
-              )}
               {summary.errors.length > 0 && (
                 <div>
                   <p className="text-[11px] font-bold text-[#791F1F] uppercase tracking-wider mb-1">Rows that will be skipped</p>

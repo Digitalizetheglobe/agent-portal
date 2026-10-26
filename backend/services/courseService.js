@@ -45,6 +45,32 @@ const assertNoAmbiguousDuplicate = async ({ id, name, code, level, universityIds
   }
 };
 
+// A program belongs to exactly one university (each university sets its own price). Returns that university's id.
+const resolveSingleUniversity = async ({ universityId, universityIds }) => {
+  let ids = [];
+  if (Array.isArray(universityIds)) {
+    ids = universityIds.filter(id => id && id !== 'all' && id !== 'none');
+  } else if (universityId && universityId !== 'none' && universityId !== 'all') {
+    ids = [universityId];
+  }
+  if (ids.length === 0) {
+    const err = new Error('Choose the university this program belongs to.');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (ids.length > 1) {
+    const err = new Error('A program belongs to one university. Add a separate program for each university, so each can have its own price.');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!isUuid(String(ids[0])) || !(await University.count({ where: { id: ids[0] } }))) {
+    const err = new Error('The selected university was not found.');
+    err.statusCode = 400;
+    throw err;
+  }
+  return String(ids[0]);
+};
+
 class CourseService {
   /**
    * Get all courses with optional filters (search, universityId, level, status)
@@ -145,7 +171,7 @@ class CourseService {
         {
           model: University,
           as: 'university',
-          attributes: ['id', 'name', 'code', 'country']
+          attributes: ['id', 'name', 'code', 'country', 'logoUrl', 'commissionRate']
         }
       ],
       order: [[sortBy, sortOrder.toUpperCase()]],
@@ -172,13 +198,13 @@ class CourseService {
   /**
    * Get single course by ID
    */
-  async getCourseById(id) {
+  async getCourseById(id, currentUser = null) {
     const course = await Course.findByPk(id, {
       include: [
         {
           model: University,
           as: 'university',
-          attributes: ['id', 'name', 'code', 'country']
+          attributes: ['id', 'name', 'code', 'country', 'logoUrl', 'commissionRate']
         }
       ]
     });
@@ -189,7 +215,37 @@ class CourseService {
       throw err;
     }
 
-    return course.toJSON();
+    const json = course.toJSON();
+
+    // Agents only see active programs, offered by a university they are allowed to use
+    const isAgent = currentUser?.role === 'agent';
+    if (isAgent && course.status !== 'active') {
+      const err = new Error('Course not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Every university that offers it (empty list = open to all universities)
+    const offeredIds = Array.isArray(json.universityIds) ? json.universityIds : [];
+    let universities = [];
+    if (offeredIds.length > 0) {
+      const where = { id: { [Op.in]: offeredIds } };
+      const access = universityAccessCondition(currentUser);
+      universities = await University.findAll({
+        where: access ? { [Op.and]: [where, access] } : where,
+        attributes: ['id', 'name', 'code', 'country', 'city', 'logoUrl', 'commissionRate', 'status'],
+        order: [['name', 'ASC']]
+      });
+      if (isAgent) universities = universities.filter(u => u.status === 'active');
+      if (isAgent && universities.length === 0) {
+        const err = new Error('Course not found');
+        err.statusCode = 404;
+        throw err;
+      }
+    }
+    json.universities = universities.map(u => u.toJSON());
+
+    return json;
   }
 
   /**
@@ -215,14 +271,8 @@ class CourseService {
       throw err;
     }
 
-    let finalUniversityIds = [];
-    if (Array.isArray(universityIds)) {
-      finalUniversityIds = universityIds.filter(id => id && id !== 'all' && id !== 'none');
-    } else if (universityId && universityId !== 'none' && universityId !== 'all') {
-      finalUniversityIds = [universityId];
-    }
-
-    const primaryUniId = finalUniversityIds.length > 0 ? finalUniversityIds[0] : null;
+    const primaryUniId = await resolveSingleUniversity({ universityId, universityIds });
+    const finalUniversityIds = [primaryUniId];
     const finalLevel = level ? level.trim() : 'Undergraduate';
     const finalStatus = status === 'inactive' ? 'inactive' : 'active';
 
@@ -292,14 +342,14 @@ class CourseService {
     if (description !== undefined) course.description = description ? description.trim() : null;
 
     if (universityIds !== undefined || universityId !== undefined) {
-      let finalUniversityIds = [];
-      if (Array.isArray(universityIds)) {
-        finalUniversityIds = universityIds.filter(id => id && id !== 'all' && id !== 'none');
-      } else if (universityId && universityId !== 'none' && universityId !== 'all') {
-        finalUniversityIds = [universityId];
-      }
-      course.universityIds = finalUniversityIds;
-      course.universityId = finalUniversityIds.length > 0 ? finalUniversityIds[0] : null;
+      const onlyId = await resolveSingleUniversity({ universityId, universityIds });
+      course.universityIds = [onlyId];
+      course.universityId = onlyId;
+    } else if ((course.toJSON().universityIds || []).length !== 1) {
+      // Older programs were set up for several universities or all of them: saving needs one university
+      const err = new Error('Choose the one university this program belongs to before saving it.');
+      err.statusCode = 400;
+      throw err;
     }
 
     await assertNoAmbiguousDuplicate({

@@ -12,12 +12,13 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
-  Globe,
+  AlertTriangle,
   Upload
 } from 'lucide-react';
 import ImportModal from '../../components/modals/ImportModal';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
+import useAllUniversities from '../../hooks/useAllUniversities';
 import { hasStaffRole } from '../../utils/staffRoles';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -62,7 +63,8 @@ const DEGREE_LEVELS = [
 ];
 
 const CoursesPage = () => {
-  const { universities, deleteCourse, updateCourseStatus } = useData();
+  const { deleteCourse, updateCourseStatus } = useData();
+  const { universities } = useAllUniversities();
   const { user } = useAuth();
   // University and course information is maintained by the Head of Admission
   const canManage = hasStaffRole(user, 'head_admission');
@@ -349,7 +351,6 @@ const CoursesPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Universities</SelectItem>
-                  <SelectItem value="general">Open to All Universities</SelectItem>
                   {universities?.map(u => (
                     <SelectItem key={u.id || u._id} value={String(u.id || u._id)}>
                       {u.name}
@@ -475,8 +476,8 @@ const CoursesPage = () => {
 
                         if (uniIds.length === 0) {
                           return (
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#042C53] bg-blue-50 px-2 py-0.5 rounded-md">
-                              <Globe className="w-3 h-3 text-[#042C53]" /> All Partner Universities
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#633806] bg-[#FAEEDA] px-2 py-0.5 rounded-md" title="Edit the program and choose its university">
+                              <AlertTriangle className="w-3 h-3" /> No university - assign one
                             </span>
                           );
                         }

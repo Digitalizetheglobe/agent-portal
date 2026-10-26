@@ -123,8 +123,8 @@ class ImportService {
   }
 
   /**
-   * Programs. Each row names the university (or several, separated by ; or |) by code or by name.
-   * An empty university cell means the program is open to all universities.
+   * Programs. Each row names its one university, by code or by name. A program that several universities
+   * offer is one row per university, so each can have its own price.
    * A row matches an existing program with the same name, level, code and universities.
    */
   async importPrograms(rows, { dryRun = false } = {}) {
@@ -151,6 +151,8 @@ class ImportService {
         // Which universities offer it
         const universityIds = [];
         const names = text(row.university).split(/[;|]/).map((s) => s.trim()).filter(Boolean);
+        if (names.length === 0) throw fail(400, 'University is required. Every program belongs to one university.');
+        if (names.length > 1) throw fail(400, 'Only one university per row. Repeat the row for each university, each with its own price.');
         for (const token of names) {
           const uni = byCode.get(token.toLowerCase()) || byName.get(token.toLowerCase());
           if (!uni) throw fail(400, `University "${token}" was not found. Import the universities first, then the programs.`);
@@ -197,7 +199,6 @@ class ImportService {
             await courseService.createCourse({ name, ...values, level: finalLevel, universityIds });
           }
           result.created += 1;
-          if (universityIds.length === 0) result.openToAll += 1;
         }
       } catch (error) {
         result.errors.push({ row: line, message: error.message });

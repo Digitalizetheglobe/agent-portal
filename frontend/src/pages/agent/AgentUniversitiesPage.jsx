@@ -15,7 +15,8 @@ import {
   Megaphone,
   Percent,
   LayoutGrid,
-  List
+  List,
+  ArrowUpRight
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -330,101 +331,106 @@ const AgentUniversitiesPage = () => {
           </Table>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {universities.map((uni) => (
-            <Card key={uni.id} className="border-[#E5E7EB] bg-white shadow-none hover:shadow-md hover:border-[#042C53]/30 transition-all flex flex-col">
-              <CardContent className="p-5 flex flex-col gap-4 flex-1">
-                {/* Who and where */}
-                <div className="flex items-start gap-3">
-                  <UniversityLogo university={uni} size="md" />
-                  <div className="min-w-0 flex-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {universities.map((uni) => {
+            const brochureCount = (uni.brochures || []).length;
+            const newsCount = (uni.updateCount || 0) - (uni.scholarshipCount || 0);
+            const pills = [
+              { label: uni.city || uni.country, icon: MapPin },
+              { label: uni.code ? `Code: ${uni.code}` : uni.country, icon: Building2 },
+              { label: `${uni.programCount ?? 0} ${uni.programCount === 1 ? 'program' : 'programs'}`, icon: GraduationCap },
+              { label: uni.commissionRate != null ? `You earn ${uni.commissionRate}%` : 'Rate on request', icon: Percent, tone: uni.commissionRate != null ? 'good' : 'muted' },
+              { label: `${brochureCount} ${brochureCount === 1 ? 'brochure' : 'brochures'}`, icon: FileText },
+              { label: uni.scholarshipCount > 0 ? `${uni.scholarshipCount} ${uni.scholarshipCount === 1 ? 'scholarship' : 'scholarships'}` : `${newsCount > 0 ? newsCount : 0} news`, icon: uni.scholarshipCount > 0 ? Award : Megaphone, tone: uni.scholarshipCount > 0 ? 'good' : undefined },
+            ];
+            return (
+              <div
+                key={uni.id}
+                className="group bg-white rounded-[28px] border border-[#E5E7EB] shadow-sm hover:shadow-xl transition-shadow overflow-hidden flex flex-col"
+              >
+                {/* Dark header with the logo */}
+                <button
+                  type="button"
+                  onClick={() => navigate(`/agent/universities/${uni.id}`)}
+                  className="relative h-48 w-full bg-gradient-to-b from-[#0B1730] to-[#050B1A] flex items-center justify-center p-6 text-left"
+                  aria-label={`Open ${uni.name}`}
+                >
+                  <div className="absolute top-4 left-4 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 bg-white text-[#111827] text-xs font-semibold px-3 py-1.5 rounded-full">
+                      <GraduationCap size={13} /> University
+                    </span>
+                    {uni.scholarshipCount > 0 && (
+                      <span className="inline-flex items-center gap-1.5 bg-[#FFF1C9] text-[#7A4B00] text-xs font-semibold px-3 py-1.5 rounded-full">
+                        <Award size={13} /> Scholarship
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-6 bg-white rounded-2xl p-3 shadow-lg flex items-center justify-center max-w-[70%]">
+                    <UniversityLogo university={uni} size="lg" />
+                  </div>
+                </button>
+
+                <div className="p-6 flex flex-col gap-4 flex-1">
+                  <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                    <MapPin size={14} className="shrink-0" />
+                    {uni.country}{uni.city ? ` - ${uni.city}` : ''}
+                  </p>
+
+                  <div className="flex items-start justify-between gap-3">
                     <button
+                      type="button"
                       onClick={() => navigate(`/agent/universities/${uni.id}`)}
-                      className="text-sm font-bold text-[#111827] hover:text-[#042C53] hover:underline text-left leading-snug"
+                      className="text-xl font-semibold text-[#111827] font-['Outfit'] leading-snug text-left hover:text-[#042C53]"
                     >
                       {uni.name}
                     </button>
-                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                      <MapPin size={12} className="shrink-0" />
-                      {uni.city ? `${uni.city}, ` : ''}{uni.country}
-                    </p>
-                  </div>
-                  {uni.code && (
-                    <Badge variant="outline" className="font-mono text-[10px] font-bold uppercase bg-gray-50 text-gray-600 border-gray-200 shrink-0">
-                      {uni.code}
-                    </Badge>
-                  )}
-                </div>
-
-                {/* What the agent needs to decide */}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-lg bg-[#F9FAFB] border border-gray-100 py-2.5">
-                    <p className="text-lg font-bold text-[#042C53] leading-none">{uni.programCount ?? 0}</p>
-                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mt-1 flex items-center justify-center gap-1">
-                      <GraduationCap size={11} /> Programs
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-[#EAF3DE]/60 border border-[#C0DD97]/60 py-2.5">
-                    <p className="text-lg font-bold text-[#27500A] leading-none">
-                      {uni.commissionRate != null ? `${uni.commissionRate}%` : '—'}
-                    </p>
-                    <p className="text-[10px] font-semibold text-[#27500A]/80 uppercase tracking-wider mt-1 flex items-center justify-center gap-1">
-                      <Percent size={11} /> You earn
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-[#F9FAFB] border border-gray-100 py-2.5">
-                    <p className="text-lg font-bold text-[#042C53] leading-none">{(uni.brochures || []).length}</p>
-                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mt-1 flex items-center justify-center gap-1">
-                      <FileText size={11} /> Brochures
-                    </p>
-                  </div>
-                </div>
-
-                {/* Good to know */}
-                <div className="flex flex-wrap items-center gap-1.5 min-h-[22px]">
-                  {uni.scholarshipCount > 0 && (
-                    <Badge className="bg-[#EAF3DE] text-[#27500A] border-none text-[10px] font-semibold gap-1">
-                      <Award size={11} /> {uni.scholarshipCount} {uni.scholarshipCount === 1 ? 'scholarship' : 'scholarships'}
-                    </Badge>
-                  )}
-                  {uni.updateCount - uni.scholarshipCount > 0 && (
-                    <Badge className="bg-[#E6F1FB] text-[#0C447C] border-none text-[10px] font-semibold gap-1">
-                      <Megaphone size={11} /> {uni.updateCount - uni.scholarshipCount} news
-                    </Badge>
-                  )}
-                  {uni.website && (
-                    <a
-                      href={uni.website.startsWith('http') ? uni.website : `https://${uni.website}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-gray-400 hover:text-[#042C53] flex items-center gap-1 ml-auto"
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/agent/universities/${uni.id}`)}
+                      className="shrink-0 h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-700 group-hover:bg-[#042C53] group-hover:text-white group-hover:border-[#042C53] transition-colors"
+                      aria-label={`View ${uni.name}`}
                     >
-                      <Globe size={11} /> {uni.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-                    </a>
-                  )}
-                </div>
+                      <ArrowUpRight size={18} />
+                    </button>
+                  </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2 mt-auto pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate(`/agent/universities/${uni.id}`)}
-                    className="flex-1 text-xs h-9 border-gray-200 hover:border-[#042C53] hover:text-[#042C53]"
-                  >
-                    View programs
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => navigate(`/agent/applications?university=${uni.id}`)}
-                    className="flex-1 text-xs h-9 bg-[#042C53] hover:bg-[#0C447C] text-white"
-                  >
-                    Apply a student <ArrowRight size={12} className="ml-1" />
-                  </Button>
+                  {/* Facts */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {pills.map(({ label, icon: Icon, tone }, index) => (
+                      <div
+                        key={index}
+                        className={cn(
+                          'flex items-center gap-1.5 rounded-2xl px-3.5 py-2.5 text-xs min-w-0',
+                          tone === 'good' ? 'bg-[#EAF3DE] text-[#27500A] font-semibold' : 'bg-[#F3F4F6] text-gray-700'
+                        )}
+                      >
+                        <Icon size={13} className="shrink-0 opacity-70" />
+                        <span className="truncate">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-between gap-3 mt-auto pt-1">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/agent/universities/${uni.id}`)}
+                      className="text-sm font-semibold text-[#042C53] hover:underline"
+                    >
+                      View university
+                    </button>
+                    <Button
+                      size="sm"
+                      onClick={() => navigate(`/agent/applications?university=${uni.id}`)}
+                      className="h-9 rounded-full px-4 text-xs bg-[#042C53] hover:bg-[#0C447C] text-white"
+                    >
+                      Apply a student <ArrowRight size={12} className="ml-1" />
+                    </Button>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            );
+          })}
         </div>
       )}
 

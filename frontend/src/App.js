@@ -35,6 +35,8 @@ const CoursesPage = lazy(() => import("./pages/admin/CoursesPage"));
 const ApplicationsPage = lazy(() => import("./pages/admin/ApplicationsPage"));
 const ApplicationDetailsPage = lazy(() => import("./pages/admin/ApplicationDetailsPage"));
 const AgentUniversitiesPage = lazy(() => import("./pages/agent/AgentUniversitiesPage"));
+const AgentProgramsPage = lazy(() => import("./pages/agent/AgentProgramsPage"));
+const AgentProgramDetailPage = lazy(() => import("./pages/agent/AgentProgramDetailPage"));
 const AgentApplicationsPage = lazy(() => import("./pages/agent/AgentApplicationsPage"));
 const SettingsPage = lazy(() => import("./pages/shared/SettingsPage"));
 const NotificationsPage = lazy(() => import("./pages/shared/NotificationsPage"));
@@ -94,6 +96,8 @@ function App() {
                   <Route path="applications" element={<AgentApplicationsPage />} />
                   <Route path="applications/:applicationId" element={<ApplicationDetailsPage />} />
                   <Route path="universities" element={<AgentUniversitiesPage />} />
+                  <Route path="programs" element={<AgentProgramsPage />} />
+                  <Route path="programs/:programId" element={<AgentProgramDetailPage />} />
                   <Route path="universities/:universityId" element={<UniversityDetailsPage />} />
                   <Route path="invoices" element={<InvoicesPage />} />
                   <Route path="payoffs" element={<AgentPayoffsPage />} />

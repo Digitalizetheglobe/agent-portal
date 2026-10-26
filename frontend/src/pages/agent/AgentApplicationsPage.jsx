@@ -80,7 +80,8 @@ const AgentApplicationsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   // Arriving from a university page (?university=ID) opens the new application form for that university
   const presetUniversityId = searchParams.get('university') || '';
-  const [modalOpen, setModalOpen] = useState(Boolean(presetUniversityId));
+  const presetCourseId = searchParams.get('course') || '';
+  const [modalOpen, setModalOpen] = useState(Boolean(presetUniversityId || presetCourseId));
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [applicationToDelete, setApplicationToDelete] = useState(null);
@@ -545,10 +546,11 @@ const AgentApplicationsPage = () => {
         open={modalOpen}
         onOpenChange={(open) => {
           setModalOpen(open);
-          if (!open && presetUniversityId) setSearchParams({}, { replace: true });
+          if (!open && (presetUniversityId || presetCourseId)) setSearchParams({}, { replace: true });
         }}
         application={selectedApplication}
         defaultUniversityId={presetUniversityId}
+        defaultCourseId={presetCourseId}
         onSuccess={() => loadApplications(currentPage)}
       />
 

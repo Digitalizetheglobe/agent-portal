@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
+import useAllUniversities from '../../hooks/useAllUniversities';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Badge } from '../ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -20,16 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { BookOpen, Building2, Globe, Search } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { BookOpen, Building2 } from 'lucide-react';
 
 const initialFormState = {
   name: '',
   code: '',
   level: 'Undergraduate',
   department: '',
-  isAllUniversities: true,
-  universityIds: [],
+  universityId: '',
   duration: '',
   tuitionAmount: '',
   tuitionCurrency: 'USD',
@@ -137,32 +135,26 @@ const formatTuitionFee = ({ amount, currency, period }) => {
 };
 
 const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
-  const { createCourse, updateCourse, universities } = useData();
+  const { createCourse, updateCourse } = useData();
+  const { universities, loading: loadingUniversities } = useAllUniversities(open);
   const isEditing = Boolean(course);
 
   const [formData, setFormData] = useState(initialFormState);
-  const [uniSearch, setUniSearch] = useState('');
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (course) {
-      let initialUniIds = [];
-      if (Array.isArray(course.universityIds) && course.universityIds.length > 0) {
-        initialUniIds = course.universityIds.map(String);
-      } else if (course.universityId) {
-        initialUniIds = [String(course.universityId)];
-      }
-
-      const allUnis = initialUniIds.length === 0;
+      // A program belongs to one university. Older ones set up for several or all must be given one now.
+      const offered = Array.isArray(course.universityIds) ? course.universityIds.map(String) : [];
+      const initialUniversityId = offered.length === 1 ? offered[0] : (offered.length === 0 && course.universityId ? String(course.universityId) : '');
 
       setFormData({
         name: course.name || '',
         code: course.code || '',
         level: course.level || 'Undergraduate',
         department: course.department || '',
-        isAllUniversities: allUnis,
-        universityIds: initialUniIds,
+        universityId: initialUniversityId,
         duration: course.duration || '',
         ...(() => {
           const fee = parseTuitionFee(course.tuitionFee);
@@ -178,7 +170,6 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
     } else {
       setFormData(initialFormState);
     }
-    setUniSearch('');
     setErrors({});
   }, [course, open]);
 
@@ -189,21 +180,13 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
     }
   };
 
-  const filteredUnis = useMemo(() => {
-    if (!universities) return [];
-    if (!uniSearch.trim()) return universities;
-    const term = uniSearch.toLowerCase();
-    return universities.filter(u =>
-      (u.name && u.name.toLowerCase().includes(term)) ||
-      (u.country && u.country.toLowerCase().includes(term)) ||
-      (u.city && u.city.toLowerCase().includes(term))
-    );
-  }, [universities, uniSearch]);
-
   const validate = () => {
     const newErrors = {};
     if (!formData.name.trim()) {
-      newErrors.name = 'Course name is required';
+      newErrors.name = 'Program name is required';
+    }
+    if (!formData.universityId) {
+      newErrors.universityId = 'Choose the university this program belongs to';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -215,16 +198,13 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
 
     setSubmitting(true);
     try {
-      const isAll = formData.isAllUniversities || formData.universityIds.length === 0;
-      const targetUniIds = isAll ? [] : formData.universityIds;
-
       const payload = {
         name: formData.name.trim(),
         code: formData.code.trim().toUpperCase() || null,
         level: formData.level,
         department: formData.department.trim() || null,
-        universityIds: targetUniIds,
-        universityId: targetUniIds.length > 0 ? targetUniIds[0] : null,
+        universityIds: [formData.universityId],
+        universityId: formData.universityId,
         duration: formData.duration.trim() || null,
         tuitionFee: formatTuitionFee(toPerYearFee({
           amount: formData.tuitionAmount,
@@ -263,13 +243,45 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
                 {isEditing ? 'Edit Program' : 'Add New Program'}
               </DialogTitle>
               <DialogDescription className="text-xs text-gray-500 font-medium mt-0.5">
-                {isEditing ? 'Update course specifications and university availability' : 'Add a degree program or study course and assign to partner universities'}
+                {isEditing ? 'Update this program and its price at the university' : 'Add a degree program to one university and set its price there'}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="p-6 bg-[#F9FAFB] space-y-4 max-h-[75vh] overflow-y-auto">
+          {/* The one university this program belongs to */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-[#042C53]" /> University <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={formData.universityId}
+              onValueChange={(val) => handleChange('universityId', val)}
+            >
+              <SelectTrigger className={`bg-white ${errors.universityId ? 'border-red-500' : ''}`}>
+                <SelectValue placeholder={loadingUniversities ? 'Loading universities...' : 'Choose the university'} />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                {universities.map(u => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    <span className="font-medium">{u.name}</span>
+                    {u.country && <span className="text-gray-500 text-[11px] ml-1.5">({u.country})</span>}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.universityId && <p className="text-[11px] text-red-500">{errors.universityId}</p>}
+            {isEditing && !formData.universityId && !loadingUniversities && (
+              <p className="text-[11px] text-amber-600">
+                This program was set up for several universities or all of them. Choose the one it belongs to; add a separate program for each other university, so each has its own price.
+              </p>
+            )}
+            {!isEditing && (
+              <p className="text-[11px] text-gray-500">A program belongs to one university. To offer the same program at another university, add it again there with that university's price.</p>
+            )}
+          </div>
+
           {/* Course Name */}
           <div className="space-y-1.5">
             <Label htmlFor="course-name" className="text-xs font-semibold text-gray-700">
@@ -339,170 +351,6 @@ const CourseModal = ({ open, onOpenChange, course = null, onSuccess }) => {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Partner University Multi-Select Selection */}
-          <div className="space-y-2.5 p-3.5 bg-white rounded-lg border border-gray-200">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <Label className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Building2 className="w-4 h-4 text-[#042C53]" /> Partner University Availability
-                </Label>
-                <p className="text-[11px] text-gray-500 mt-0.5">
-                  Assign this course to multiple partner universities so you don't have to recreate it every time.
-                </p>
-              </div>
-              <Badge variant="outline" className="text-[11px] shrink-0 border-blue-200 text-[#042C53] hover:text-[#042C53] hover:bg-blue-50/50">
-                {formData.isAllUniversities
-                  ? 'All Universities'
-                  : `${formData.universityIds.length} Selected`}
-              </Badge>
-            </div>
-
-            {/* Toggle Modes */}
-            <div className="flex items-center gap-2 pt-1">
-              <Button
-                type="button"
-                variant={formData.isAllUniversities ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFormData(prev => ({ ...prev, isAllUniversities: true, universityIds: [] }))}
-                className={cn(
-                  "text-xs h-8",
-                  formData.isAllUniversities
-                    ? "bg-[#042C53] text-white hover:bg-[#042C53]/90"
-                    : "border-gray-200 hover:text-[#042C53] hover:bg-gray-50"
-                )}
-              >
-                <Globe className="w-3.5 h-3.5 mr-1.5" /> All Partner Universities
-              </Button>
-              <Button
-                type="button"
-                variant={!formData.isAllUniversities ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFormData(prev => ({ ...prev, isAllUniversities: false }))}
-                className={cn(
-                  "text-xs h-8",
-                  !formData.isAllUniversities
-                    ? "bg-[#042C53] text-white hover:bg-[#042C53]/90"
-                    : "border-gray-200 hover:text-[#042C53] hover:bg-gray-50"
-                )}
-              >
-                Select Specific Universities ({formData.universityIds.length})
-              </Button>
-            </div>
-
-            {/* If Specific Universities is selected */}
-            {!formData.isAllUniversities && (
-              <div className="space-y-2 pt-2 border-t border-gray-100">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="relative flex-1">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <Input
-                      placeholder="Search partner universities by name or country..."
-                      value={uniSearch}
-                      onChange={(e) => setUniSearch(e.target.value)}
-                      className="h-8 pl-8 text-xs bg-gray-50/70 border-gray-200"
-                    />
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const allIds = (universities || []).map(u => String(u.id || u._id));
-                        setFormData(prev => ({ ...prev, universityIds: allIds }));
-                      }}
-                      className="text-[11px] h-7 px-2 text-[#042C53] font-semibold hover:bg-blue-50"
-                    >
-                      Select All
-                    </Button>
-                    <span className="text-gray-300">|</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setFormData(prev => ({ ...prev, universityIds: [] }))}
-                      className="text-[11px] h-7 px-2 text-gray-500 hover:bg-gray-100"
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Universities scrollable checkbox list */}
-                <div className="max-h-48 overflow-y-auto space-y-1 border border-gray-200 rounded-md p-1.5 bg-gray-50/40">
-                  {filteredUnis.length === 0 ? (
-                    <p className="text-xs text-center text-gray-400 py-3">No universities matching your search</p>
-                  ) : (
-                    filteredUnis.map(u => {
-                      const uId = String(u.id || u._id);
-                      const isSelected = formData.universityIds.includes(uId);
-                      return (
-                        <label
-                          key={uId}
-                          className={cn(
-                            "flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer transition-colors select-none",
-                            isSelected
-                              ? "bg-blue-50/80 text-[#042C53] font-medium border border-blue-100"
-                              : "hover:bg-white text-gray-700"
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              setFormData(prev => {
-                                const exists = prev.universityIds.includes(uId);
-                                const nextIds = exists
-                                  ? prev.universityIds.filter(id => id !== uId)
-                                  : [...prev.universityIds, uId];
-                                return { ...prev, universityIds: nextIds };
-                              });
-                            }}
-                            className="rounded border-gray-300 text-[#042C53] focus:ring-[#042C53] w-3.5 h-3.5"
-                          />
-                          <span className="flex-1 truncate">{u.name}</span>
-                          {u.country && (
-                            <span className="text-[10px] text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-200 shrink-0">
-                              {u.country}
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Selected chips display */}
-                {formData.universityIds.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1 max-h-20 overflow-y-auto">
-                    {formData.universityIds.map(id => {
-                      const u = universities?.find(uni => String(uni.id || uni._id) === String(id));
-                      if (!u) return null;
-                      return (
-                        <span
-                          key={id}
-                          className="inline-flex items-center gap-1 text-[11px] bg-blue-50 text-[#042C53] px-2 py-0.5 rounded-md border border-blue-100"
-                        >
-                          <span className="truncate max-w-[150px]">{u.name}</span>
-                          <button
-                            type="button"
-                            onClick={() => setFormData(prev => ({
-                              ...prev,
-                              universityIds: prev.universityIds.filter(x => x !== id)
-                            }))}
-                            className="text-blue-400 hover:text-blue-800 font-bold ml-1 text-xs"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Duration & Tuition Fee */}

@@ -85,6 +85,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     {
       title: 'Info', links: [
         { to: '/agent/universities', icon: Building2, label: 'Universities' },
+        { to: '/agent/programs', icon: BookOpen, label: 'Programs' },
       ]
     },
     {

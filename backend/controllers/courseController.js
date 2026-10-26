@@ -20,7 +20,7 @@ exports.getCourses = async (req, res, next) => {
 // @access  Private (Agent, Admin)
 exports.getCourseById = async (req, res, next) => {
   try {
-    const course = await courseService.getCourseById(req.params.id);
+    const course = await courseService.getCourseById(req.params.id, req.user);
     res.json({
       success: true,
       course

@@ -20,7 +20,7 @@ export const COLUMNS = {
     { key: 'name', label: 'Name', required: true, aliases: ['name', 'program', 'programme', 'program name', 'programme name', 'course', 'course name', 'title'], example: 'Bachelor of Computer Science' },
     { key: 'code', label: 'Code', aliases: ['code', 'program code', 'programme code', 'course code'], example: 'BCS' },
     { key: 'level', label: 'Level', aliases: ['level', 'degree level', 'degree', 'study level', 'type'], example: 'Undergraduate' },
-    { key: 'university', label: 'University (code or name)', aliases: ['university', 'university code', 'university name', 'universities', 'institution'], example: 'TU' },
+    { key: 'university', label: 'University (code or name)', required: true, aliases: ['university', 'university code', 'university name', 'universities', 'institution'], example: 'TU' },
     { key: 'department', label: 'Faculty / Department', aliases: ['department', 'faculty', 'school', 'faculty department'], example: 'School of Computing' },
     { key: 'duration', label: 'Duration', aliases: ['duration', 'length'], example: '3 years' },
     { key: 'tuitionFee', label: 'Tuition fee', aliases: ['tuition', 'tuition fee', 'tuitionfee', 'fee', 'fees', 'total fee'], example: '15000' },

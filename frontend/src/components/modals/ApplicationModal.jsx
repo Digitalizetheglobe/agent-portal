@@ -22,7 +22,7 @@ import {
 } from '../ui/select';
 import { FileCheck, Search, Building2, User, BookOpen, Calendar, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatApiError } from '../../utils/api';
+import { formatApiError, universityAPI } from '../../utils/api';
 
 const COURSE_LEVELS = [
   'Undergraduate',
@@ -80,13 +80,12 @@ const parseCourseFee = (fee) => {
   return value > 0 && isFinite(value) ? value : null;
 };
 
-const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess, defaultUniversityId = '' }) => {
+const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess, defaultUniversityId = '', defaultCourseId = '' }) => {
   const { user, isAdmin } = useAuth();
   const {
     students,
     universities,
     agents,
-    courses,
     createApplication,
     updateApplication
   } = useData();
@@ -121,24 +120,58 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess, d
     );
   }, [eligibleStudents, studentSearch]);
 
-  // Active universities
+  // Every active university (the app-wide list only holds the first few, so load them all when the form opens).
+  // An agent only receives the universities they are allowed to use.
+  const [universityOptions, setUniversityOptions] = useState(null);
+  useEffect(() => {
+    if (!open || universityOptions) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const all = [];
+        let page = 1;
+        let totalPages = 1;
+        do {
+          const { data } = await universityAPI.getAll({ page, limit: 100, status: 'active', envelope: 'true' });
+          all.push(...(data.universities || []));
+          totalPages = data.totalPages || 1;
+          page += 1;
+        } while (page <= totalPages);
+        if (!cancelled) setUniversityOptions(all);
+      } catch {
+        // fall back to the app-wide list below
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, universityOptions]);
+
   const activeUniversities = useMemo(() => {
-    if (!universities || !Array.isArray(universities)) return [];
-    return universities.filter(u => u.status === 'active' || !u.status);
-  }, [universities]);
+    const list = universityOptions || universities;
+    if (!list || !Array.isArray(list)) return [];
+    return list.filter(u => u.status === 'active' || !u.status);
+  }, [universityOptions, universities]);
 
-  // Active catalog courses offered by the selected university (or open to all)
-  const availableCourses = useMemo(() => {
-    if (!formData.universityId || !Array.isArray(courses)) return [];
-    return courses.filter(c => {
-      if (c.status && c.status !== 'active') return false;
-      const ids = (c.universityIds || []).map(String);
-      return ids.length === 0 || ids.includes(String(formData.universityId));
-    });
-  }, [courses, formData.universityId]);
+  // The active programs of the chosen university (including programs open to all), loaded from the server
+  const [courseOptions, setCourseOptions] = useState([]);
+  useEffect(() => {
+    if (!open || !formData.universityId) {
+      setCourseOptions([]);
+      return undefined;
+    }
+    let cancelled = false;
+    universityAPI.getCourses(formData.universityId)
+      .then(({ data }) => {
+        if (!cancelled) setCourseOptions((data.courses || []).filter(c => !c.status || c.status === 'active'));
+      })
+      .catch(() => { if (!cancelled) setCourseOptions([]); });
+    return () => { cancelled = true; };
+  }, [open, formData.universityId]);
 
-  // "All universities" or the (first two) university names a course is limited to
+  const availableCourses = courseOptions;
+
+  // "All universities" or the (first two) university names a course is limited to (only known for the app-wide list)
   const describeAvailability = (course) => {
+    if (!course.universityIds) return null;
     const ids = (course.universityIds || []).map(String);
     if (ids.length === 0) return 'All universities';
     const names = ids
@@ -193,7 +226,7 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess, d
       }
       // Auto-fill tuition from the catalog when the course changes; the user can still overwrite it
       if (field === 'courseId' && value !== prev.courseId) {
-        const course = courses?.find(c => String(c.id || c._id) === String(value));
+        const course = courseOptions.find(c => String(c.id || c._id) === String(value));
         const fee = course ? parseCourseFee(course.tuitionFee) : null;
         next.tuitionFee = fee !== null ? String(fee) : '';
       }
@@ -220,6 +253,19 @@ const ApplicationModal = ({ open, onOpenChange, application = null, onSuccess, d
       }
     }
   };
+
+  // Arriving from a program: select it once the chosen university's programs are loaded.
+  // Choosing another university later selects it again if that university offers it; the agent's own pick is never overridden.
+  useEffect(() => {
+    if (!open || application || !defaultCourseId) return;
+    const course = courseOptions.find(c => String(c.id || c._id) === String(defaultCourseId));
+    if (!course) return;
+    setFormData(prev => {
+      if (prev.courseId) return prev;
+      const fee = parseCourseFee(course.tuitionFee);
+      return { ...prev, courseId: String(course.id || course._id), tuitionFee: fee !== null ? String(fee) : prev.tuitionFee };
+    });
+  }, [open, application, defaultCourseId, courseOptions, formData.courseId]);
 
   const validate = () => {
     const newErrors = {};
