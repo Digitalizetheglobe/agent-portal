@@ -415,7 +415,7 @@ const startServer = async () => {
     if (isEmailConfigured()) {
       console.log(`📧 Email delivery: ${getEmailProviderName()} (sender: ${process.env.SENDER_EMAIL || 'default'})`);
     } else {
-      console.warn('⚠️  Email delivery is OFF (no RESEND_API_KEY or SMTP_HOST). Notification emails are not sent. See backend/.env.example.');
+      console.warn('⚠️  Email delivery is OFF (no BREVO_API_KEY, RESEND_API_KEY or SMTP_HOST). Notification emails are not sent. See backend/.env.example.');
     }
 
     // One-time backfill for onboarding status: agents that existed before the review flow

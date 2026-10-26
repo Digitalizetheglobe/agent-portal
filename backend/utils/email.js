@@ -1,21 +1,29 @@
 // Email delivery.
 //
 // Provider is chosen from the environment:
+//   BREVO_API_KEY             -> Brevo (https://brevo.com), HTTPS API key starting with "xkeysib-"
 //   RESEND_API_KEY            -> Resend (https://resend.com)
 //   SMTP_HOST (+ SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE) -> any SMTP server
 // Sender address: SENDER_EMAIL (for example "QStudy <no-reply@yourdomain.com>").
 // With neither provider configured, emails are only written to the server log (development).
 
 const getProvider = () => {
+  if (process.env.BREVO_API_KEY) return 'brevo';
   if (process.env.RESEND_API_KEY) return 'resend';
   if (process.env.SMTP_HOST) return 'smtp';
   return null;
 };
 
 const isEmailConfigured = () => getProvider() !== null;
-const getEmailProviderName = () => ({ resend: 'Resend', smtp: 'SMTP' }[getProvider()] || 'none (console log only)');
+const getEmailProviderName = () => ({ brevo: 'Brevo', resend: 'Resend', smtp: 'SMTP' }[getProvider()] || 'none (console log only)');
 
 const getSender = () => process.env.SENDER_EMAIL || 'QStudy <onboarding@resend.dev>';
+
+// Splits "Name <a@b.com>" into { name, email } for APIs that want them separately.
+const parseSender = () => {
+  const match = getSender().match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  return match ? { name: match[1].replace(/^"|"$/g, '') || undefined, email: match[2] } : { email: getSender().trim() };
+};
 
 let smtpTransporter = null;
 const getSmtpTransporter = () => {
@@ -41,6 +49,22 @@ const sendEmail = async (to, subject, htmlContent) => {
     console.log(`   To: ${to}`);
     console.log(`   Subject: ${subject}`);
     return { success: true, logged: true };
+  }
+
+  if (provider === 'brevo') {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({ sender: parseSender(), to: [{ email: to }], subject, htmlContent })
+    });
+    if (!response.ok) {
+      throw new Error(`Brevo rejected the email (${response.status}): ${await response.text()}`);
+    }
+    return { success: true, provider };
   }
 
   if (provider === 'resend') {
