@@ -1,12 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
-import { Badge } from '../../components/ui/badge';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../../components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import {
   FilePlus,
   FileText,
@@ -29,8 +26,6 @@ import { Label } from '../../components/ui/label';
 import InvoiceModal from '../../components/modals/InvoiceModal';
 import { invoiceReviewAPI } from '../../utils/api';
 import { FinancialStatusBadge, FinancialStateHierarchy } from '../../components/common/FinancialStatusBadge';
-import InvoiceStageSummary from '../../components/common/InvoiceStageSummary';
-import { getPayoffPaymentState, PAYOFF_PAYMENT_STATE_INFO } from '../../utils/invoiceStage';
 import {
   formatCurrency,
   formatFinancialDate,
@@ -45,6 +40,7 @@ const InvoicesPage = () => {
 
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('all');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [reviewHistory, setReviewHistory] = useState([]);
@@ -159,27 +155,72 @@ const InvoicesPage = () => {
     }
   };
 
+  const payoffFor = (inv) =>
+    (payoffs || []).find(p => (p.invoiceId?._id || p.invoiceId?.id || p.invoiceId) === (inv._id || inv.id));
+
+  // One plain-language status per invoice: what is happening and whether the agent has to do anything
+  const getStage = (inv) => {
+    const review = inv.financeReviewStatus || 'PendingReview';
+    const payoff = payoffFor(inv);
+    if (review === 'CorrectionRequired') {
+      return { key: 'action', label: 'Needs your action', hint: 'Finance asked for a change', tone: 'bg-amber-50 text-amber-800 border-amber-300' };
+    }
+    if (review === 'Rejected') {
+      return { key: 'rejected', label: 'Rejected', hint: 'No commission will be paid', tone: 'bg-red-50 text-red-700 border-red-200' };
+    }
+    if (review === 'Approved') {
+      if (payoff?.status === 'SETTLED') {
+        return { key: 'paid', label: 'Paid', hint: payoff.settledAt ? `Paid on ${formatFinancialDate(payoff.settledAt)}` : 'Money sent to you', tone: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+      }
+      return { key: 'approved', label: 'Approved', hint: 'Waiting for bank payment', tone: 'bg-blue-50 text-blue-800 border-blue-200' };
+    }
+    return { key: 'review', label: 'In review', hint: 'Finance is checking it', tone: 'bg-gray-50 text-gray-700 border-gray-200' };
+  };
+
+  const FILTERS = [
+    { key: 'all', label: 'All' },
+    { key: 'action', label: 'Needs your action' },
+    { key: 'review', label: 'In review' },
+    { key: 'approved', label: 'Approved' },
+    { key: 'paid', label: 'Paid' },
+    { key: 'rejected', label: 'Rejected' },
+  ];
+  const stageCounts = useMemo(() => {
+    const counts = { all: invoices.length, action: 0, review: 0, approved: 0, paid: 0, rejected: 0 };
+    invoices.forEach((inv) => { counts[getStage(inv).key] += 1; });
+    return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoices, payoffs]);
+
+  const visibleInvoices = filteredInvoices.filter((inv) => filter === 'all' || getStage(inv).key === filter);
+
+  const summaryCards = [
+    { filter: 'action', title: 'Needs your action', value: stageCounts.action, hint: stageCounts.action ? 'Finance is waiting for your reply' : 'Nothing to do', tone: stageCounts.action ? 'border-amber-300 bg-amber-50' : 'border-[#E5E7EB] bg-white', valueTone: stageCounts.action ? 'text-amber-800' : 'text-[#111827]' },
+    { filter: 'review', title: 'Being reviewed', value: stageCounts.review, hint: 'Finance is checking these', tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#111827]' },
+    { filter: 'approved', title: 'Waiting for payment', value: formatCurrency(stats.pendingPayoutAmount), hint: `${stats.pendingPayoutCount} approved, bank transfer pending`, tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#0C447C]' },
+    { filter: 'paid', title: 'Paid to you', value: formatCurrency(stats.settledPayoutAmount), hint: `${stats.settledPayoutCount} paid by bank transfer`, tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#27500A]' },
+  ];
+
   const InvoiceList = ({ list }) => (
     <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm">
       <Table>
         <TableHeader>
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Student(s)</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Your Commission</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Invoice Status</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payment Status</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Submitted On</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Action</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3">Invoice</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3">Students</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3 text-right">Your commission</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3">Status</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3 text-right"><span className="sr-only">Action</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {list.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-20 text-[#6B7280]">
-                <div className="flex flex-col items-center gap-3">
+              <TableCell colSpan={5} className="text-center py-16 text-[#6B7280]">
+                <div className="flex flex-col items-center gap-2">
                   <FileText className="w-10 h-10 opacity-20" />
-                  <p className="text-sm font-medium">No invoices found in this view.</p>
+                  <p className="text-sm font-medium">{invoices.length === 0 ? 'You have not raised any invoice yet.' : 'No invoices match this view.'}</p>
+                  {invoices.length === 0 && <p className="text-xs">Use "Raise New Invoice" to claim your commission.</p>}
                 </div>
               </TableCell>
             </TableRow>
@@ -187,78 +228,43 @@ const InvoicesPage = () => {
             list.map((invoice) => {
               const appCount = invoice.applications?.length || invoice.studentIds?.length || 0;
               const studentNames = getStudentNames(invoice);
-              const linkedPayoff = (payoffs || []).find(
-                p => (p.invoiceId?._id || p.invoiceId?.id || p.invoiceId) === (invoice._id || invoice.id)
-              );
+              const stage = getStage(invoice);
 
               return (
-                <TableRow key={invoice.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0">
-                  <TableCell className="px-6 py-4 font-bold text-[#111827]">
-                    <span className="font-mono text-xs whitespace-nowrap">{invoice.invoiceNumber}</span>
+                <TableRow key={invoice.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0 cursor-pointer" onClick={() => handleOpenView(invoice)}>
+                  <TableCell className="px-5 py-4">
+                    <span className="font-mono text-xs font-semibold text-[#111827] whitespace-nowrap block">{invoice.invoiceNumber}</span>
+                    <span className="text-[11px] text-[#6B7280]">Raised {formatFinancialDate(invoice.raisedAt)}</span>
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-xs">
+                  <TableCell className="px-5 py-4 text-sm">
                     {studentNames.length > 0 ? (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-semibold text-[#111827]">
-                          {studentNames.slice(0, 2).join(', ')}
-                          {studentNames.length > 2 && (
-                            <span className="text-[#6B7280] font-medium"> +{studentNames.length - 2} more</span>
-                          )}
-                        </span>
-                        <span className="text-[11px] text-[#6B7280]">
-                          {appCount} {appCount === 1 ? 'application' : 'applications'}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-[#9CA3AF]">
-                        {appCount} {appCount === 1 ? 'application' : 'applications'}
+                      <span className="font-medium text-[#111827]">
+                        {studentNames.slice(0, 2).join(', ')}
+                        {studentNames.length > 2 && <span className="text-[#6B7280]"> +{studentNames.length - 2} more</span>}
                       </span>
+                    ) : (
+                      <span className="text-[#6B7280]">{appCount} {appCount === 1 ? 'application' : 'applications'}</span>
                     )}
                   </TableCell>
-                  <TableCell className="px-6 py-4 font-bold text-[#111827] text-center font-['Outfit'] tabular-nums">
+                  <TableCell className="px-5 py-4 text-right font-semibold text-[#111827] tabular-nums">
                     {invoice.amount > 0 ? (
                       formatCurrency(invoice.amount, invoice.currency)
                     ) : (
-                      <span className="text-xs text-amber-600 font-medium">Finance will calculate</span>
+                      <span className="text-xs text-[#6B7280] font-medium">Finance will calculate</span>
                     )}
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-center">
-                    <FinancialStatusBadge
-                      status={invoice.financeReviewStatus || 'PendingReview'}
-                      size="sm"
-                    />
+                  <TableCell className="px-5 py-4">
+                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${stage.tone}`}>{stage.label}</span>
+                    <span className="block text-[11px] text-[#6B7280] mt-1">{stage.hint}</span>
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-center">
-                    {linkedPayoff ? (
-                      <div className="flex flex-col items-center gap-1">
-                        <FinancialStatusBadge status={linkedPayoff.status} size="sm" />
-                        <span className="text-[10px] text-gray-500 font-mono">{linkedPayoff.payoffNumber}</span>
-                        {linkedPayoff.status === 'PENDING' && (
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(linkedPayoff)].style}`}>
-                            {PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(linkedPayoff)].label}
-                          </span>
-                        )}
-                        {linkedPayoff.status === 'SETTLED' && linkedPayoff.settledAt && (
-                          <span className="text-[10px] text-[#27500A] font-semibold font-['Outfit'] tabular-nums">
-                            Settled {formatFinancialDate(linkedPayoff.settledAt)}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400 font-medium">Not paid yet</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center font-['Outfit'] tabular-nums">
-                    {formatFinancialDate(invoice.raisedAt)}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-center">
+                  <TableCell className="px-5 py-4 text-right">
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="btn-financial-action text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB]"
-                      onClick={() => handleOpenView(invoice)}
+                      variant={stage.key === 'action' ? 'default' : 'outline'}
+                      className={stage.key === 'action' ? 'h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white' : 'h-8 text-xs'}
+                      onClick={(e) => { e.stopPropagation(); handleOpenView(invoice); }}
                     >
-                      <FileText className="w-3.5 h-3.5 mr-1" /> View Invoice
+                      {stage.key === 'action' ? 'Reply to Finance' : 'View'}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -273,118 +279,67 @@ const InvoicesPage = () => {
   return (
     <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <img src="/assets/QStudylogo(blue).png" alt="QStudy" className="h-10 object-contain shrink-0" />
-          <div>
-            <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Invoice Management</h1>
-            <p className="text-sm font-medium text-[#6B7280] mt-0.5">Track your commission claims, review statuses, and offline payout milestones.</p>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Invoices</h1>
+          <p className="text-sm text-[#6B7280] mt-0.5">Claim your commission and follow it until it is paid.</p>
         </div>
-        <div className="flex gap-3">
-          <Button
-            size="sm"
-            onClick={() => setIsRaiseModalOpen(true)}
-            className="inline-flex items-center text-xs font-semibold h-10 px-4 bg-[#042C53] hover:bg-[#03213F] text-white"
-          >
-            <FilePlus size={16} className="mr-2" /> Raise New Invoice
-          </Button>
-        </div>
+        <Button
+          onClick={() => setIsRaiseModalOpen(true)}
+          className="inline-flex items-center text-sm font-semibold h-10 px-4 bg-[#042C53] hover:bg-[#03213F] text-white w-fit"
+        >
+          <FilePlus size={16} className="mr-2" /> Raise New Invoice
+        </Button>
       </div>
 
-      {/* Submitted / Processing / Paid: every invoice in exactly one stage */}
-      <InvoiceStageSummary invoices={invoices} />
-
-      {/* True Financial Lifecycle KPI Cards (FA-4.3) */}
-      <div className="stat-grid grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        {[
-          { label: 'Total Invoices', val: stats.total, sub: 'All submitted claims', color: '#0C447C', highlight: false },
-          { label: 'In Review', val: stats.inReviewCount, sub: 'Finance triage queue', color: '#1D4ED8', highlight: false },
-          { label: 'Action Required', val: stats.actionRequiredCount, sub: 'Finance requested changes', color: '#B45309', highlight: stats.actionRequiredCount > 0 },
-          { label: 'Pending Payout', val: formatCurrency(stats.pendingPayoutAmount), sub: `${stats.pendingPayoutCount} approved payoffs`, color: '#633806', highlight: false },
-          { label: 'Total Settled', val: formatCurrency(stats.settledPayoutAmount), sub: `${stats.settledPayoutCount} offline payouts`, color: '#27500A', highlight: false }
-        ].map((kpi, i) => (
-          <Card key={i} className={`border-[#E5E7EB] bg-white shadow-none ${kpi.highlight ? 'border-amber-400 bg-amber-50/30 ring-1 ring-amber-400/20' : ''}`}>
-            <CardContent className="p-4">
-              <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">{kpi.label}</p>
-              <p className="text-2xl font-bold text-[#111827] mt-1 font-['Outfit'] tabular-nums">{kpi.val}</p>
-              <p className="text-[10px] font-semibold mt-1" style={{ color: kpi.color }}>{kpi.sub}</p>
-            </CardContent>
-          </Card>
+      {/* Summary: four things an agent wants to know, each opens the matching list */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {summaryCards.map((card) => (
+          <button
+            key={card.filter}
+            type="button"
+            onClick={() => setFilter(card.filter)}
+            className={`text-left rounded-xl border p-4 transition-shadow hover:shadow-md ${card.tone} ${filter === card.filter ? 'ring-2 ring-[#0C447C]/40' : ''}`}
+          >
+            <p className="text-sm font-semibold text-[#374151]">{card.title}</p>
+            <p className={`text-2xl font-bold mt-1 font-['Outfit'] tabular-nums ${card.valueTone}`}>{card.value}</p>
+            <p className="text-xs text-[#6B7280] mt-1">{card.hint}</p>
+          </button>
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative w-full md:w-96">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
-        <Input
-          placeholder="Search by student name, invoice # or remarks..."
-          className="pl-9 h-10 border-[#E5E7EB] text-sm focus-visible:ring-[#042C53]/10 bg-white"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      {/* Filters + search */}
+      <div className="space-y-3">
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
+          <Input
+            placeholder="Search by student, invoice number or remarks"
+            className="pl-9 h-10 border-[#D1D5DB] text-sm bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2" role="tablist">
+          {FILTERS.map((f) => {
+            const selected = filter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setFilter(f.key)}
+                className={`inline-flex items-center gap-2 h-9 px-4 rounded-full text-[13px] font-semibold border transition-colors ${selected ? 'bg-[#0C447C] text-white border-[#0C447C]' : 'bg-white text-[#374151] border-[#D1D5DB] hover:bg-[#F3F4F6]'}`}
+              >
+                {f.label}
+                <span className={`text-[11px] font-mono px-1.5 rounded-full ${selected ? 'bg-white/20' : 'bg-[#E5E7EB]'}`}>{stageCounts[f.key]}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Tabs Aligned to Financial Lifecycle (FA-4.3) */}
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="bg-transparent h-auto p-0 gap-6 border-b border-[#E5E7EB] w-full justify-start rounded-none">
-          <TabsTrigger
-            value="all"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
-          >
-            All Invoices ({invoices.length})
-          </TabsTrigger>
-          <TabsTrigger
-            value="action_required"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#B45309] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#B45309] transition-all capitalize flex items-center gap-1.5"
-          >
-            Action Required
-            {stats.actionRequiredCount > 0 && (
-              <span className="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                {stats.actionRequiredCount}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger
-            value="in_review"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
-          >
-            In Review ({stats.inReviewCount})
-          </TabsTrigger>
-          <TabsTrigger
-            value="approved"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
-          >
-            Approved ({stats.approvedCount})
-          </TabsTrigger>
-          <TabsTrigger
-            value="rejected"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
-          >
-            Rejected ({invoices.filter(i => i.financeReviewStatus === 'Rejected').length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="mt-6">
-          <InvoiceList list={filteredInvoices} />
-        </TabsContent>
-
-        <TabsContent value="action_required" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'CorrectionRequired')} />
-        </TabsContent>
-
-        <TabsContent value="in_review" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => ['PendingReview', 'Resubmitted', 'UnderReview'].includes(i.financeReviewStatus))} />
-        </TabsContent>
-
-        <TabsContent value="approved" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'Approved')} />
-        </TabsContent>
-
-        <TabsContent value="rejected" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'Rejected')} />
-        </TabsContent>
-      </Tabs>
+      <InvoiceList list={visibleInvoices} />
 
       {/* Invoice Details Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>

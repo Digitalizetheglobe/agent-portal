@@ -440,7 +440,7 @@ const AgentsPage = () => {
       {/* KPI Row */}
       <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { label: 'Total agents', val: agents.length, sub: `${agents.filter(a => a.status === 'active').length} active`, subColor: 'text-[#27500A]' },
+          { label: 'Total agents', val: agents.length, sub: 'All registered agents', subColor: 'text-[#27500A]' },
           { label: 'Pending verification', val: agents.filter(a => !a.isVerified && a.verificationStatus !== 'rejected').length, sub: 'Needs review', subColor: 'text-[#633806]' },
           { label: 'Students with fees paid', val: stats.conversionRate + '%', sub: 'Of all registered students', subColor: 'text-[#27500A]' },
           // { label: 'Total commissions', val: `₹${(invoices.reduce((s, i) => s + (i.amount || 0), 0) / 100000).toFixed(1)}L`, sub: `₹${(invoices.filter(i => i.status === 'pending').reduce((s, i) => s + (i.amount || 0), 0) / 1000).toFixed(0)}K pending`, subColor: 'text-[#633806]' },
@@ -474,7 +474,7 @@ const AgentsPage = () => {
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <h4 className="text-sm font-semibold text-[#111827]">{agent.name}</h4>
-                        <Badge className={cn('border-none text-[10px] h-5', getOnboardingStatus(agent).style)}>{getOnboardingStatus(agent).label}</Badge>
+                        <Badge className={cn('border-none text-[10px] h-5 hover:text-white', getOnboardingStatus(agent).style)}>{getOnboardingStatus(agent).label}</Badge>
                       </div>
                       <p className="text-[11px] text-[#6B7280] mt-0.5">
                         {agent.agencyName || 'Independent'} · {agent.region || 'Region Unknown'} · Submitted {new Date(agent.onboardingSubmittedAt || agent.createdAt).toLocaleDateString()}

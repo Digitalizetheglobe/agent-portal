@@ -7,10 +7,10 @@ import { cn } from '../../lib/utils';
 import { getReviewActions } from '../../utils/onboarding';
 
 const KIND_STYLE = {
-  primary: 'bg-[#042C53] hover:bg-[#0C447C] text-white border-transparent',
-  success: 'bg-[#27500A] hover:bg-[#1f3b08] text-white border-transparent',
-  warn: 'bg-white border-orange-200 text-orange-800 hover:bg-orange-50',
-  danger: 'bg-white border-red-200 text-red-700 hover:bg-red-50',
+  primary: 'bg-[#042C53] hover:bg-[#0C447C] text-white hover:text-white border-transparent',
+  success: 'bg-[#27500A] hover:bg-[#1f3b08] text-white hover:text-white border-transparent',
+  warn: 'bg-white border-orange-200 text-orange-800 hover:bg-orange-50 hover:text-orange-900',
+  danger: 'bg-white border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800',
 };
 
 const SUCCESS_TOAST = {

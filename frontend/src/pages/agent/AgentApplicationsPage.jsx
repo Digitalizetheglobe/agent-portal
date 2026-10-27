@@ -479,9 +479,9 @@ const AgentApplicationsPage = () => {
                           size="sm"
                           onClick={() => handleOpenEdit(app)}
                           title="Edit Application"
-                          className="h-8 w-8 p-0 text-gray-500 hover:text-gray-900"
+                          className="h-8 w-8 p-0 text-gray-500 hover:text-white"
                         >
-                          <Edit2 className="w-3.5 h-3.5 text-gray-600" />
+                          <Edit2 className="w-3.5 h-3.5" />
                         </Button>
                         {/* Agents can only delete applications in Draft status */}
                         {app.status === 'Draft' && !app.isInvoiced && (

@@ -254,7 +254,7 @@ const AgentProgramsPage = () => {
                   <Button
                     variant="outline"
                     onClick={() => navigate(`/agent/programs/${program.id}`)}
-                    className="h-12 rounded-xl px-4 text-sm font-semibold border-gray-200 hover:border-[#042C53] hover:text-[#042C53] whitespace-nowrap"
+                    className="h-12 rounded-xl px-4 text-sm font-semibold border-gray-200 hover:border-[#042C53] hover:text-white whitespace-nowrap"
                   >
                     Details
                   </Button>

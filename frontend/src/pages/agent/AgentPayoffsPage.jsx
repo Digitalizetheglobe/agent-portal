@@ -1,12 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
-import { Badge } from '../../components/ui/badge';
 import { Dialog, DialogContent } from '../../components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import {
   CreditCard,
   DollarSign,
@@ -32,6 +29,7 @@ const AgentPayoffsPage = () => {
   const { user } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('all');
   const [selectedPayoff, setSelectedPayoff] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [reviewHistory, setReviewHistory] = useState([]);
@@ -92,78 +90,105 @@ const AgentPayoffsPage = () => {
     <FinancialStatusBadge status={status || 'PENDING'} size="md" />
   );
 
+  // One plain-language status per payoff: what is happening and what the agent should expect
+  const getStage = (payoff) => {
+    if (payoff.status === 'SETTLED') {
+      return {
+        key: 'settled',
+        label: 'Paid',
+        hint: payoff.settledAt ? `Paid on ${formatFinancialDate(payoff.settledAt)}` : 'Money sent to you',
+        tone: 'bg-emerald-50 text-emerald-800 border-emerald-200'
+      };
+    }
+    if (payoff.status === 'CANCELLED') {
+      return { key: 'cancelled', label: 'Cancelled', hint: 'Contact Finance if unsure why', tone: 'bg-red-50 text-red-700 border-red-200' };
+    }
+    return {
+      key: 'pending',
+      label: 'Waiting for payment',
+      hint: payoff.universityPaid || payoff.blockBypassed
+        ? 'QStudy Accounts is preparing your transfer'
+        : 'Waiting for the university to pay QStudy',
+      tone: 'bg-amber-50 text-amber-800 border-amber-300'
+    };
+  };
+
+  const FILTERS = [
+    { key: 'all', label: 'All', count: filteredPayoffs.length },
+    { key: 'pending', label: 'Waiting for payment', count: filteredPayoffs.filter(p => p.status === 'PENDING').length },
+    { key: 'settled', label: 'Paid', count: filteredPayoffs.filter(p => p.status === 'SETTLED').length },
+    { key: 'cancelled', label: 'Cancelled', count: filteredPayoffs.filter(p => p.status === 'CANCELLED').length },
+  ];
+  const visiblePayoffs = filteredPayoffs.filter((p) => filter === 'all' || getStage(p).key === filter);
+
+  const summaryCards = [
+    { filter: 'settled', title: 'Paid to you', value: formatCurrency(stats.settledAmount), hint: `${stats.settledCount} bank ${stats.settledCount === 1 ? 'transfer' : 'transfers'} received`, valueTone: 'text-[#27500A]' },
+    { filter: 'pending', title: 'Waiting for payment', value: formatCurrency(stats.pendingAmount), hint: `${stats.pendingCount} approved, not paid yet`, valueTone: 'text-[#0C447C]' },
+    { filter: 'all', title: 'Total commission', value: formatCurrency(stats.totalEarnedAmount), hint: 'Paid and waiting, together', valueTone: 'text-[#111827]' },
+  ];
+
   const PayoffTable = ({ list }) => (
     <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-sm">
       <Table>
         <TableHeader>
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Payoff Ref #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Gross Commission</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Deductions</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Net Amount</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement Status</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Settlement Details</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Action</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3">Payment</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3 text-right">You receive</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3">Status</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3">Bank reference</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3 text-right"><span className="sr-only">Action</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {list.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center py-20 text-[#6B7280]">
-                <div className="flex flex-col items-center gap-3">
+              <TableCell colSpan={5} className="text-center py-16 text-[#6B7280]">
+                <div className="flex flex-col items-center gap-2">
                   <CreditCard className="w-10 h-10 opacity-20" />
-                  <p className="text-sm font-medium">No payoff records found in this view.</p>
+                  <p className="text-sm font-medium">{(payoffs || []).length === 0 ? 'No payments yet.' : 'No payments match this view.'}</p>
+                  {(payoffs || []).length === 0 && <p className="text-xs">When Finance approves an invoice, your payment appears here.</p>}
                 </div>
               </TableCell>
             </TableRow>
           ) : (
             list.map((payoff) => {
               const invoice = payoff.invoiceId || {};
+              const stage = getStage(payoff);
+              const deductions = Number(payoff.deductions || 0);
 
               return (
-                <TableRow key={payoff.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0">
-                  <TableCell className="px-6 py-4 font-bold text-[#111827]">
-                    <span className="font-mono text-xs">{payoff.payoffNumber}</span>
+                <TableRow key={payoff.id} className="hover:bg-[#F9FAFB] transition-colors border-b border-[#F3F4F6] last:border-0 cursor-pointer" onClick={() => handleOpenView(payoff)}>
+                  <TableCell className="px-5 py-4">
+                    <span className="font-mono text-xs font-semibold text-[#111827] block">{payoff.payoffNumber}</span>
+                    <span className="text-[11px] text-[#6B7280]">For invoice {invoice.invoiceNumber || 'N/A'}</span>
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563]">
-                    {invoice.invoiceNumber || 'N/A'}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center font-['Outfit'] tabular-nums">
-                    {formatCurrency(payoff.grossCommission, payoff.currency)}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center font-['Outfit'] tabular-nums">
-                    {formatCurrency(payoff.deductions || 0, payoff.currency)}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 font-bold text-[#042C53] text-center font-['Outfit'] text-base tabular-nums">
-                    {formatCurrency(payoff.netAmount || payoff.grossCommission, payoff.currency)}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-center">
-                    {getPayoffBadge(payoff.status)}
-                    {payoff.status === 'PENDING' && (
-                      <span className="mt-1.5 flex w-fit mx-auto items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#FAEEDA] text-[#633806]">
-                        {payoff.universityPaid || payoff.blockBypassed ? 'Being paid by Accounts' : 'Waiting for the university to pay QStudy'}
-                      </span>
+                  <TableCell className="px-5 py-4 text-right">
+                    <span className="font-semibold text-[#042C53] text-base tabular-nums block">
+                      {formatCurrency(payoff.netAmount || payoff.grossCommission, payoff.currency)}
+                    </span>
+                    {deductions > 0 && (
+                      <span className="text-[11px] text-[#6B7280]">after {formatCurrency(deductions, payoff.currency)} deducted</span>
                     )}
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center">
-                    {payoff.status === 'SETTLED' ? (
-                      <div>
-                        <span className="font-mono text-[11px] text-gray-800 font-bold block">{payoff.settlementReference}</span>
-                        <span className="text-[10px] text-gray-500 font-['Outfit'] tabular-nums">{formatFinancialDate(payoff.settledAt)}</span>
-                      </div>
+                  <TableCell className="px-5 py-4">
+                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${stage.tone}`}>{stage.label}</span>
+                    <span className="block text-[11px] text-[#6B7280] mt-1">{stage.hint}</span>
+                  </TableCell>
+                  <TableCell className="px-5 py-4 text-sm">
+                    {payoff.status === 'SETTLED' && payoff.settlementReference ? (
+                      <span className="font-mono text-xs font-semibold text-[#111827]">{payoff.settlementReference}</span>
                     ) : (
-                      <span className="text-gray-400 italic">Pending Bank Transfer</span>
+                      <span className="text-[#9CA3AF]">Not available yet</span>
                     )}
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-center">
+                  <TableCell className="px-5 py-4 text-right">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="btn-financial-action text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB]"
-                      onClick={() => handleOpenView(payoff)}
+                      className="h-8 text-xs"
+                      onClick={(e) => { e.stopPropagation(); handleOpenView(payoff); }}
                     >
-                      <Receipt className="w-3.5 h-3.5 mr-1" /> View Details
+                      View
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -178,91 +203,59 @@ const AgentPayoffsPage = () => {
   return (
     <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">
-            Commission Payoff & Settlement Ledger
-          </h1>
-          <p className="text-sm font-medium text-[#6B7280] mt-0.5">
-            Track authorized payouts and verified bank wire settlements for your approved invoices.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Payments</h1>
+        <p className="text-sm text-[#6B7280] mt-0.5">See what QStudy has paid you and what is still on its way.</p>
       </div>
 
-      {/* KPI Cards */}
-      <div className="stat-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {[
-          { label: 'Settled Payouts', val: `$${(stats.settledAmount / 1000).toFixed(1)}k`, sub: `${stats.settledCount} confirmed transfers`, color: '#27500A' },
-          { label: 'Pending Settlement', val: `$${(stats.pendingAmount / 1000).toFixed(1)}k`, sub: `${stats.pendingCount} approved & queued`, color: '#633806' },
-          { label: 'Total Volume', val: `$${(stats.totalEarnedAmount / 1000).toFixed(1)}k`, sub: `${stats.total} total payoffs`, color: '#0C447C' },
-          { label: 'Cancelled Payoffs', val: stats.cancelledCount, sub: 'Voided records', color: '#791F1F' }
-        ].map((kpi, i) => (
-          <Card key={i} className="border-[#E5E7EB] bg-white shadow-none">
-            <CardContent className="p-4">
-              <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">{kpi.label}</p>
-              <p className="text-2xl font-bold text-[#111827] mt-1 font-['Outfit']">{kpi.val}</p>
-              <p className="text-[10px] font-semibold mt-1" style={{ color: kpi.color }}>{kpi.sub}</p>
-            </CardContent>
-          </Card>
+      {/* Summary: each card opens the matching list */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        {summaryCards.map((card) => (
+          <button
+            key={card.title}
+            type="button"
+            onClick={() => setFilter(card.filter)}
+            className={`text-left rounded-xl border border-[#E5E7EB] bg-white p-4 transition-shadow hover:shadow-md ${filter === card.filter && card.filter !== 'all' ? 'ring-2 ring-[#0C447C]/40' : ''}`}
+          >
+            <p className="text-sm font-semibold text-[#374151]">{card.title}</p>
+            <p className={`text-2xl font-bold mt-1 font-['Outfit'] tabular-nums ${card.valueTone}`}>{card.value}</p>
+            <p className="text-xs text-[#6B7280] mt-1">{card.hint}</p>
+          </button>
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative w-full md:w-96">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
-        <Input
-          placeholder="Search by payoff #, invoice #, or UTR..."
-          className="pl-9 h-10 border-[#E5E7EB] text-sm focus-visible:ring-[#042C53]/10 bg-white"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      {/* Filters + search */}
+      <div className="space-y-3">
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
+          <Input
+            placeholder="Search by payment number, invoice number or bank reference"
+            className="pl-9 h-10 border-[#D1D5DB] text-sm bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2" role="tablist">
+          {FILTERS.map((f) => {
+            const selected = filter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setFilter(f.key)}
+                className={`inline-flex items-center gap-2 h-9 px-4 rounded-full text-[13px] font-semibold border transition-colors ${selected ? 'bg-[#0C447C] text-white border-[#0C447C]' : 'bg-white text-[#374151] border-[#D1D5DB] hover:bg-[#F3F4F6]'}`}
+              >
+                {f.label}
+                <span className={`text-[11px] font-mono px-1.5 rounded-full ${selected ? 'bg-white/20' : 'bg-[#E5E7EB]'}`}>{f.count}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="bg-transparent h-auto p-0 gap-6 border-b border-[#E5E7EB] w-full justify-start rounded-none">
-          <TabsTrigger
-            value="all"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
-          >
-            All Payoffs ({filteredPayoffs.length})
-          </TabsTrigger>
-          <TabsTrigger
-            value="pending"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#633806] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#633806] transition-all capitalize"
-          >
-            Pending Settlement ({filteredPayoffs.filter(p => p.status === 'PENDING').length})
-          </TabsTrigger>
-          <TabsTrigger
-            value="settled"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#27500A] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#27500A] transition-all capitalize"
-          >
-            Settled ({filteredPayoffs.filter(p => p.status === 'SETTLED').length})
-          </TabsTrigger>
-          <TabsTrigger
-            value="cancelled"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#791F1F] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#791F1F] transition-all capitalize"
-          >
-            Cancelled ({filteredPayoffs.filter(p => p.status === 'CANCELLED').length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="mt-6">
-          <PayoffTable list={filteredPayoffs} />
-        </TabsContent>
-
-        <TabsContent value="pending" className="mt-6">
-          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'PENDING')} />
-        </TabsContent>
-
-        <TabsContent value="settled" className="mt-6">
-          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'SETTLED')} />
-        </TabsContent>
-
-        <TabsContent value="cancelled" className="mt-6">
-          <PayoffTable list={filteredPayoffs.filter(p => p.status === 'CANCELLED')} />
-        </TabsContent>
-      </Tabs>
+      <PayoffTable list={visiblePayoffs} />
 
       {/* Payoff Inspection Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
@@ -282,7 +275,7 @@ const AgentPayoffsPage = () => {
                 <div className="text-right">
                   <span className="text-xs text-blue-200 font-semibold uppercase tracking-wider block">Net Payoff Amount</span>
                   <span className="text-3xl font-bold font-['Outfit'] block mt-0.5">
-                    ${Number(selectedPayoff.netAmount || 0).toLocaleString()}
+                    {formatCurrency(selectedPayoff.netAmount || selectedPayoff.grossCommission, selectedPayoff.currency)}
                   </span>
                   <span className="text-[11px] text-blue-200 block">
                     Currency: {selectedPayoff.currency || 'USD'}

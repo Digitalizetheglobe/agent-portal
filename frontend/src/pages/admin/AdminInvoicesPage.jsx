@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { hasStaffRole } from '../../utils/staffRoles';
@@ -6,7 +7,7 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { cn } from '../../lib/utils';
 import {
   FileText,
   CheckCircle2,
@@ -29,8 +30,6 @@ import InvoiceModal from '../../components/modals/InvoiceModal';
 import FinanceReviewModal from '../../components/modals/FinanceReviewModal';
 import { invoiceReviewAPI, formatApiError } from '../../utils/api';
 import { FinancialStatusBadge, FinancialStateHierarchy } from '../../components/common/FinancialStatusBadge';
-import InvoiceStageSummary from '../../components/common/InvoiceStageSummary';
-import { getPayoffPaymentState, PAYOFF_PAYMENT_STATE_INFO } from '../../utils/invoiceStage';
 import {
   formatCurrency,
   formatFinancialDate,
@@ -46,6 +45,10 @@ const AdminInvoicesPage = () => {
   const canReview = hasStaffRole(user, 'head_admission');
 
   const [searchTerm, setSearchTerm] = useState('');
+  // The selected section lives in the URL so a link or a refresh keeps it
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'all';
+  const setTab = (key) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', key); return next; }, { replace: true });
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
 
@@ -108,134 +111,138 @@ const AdminInvoicesPage = () => {
     );
   }, [selectedInvoice, payoffs]);
 
-  // Operational Lifecycle KPIs (FA-4.4)
-  const stats = useMemo(() => {
-    const total = invoices.length;
-    // 1. Needs Review: PendingReview or Resubmitted
-    const needsReviewInvoices = invoices.filter(i =>
-      ['PendingReview', 'Resubmitted'].includes(i.financeReviewStatus)
-    );
-    // 2. Under Review: UnderReview
-    const underReviewInvoices = invoices.filter(i => i.financeReviewStatus === 'UnderReview');
-    // 3. Correction Active: CorrectionRequired
-    const correctionInvoices = invoices.filter(i => i.financeReviewStatus === 'CorrectionRequired');
-    // 4. Resolved: Approved or Rejected
-    const approvedInvoices = invoices.filter(i => i.financeReviewStatus === 'Approved');
-    const rejectedInvoices = invoices.filter(i => i.financeReviewStatus === 'Rejected');
+  const payoffFor = (inv) =>
+    (payoffs || []).find(p => (p.invoiceId?._id || p.invoiceId?.id || p.invoiceId) === (inv._id || inv.id));
 
-    const approvedGrossTotal = approvedInvoices.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
-
+  // One plain-language status per invoice: where it is and who has to act next
+  const getStage = (inv) => {
+    const review = inv.financeReviewStatus || 'PendingReview';
+    const payoff = payoffFor(inv);
+    if (review === 'Rejected') {
+      return { key: 'rejected', label: 'Rejected', hint: 'No commission payable', tone: 'bg-red-50 text-red-700 border-red-200' };
+    }
+    if (review === 'CorrectionRequired') {
+      return { key: 'correction', label: 'Waiting for agent', hint: 'Agent must fix and resubmit', tone: 'bg-amber-50 text-amber-800 border-amber-300' };
+    }
+    if (review === 'UnderReview') {
+      return { key: 'under', label: 'Under review', hint: 'Audit in progress', tone: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
+    }
+    if (review === 'Approved') {
+      if (payoff?.status === 'SETTLED') {
+        return { key: 'paid', label: 'Paid to agent', hint: payoff.settledAt ? `Paid on ${formatFinancialDate(payoff.settledAt)}` : 'Settled', tone: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+      }
+      const ready = payoff && (payoff.universityPaid || payoff.blockBypassed);
+      return {
+        key: 'approved',
+        label: 'Approved',
+        hint: !payoff ? 'Payment record being prepared' : ready ? 'Ready to pay the agent' : 'Waiting for the university to pay QStudy',
+        tone: 'bg-blue-50 text-blue-800 border-blue-200'
+      };
+    }
     return {
-      total,
-      needsReviewCount: needsReviewInvoices.length,
-      underReviewCount: underReviewInvoices.length,
-      correctionCount: correctionInvoices.length,
-      approvedCount: approvedInvoices.length,
-      rejectedCount: rejectedInvoices.length,
-      approvedGrossTotal
+      key: 'needs_review',
+      label: 'Needs review',
+      hint: review === 'Resubmitted' ? 'Agent resubmitted it' : 'New claim from an agent',
+      tone: 'bg-blue-50 text-blue-800 border-blue-300'
     };
-  }, [invoices]);
+  };
+
+  const counts = useMemo(() => {
+    const c = { all: invoices.length, needs_review: 0, under: 0, correction: 0, approved: 0, paid: 0, rejected: 0 };
+    let approvedAmount = 0;
+    invoices.forEach((inv) => {
+      const key = getStage(inv).key;
+      c[key] += 1;
+      if (key === 'approved') approvedAmount += Number(inv.amount) || 0;
+    });
+    return { ...c, approvedAmount };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoices, payoffs]);
+
+  const tabs = [
+    { key: 'all', label: 'All', count: counts.all },
+    { key: 'needs_review', label: 'Needs review', count: counts.needs_review },
+    { key: 'under', label: 'Under review', count: counts.under },
+    { key: 'correction', label: 'Waiting for agent', count: counts.correction },
+    { key: 'approved', label: 'Approved', count: counts.approved },
+    { key: 'paid', label: 'Paid', count: counts.paid },
+    { key: 'rejected', label: 'Rejected', count: counts.rejected },
+  ];
+  const visibleInvoices = filteredInvoices.filter((inv) => activeTab === 'all' || getStage(inv).key === activeTab);
+
+  // The first thing anyone wants to know, before any detail
+  const facts = [
+    { label: 'Needs review', value: counts.needs_review, hint: counts.needs_review ? 'waiting for a decision' : 'all caught up', tab: 'needs_review', tone: counts.needs_review ? 'warn' : 'plain' },
+    { label: 'With the agent', value: counts.correction, hint: 'asked to fix something', tab: 'correction', tone: 'plain' },
+    { label: 'Approved, not paid', value: formatCurrency(counts.approvedAmount), hint: `${counts.approved} ${counts.approved === 1 ? 'invoice' : 'invoices'}`, tab: 'approved', tone: 'plain' },
+    { label: 'Paid to agents', value: counts.paid, hint: counts.paid === 1 ? 'invoice settled' : 'invoices settled', tab: 'paid', tone: 'good' },
+  ];
 
   const InvoiceList = ({ list }) => (
     <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-x-auto shadow-sm">
-      <Table className="min-w-[1100px]">
+      <Table>
         <TableHeader>
           <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB] hover:bg-[#F9FAFB]">
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Invoice #</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-left uppercase tracking-wider">Agent / Agency</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Applications</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Gross Amount</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Financial Lifecycle</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Payoff Status</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Raised Date</TableHead>
-            <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 text-center uppercase tracking-wider">Actions</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3">Invoice</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3">Agent</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3 text-right">Amount</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3">Status</TableHead>
+            <TableHead className="text-xs text-[#374151] font-semibold px-5 py-3 text-right"><span className="sr-only">Actions</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {list.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center py-16 text-[#6B7280]">
-                <FileText size={48} className="mx-auto mb-4 opacity-20" />
-                <p>No invoices found matching your criteria.</p>
+              <TableCell colSpan={5} className="text-center py-16 text-[#6B7280]">
+                <FileText size={40} className="mx-auto mb-2 opacity-20" />
+                <p className="text-sm font-medium">{invoices.length === 0 ? 'No invoices have been raised yet.' : 'No invoices match this view.'}</p>
               </TableCell>
             </TableRow>
           ) : (
             list.map((invoice) => {
               const appCount = invoice.applications?.length || invoice.studentIds?.length || 0;
-              const linkedPayoff = (payoffs || []).find(
-                p => (p.invoiceId?._id || p.invoiceId?.id || p.invoiceId) === (invoice._id || invoice.id)
-              );
+              const stage = getStage(invoice);
+              const needsMyReview = canReview && ['needs_review', 'under'].includes(stage.key);
+              const openView = () => { setSelectedInvoice(invoice); setIsViewOpen(true); };
 
               return (
-                <TableRow key={invoice.id} className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB] transition-colors">
-                  <TableCell className="px-4 py-4 font-bold text-[#111827] whitespace-nowrap">
-                    <span className="font-mono text-xs">{invoice.invoiceNumber}</span>
+                <TableRow key={invoice.id} className="border-b border-[#F3F4F6] last:border-0 hover:bg-[#F9FAFB] transition-colors cursor-pointer" onClick={openView}>
+                  <TableCell className="px-5 py-4">
+                    <span className="font-mono text-xs font-semibold text-[#111827] whitespace-nowrap block">{invoice.invoiceNumber}</span>
+                    <span className="text-[11px] text-[#6B7280]">
+                      {appCount} {appCount === 1 ? 'application' : 'applications'} &middot; raised {formatFinancialDate(invoice.raisedAt)}
+                    </span>
                   </TableCell>
-                  <TableCell className="px-6 py-4">
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-semibold text-[#111827] truncate">{invoice.agentId?.agencyName || invoice.agentId?.name || 'Agency'}</span>
-                      <span className="text-[11px] text-[#6B7280] truncate">{invoice.agentId?.name} &bull; {invoice.agentId?.email}</span>
-                    </div>
+                  <TableCell className="px-5 py-4">
+                    <span className="text-sm font-semibold text-[#111827] block">{invoice.agentId?.agencyName || invoice.agentId?.name || 'Agency'}</span>
+                    <span className="text-[11px] text-[#6B7280]">{invoice.agentId?.name}</span>
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-[#4B5563] text-center">
-                    {appCount} {appCount === 1 ? 'Application' : 'Applications'}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 font-bold text-[#111827] text-center font-['Outfit'] tabular-nums">
+                  <TableCell className="px-5 py-4 text-right font-semibold text-[#111827] tabular-nums">
                     {invoice.amount > 0 ? (
                       formatCurrency(invoice.amount, invoice.currency)
                     ) : (
-                      <span className="text-xs text-amber-600 font-medium">Pending Review</span>
+                      <span className="text-xs text-[#6B7280] font-medium">Not set yet</span>
                     )}
                   </TableCell>
-                  <TableCell className="px-4 py-4 text-center whitespace-nowrap">
-                    <FinancialStatusBadge status={invoice.financeReviewStatus || 'PendingReview'} size="sm" />
+                  <TableCell className="px-5 py-4">
+                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${stage.tone}`}>{stage.label}</span>
+                    <span className="block text-[11px] text-[#6B7280] mt-1">{stage.hint}</span>
                   </TableCell>
-                  <TableCell className="px-4 py-4 text-center whitespace-nowrap">
-                    {linkedPayoff ? (
-                      <div className="flex flex-col items-center gap-1">
-                        <FinancialStatusBadge status={linkedPayoff.status} size="sm" />
-                        <span className="text-[10px] text-gray-500 font-mono">{linkedPayoff.payoffNumber}</span>
-                        {linkedPayoff.status === 'PENDING' && (
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(linkedPayoff)].style}`}>
-                            {PAYOFF_PAYMENT_STATE_INFO[getPayoffPaymentState(linkedPayoff)].label}
-                          </span>
-                        )}
-                        {linkedPayoff.status === 'SETTLED' && linkedPayoff.settledAt && (
-                          <span className="text-[10px] text-[#27500A] font-medium tabular-nums">
-                            Settled {formatFinancialDate(linkedPayoff.settledAt)}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400 font-medium">Pre-Payoff</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-xs text-[#6B7280] text-center font-['Outfit'] tabular-nums">
-                    {formatFinancialDate(invoice.raisedAt)}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-center">
-                    <div className="flex justify-center items-center gap-2">
-                      {canReview && (
+                  <TableCell className="px-5 py-4 text-right">
+                    <div className="flex justify-end items-center gap-2">
+                      {needsMyReview ? (
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="h-8 text-[11px] font-bold text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB] hover:text-[#042C53]"
-                          onClick={() => openReviewModal(invoice.id)}
+                          className="h-8 text-xs bg-[#042C53] hover:bg-[#0C447C] text-white"
+                          onClick={(e) => { e.stopPropagation(); openReviewModal(invoice.id); }}
                         >
-                          <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Review
+                          <ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Review
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={(e) => { e.stopPropagation(); openView(); }}>
+                          View
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 text-[11px] font-semibold text-[#4B5563] hover:text-[#111827]"
-                        onClick={() => {
-                          setSelectedInvoice(invoice);
-                          setIsViewOpen(true);
-                        }}
-                      >
-                        <FileText className="w-3.5 h-3.5 mr-1" /> View
-                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -248,129 +255,101 @@ const AdminInvoicesPage = () => {
   );
 
   return (
-    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-6">
+    <div className="p-4 sm:p-6 bg-[#F9FAFB] min-h-screen space-y-5" data-testid="admin-invoices-page">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Financial & Invoice Management</h1>
-          <p className="text-sm font-medium text-[#6B7280] mt-0.5">Audit agent commission claims, assign contractual rates, and supervise institutional settlements.</p>
+          <h1 className="text-2xl font-bold text-[#111827] font-['Outfit']">Invoices</h1>
+          <p className="text-sm text-[#6B7280] mt-0.5">Check agent commission claims and follow them until the agent is paid.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            size="sm"
-            onClick={() => setIsRaiseModalOpen(true)}
-            className="inline-flex items-center text-xs font-semibold h-10 px-4 bg-[#042C53] hover:bg-[#03213F] text-white"
-          >
-            <Plus size={14} className="mr-1.5" /> Raise Invoice
+        <Button
+          size="sm"
+          onClick={() => setIsRaiseModalOpen(true)}
+          className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs h-9 px-4 gap-1.5 w-fit"
+        >
+          <Plus size={14} /> Raise Invoice
+        </Button>
+      </div>
+
+      {/* Things that need attention come before anything else */}
+      {canReview && counts.needs_review > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#B5D4F4] bg-[#E6F1FB] px-4 py-3 text-xs text-[#0C447C]">
+          <span className="flex items-start gap-2">
+            <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+            <span><strong>{counts.needs_review}</strong> {counts.needs_review === 1 ? 'invoice is' : 'invoices are'} waiting for your review.</span>
+          </span>
+          <Button size="sm" variant="outline" className="h-8 text-xs border-[#0C447C]/30 text-[#0C447C]" onClick={() => setTab('needs_review')}>
+            Show them
           </Button>
         </div>
+      )}
+
+      {/* Key facts */}
+      <Card className="border-[#E5E7EB] bg-white shadow-sm overflow-hidden">
+        <div className="h-1.5 bg-[#042C53]" />
+        <CardContent className="p-5 sm:p-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {facts.map((fact) => (
+              <button
+                key={fact.label}
+                type="button"
+                onClick={() => setTab(fact.tab)}
+                className="text-left rounded-xl border border-gray-100 bg-[#F9FAFB] p-3.5 hover:border-[#042C53]/30 hover:bg-white transition-colors"
+              >
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{fact.label}</p>
+                <p className={cn(
+                  'text-xl font-bold mt-1 font-[\'Outfit\']',
+                  fact.tone === 'warn' ? 'text-[#0C447C]' : fact.tone === 'good' ? 'text-[#27500A]' : 'text-[#042C53]'
+                )}>
+                  {fact.value}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{fact.hint}</p>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Search */}
+      <div className="relative w-full md:w-96">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
+        <Input
+          placeholder="Search by invoice number, agent or remarks"
+          className="pl-9 h-10 border-[#D1D5DB] text-sm bg-white"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
 
-      {/* Submitted / Processing / Paid: every invoice in exactly one stage */}
-      <InvoiceStageSummary invoices={invoices} />
-
-      {/* True Operational Lifecycle KPIs (FA-4.4) */}
-      <div className="stat-grid grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        {[
-          { label: 'Total Invoices', val: stats.total, sub: 'All volume in portal', color: '#0C447C', highlight: false },
-          { label: 'Needs Review', val: stats.needsReviewCount, sub: 'Pending triage / resubmitted', color: '#1D4ED8', highlight: stats.needsReviewCount > 0 },
-          { label: 'Under Review', val: stats.underReviewCount, sub: 'Active audit in progress', color: '#4338CA', highlight: false },
-          { label: 'Correction Active', val: stats.correctionCount, sub: 'Awaiting agent changes', color: '#B45309', highlight: stats.correctionCount > 0 },
-          { label: 'Approved Claims', val: stats.approvedCount, sub: `${formatCurrency(stats.approvedGrossTotal)} gross payout`, color: '#27500A', highlight: false }
-        ].map((kpi, i) => (
-          <Card key={i} className={`border-[#E5E7EB] bg-white shadow-none ${kpi.highlight ? 'border-blue-400 bg-blue-50/20 ring-1 ring-blue-400/20' : ''}`}>
-            <CardContent className="p-4">
-              <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">{kpi.label}</p>
-              <p className="text-2xl font-bold text-[#111827] mt-1 font-['Outfit'] tabular-nums">{kpi.val}</p>
-              <p className="text-[10px] font-semibold mt-1" style={{ color: kpi.color }}>{kpi.sub}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Sections */}
+      <div className="flex items-center gap-1 border-b border-[#D1D5DB] overflow-x-auto" role="tablist">
+        {tabs.map((tab) => {
+          const selected = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setTab(tab.key)}
+              className={cn(
+                'flex items-center gap-2 py-3 px-4 -mb-px text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap rounded-t-lg',
+                selected
+                  ? 'border-[#0C447C] text-[#0C447C] bg-[#E6F1FB]'
+                  : 'border-transparent text-[#374151] hover:text-[#111827] hover:bg-[#F3F4F6]'
+              )}
+            >
+              {tab.label}
+              <span className={cn(
+                'px-1.5 py-0.5 text-[11px] font-mono rounded-full font-semibold',
+                selected ? 'bg-[#0C447C] text-white' : 'bg-[#E5E7EB] text-[#374151]'
+              )}>{tab.count}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Search Bar */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
-          <Input
-            placeholder="Search by invoice #, agency, or remarks..."
-            className="pl-9 h-10 border-[#E5E7EB] text-sm focus-visible:ring-[#042C53]/10 bg-white"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* Unified Operational Lifecycle Tabs (FA-4.4) */}
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="bg-transparent h-auto p-0 gap-6 border-b border-[#E5E7EB] w-full justify-start rounded-none">
-          <TabsTrigger
-            value="all"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all capitalize"
-          >
-            All Invoices ({invoices.length})
-          </TabsTrigger>
-          <TabsTrigger
-            value="needs_review"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#1D4ED8] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#1D4ED8] transition-all capitalize flex items-center gap-1.5"
-          >
-            Needs Review
-            {stats.needsReviewCount > 0 && (
-              <span className="bg-blue-100 text-blue-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                {stats.needsReviewCount}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger
-            value="under_review"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#4338CA] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#4338CA] transition-all capitalize"
-          >
-            Under Review ({stats.underReviewCount})
-          </TabsTrigger>
-          <TabsTrigger
-            value="correction_active"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#B45309] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#B45309] transition-all capitalize flex items-center gap-1.5"
-          >
-            Correction Active
-            {stats.correctionCount > 0 && (
-              <span className="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                {stats.correctionCount}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger
-            value="approved"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#27500A] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#27500A] transition-all capitalize"
-          >
-            Approved ({stats.approvedCount})
-          </TabsTrigger>
-          <TabsTrigger
-            value="rejected"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#791F1F] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#791F1F] transition-all capitalize"
-          >
-            Rejected ({stats.rejectedCount})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="mt-6">
-          <InvoiceList list={filteredInvoices} />
-        </TabsContent>
-        <TabsContent value="needs_review" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => ['PendingReview', 'Resubmitted'].includes(i.financeReviewStatus))} />
-        </TabsContent>
-        <TabsContent value="under_review" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'UnderReview')} />
-        </TabsContent>
-        <TabsContent value="correction_active" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'CorrectionRequired')} />
-        </TabsContent>
-        <TabsContent value="approved" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'Approved')} />
-        </TabsContent>
-        <TabsContent value="rejected" className="mt-6">
-          <InvoiceList list={filteredInvoices.filter(i => i.financeReviewStatus === 'Rejected')} />
-        </TabsContent>
-      </Tabs>
+      <InvoiceList list={visibleInvoices} />
 
       {/* Invoice Document View Modal */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
