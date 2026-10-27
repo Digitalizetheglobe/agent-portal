@@ -50,6 +50,7 @@ import {
   AlertDialogTitle
 } from '../../components/ui/alert-dialog';
 import CourseModal from '../../components/modals/CourseModal';
+import { useNavigate } from 'react-router-dom';
 import { courseAPI, formatApiError } from '../../utils/api';
 import { toast } from 'sonner';
 
@@ -63,6 +64,7 @@ const DEGREE_LEVELS = [
 ];
 
 const CoursesPage = () => {
+  const navigate = useNavigate();
   const { deleteCourse, updateCourseStatus } = useData();
   const { universities } = useAllUniversities();
   const { user } = useAuth();
@@ -448,7 +450,13 @@ const CoursesPage = () => {
                   <TableRow key={course.id || course._id} className="hover:bg-gray-50/80 transition-colors">
                     <TableCell className="py-4">
                       <div className="flex flex-col">
-                        <span className="text-sm font-semibold text-[#111827]">{course.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/courses/${course.id || course._id}`)}
+                          className="text-sm font-semibold text-[#111827] hover:text-[#0C447C] hover:underline text-left"
+                        >
+                          {course.name}
+                        </button>
                         {course.code && (
                           <span className="text-[11px] font-mono font-medium text-gray-500 mt-0.5">
                             {course.code}

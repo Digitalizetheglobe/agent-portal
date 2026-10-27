@@ -44,6 +44,10 @@ const storeFile = async (agent, folder, file) => {
   return { id, fileUrl: result.path, fileName: file.originalname, uploadedAt: new Date() };
 };
 
+// A replaced file stays in the list for the audit trail, marked as superseded
+const supersede = (docs, kind) =>
+  (Array.isArray(docs) ? docs : []).map(d => (d.kind === kind && !d.supersededAt ? { ...d, supersededAt: new Date() } : d));
+
 const parseExpiry = (raw) => {
   if (raw === undefined || raw === null || raw === '') return { value: null };
   const date = new Date(raw);
@@ -76,9 +80,11 @@ exports.issueContract = async (req, res) => {
 
     const doc = await storeFile(agent, 'contract', req.file);
     const renewal = agent.isActivated;
+    // A contract already out for signature is being replaced (the wrong file was issued)
+    const replacing = agent.contractStatus === 'issued';
 
     agent.contractDocuments = [
-      ...(Array.isArray(agent.contractDocuments) ? agent.contractDocuments : []),
+      ...supersede(agent.contractDocuments, 'issued'),
       { ...doc, kind: 'issued', uploadedBy: req.user.id, uploadedByName: req.user.name }
     ];
     agent.contractStatus = 'issued';
@@ -86,7 +92,7 @@ exports.issueContract = async (req, res) => {
     agent.contractSignedAt = null;
     agent.contractExpiresAt = expiry.value;
     addHistory(agent, {
-      action: renewal ? 'contract-renewal-issued' : 'contract-issued',
+      action: replacing ? 'contract-replaced' : renewal ? 'contract-renewal-issued' : 'contract-issued',
       by: req.user.id,
       byName: req.user.name
     });
@@ -94,8 +100,10 @@ exports.issueContract = async (req, res) => {
 
     await notify(
       agent,
-      renewal ? 'Contract renewal ready' : 'Your agent contract is ready',
-      'Please download your agent contract from your profile, sign it and return it to QStudy.',
+      replacing ? 'Agent contract replaced' : renewal ? 'Contract renewal ready' : 'Your agent contract is ready',
+      replacing
+        ? 'QStudy replaced your agent contract. Please download the new version from your profile, sign it and return it.'
+        : 'Please download your agent contract from your profile, sign it and return it to QStudy.',
       'info'
     );
 
@@ -115,18 +123,20 @@ exports.uploadSignedContract = async (req, res) => {
 
     const agent = await loadAgent(req, res);
     if (!agent) return;
-    if (agent.contractStatus !== 'issued') {
+    if (!['issued', 'signed'].includes(agent.contractStatus)) {
       return fail(res, 400, 'Issue the contract before uploading the signed copy');
     }
+    // Before the E-Certificate is issued, a wrong signed copy can be replaced
+    const replacing = agent.contractStatus === 'signed';
 
     const doc = await storeFile(agent, 'contract', req.file);
     agent.contractDocuments = [
-      ...(Array.isArray(agent.contractDocuments) ? agent.contractDocuments : []),
+      ...supersede(agent.contractDocuments, 'signed'),
       { ...doc, kind: 'signed', uploadedBy: req.user.id, uploadedByName: req.user.name }
     ];
     agent.contractStatus = 'signed';
     agent.contractSignedAt = new Date();
-    addHistory(agent, { action: 'contract-signed', by: req.user.id, byName: req.user.name });
+    addHistory(agent, { action: replacing ? 'contract-signed-replaced' : 'contract-signed', by: req.user.id, byName: req.user.name });
     await agent.save();
 
     res.status(200).json(agent.toJSON());
@@ -151,7 +161,7 @@ exports.uploadOwnSignedContract = async (req, res) => {
 
     const doc = await storeFile(agent, 'contract', req.file);
     agent.contractDocuments = [
-      ...(Array.isArray(agent.contractDocuments) ? agent.contractDocuments : []),
+      ...supersede(agent.contractDocuments, 'signed'),
       { ...doc, kind: 'signed', uploadedBy: agent.id, uploadedByName: agent.name }
     ];
     agent.contractStatus = 'signed';
@@ -196,6 +206,14 @@ exports.issueCertificate = async (req, res) => {
 
     // The Head of Admission uploads the E-Certificate itself; re-issuing may keep the existing file
     if (!req.file && !agent.eCertificateFile) return fail(res, 400, 'Please upload the E-Certificate file');
+    const replacing = Boolean(req.file && agent.eCertificateFile);
+    if (replacing) {
+      // Keep the old certificate file for the audit trail
+      agent.contractDocuments = [
+        ...(Array.isArray(agent.contractDocuments) ? agent.contractDocuments : []),
+        { ...agent.eCertificateFile, kind: 'certificate', supersededAt: new Date() }
+      ];
+    }
     if (req.file) agent.eCertificateFile = await storeFile(agent, 'certificate', req.file);
     const firstTime = !agent.isActivated;
     if (!agent.eCertificateNumber) agent.eCertificateNumber = nextCertificateNumber();
@@ -204,7 +222,7 @@ exports.issueCertificate = async (req, res) => {
     agent.isActivated = true;
     agent.activatedAt = agent.activatedAt || new Date();
     addHistory(agent, {
-      action: firstTime ? 'certificate-issued' : 'certificate-reissued',
+      action: firstTime ? 'certificate-issued' : replacing ? 'certificate-replaced' : 'certificate-reissued',
       by: req.user.id,
       byName: req.user.name,
       remarks: agent.eCertificateNumber

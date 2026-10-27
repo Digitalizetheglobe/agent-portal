@@ -436,30 +436,30 @@ const AdminPayoffsPage = () => {
 
       {/* Tabs: the three stages of the money, then everything */}
       <Tabs defaultValue={canRecordUniversityPayment ? 'awaiting' : 'due'} className="w-full">
-        <TabsList className="bg-transparent h-auto p-0 gap-6 border-b border-[#E5E7EB] w-full justify-start rounded-none overflow-x-auto">
+        <TabsList className="bg-transparent h-auto p-0 gap-1 border-b border-[#D1D5DB] w-full justify-start rounded-none overflow-x-auto">
           {canRecordUniversityPayment && (
           <TabsTrigger
             value="awaiting"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#633806] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#633806] transition-all flex items-center gap-1.5 whitespace-nowrap"
+            className="rounded-t-lg rounded-b-none border-b-2 border-transparent -mb-px data-[state=active]:border-[#633806] data-[state=active]:bg-[#FAEEDA] data-[state=active]:shadow-none px-4 py-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F3F4F6] data-[state=active]:hover:bg-[#FAEEDA] data-[state=active]:text-[#633806] transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
             1. Awaiting University Payment ({receivables.filter(r => !r.done).length})
           </TabsTrigger>
           )}
           <TabsTrigger
             value="due"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#0C447C] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#0C447C] transition-all flex items-center gap-1.5 whitespace-nowrap"
+            className="rounded-t-lg rounded-b-none border-b-2 border-transparent -mb-px data-[state=active]:border-[#0C447C] data-[state=active]:bg-[#E6F1FB] data-[state=active]:shadow-none px-4 py-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F3F4F6] data-[state=active]:hover:bg-[#E6F1FB] data-[state=active]:text-[#0C447C] transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
             {canRecordUniversityPayment ? '2. ' : ''}Agent Payment Due ({dueList.length})
           </TabsTrigger>
           <TabsTrigger
             value="done"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#27500A] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#27500A] transition-all flex items-center gap-1.5 whitespace-nowrap"
+            className="rounded-t-lg rounded-b-none border-b-2 border-transparent -mb-px data-[state=active]:border-[#27500A] data-[state=active]:bg-[#EAF3DE] data-[state=active]:shadow-none px-4 py-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F3F4F6] data-[state=active]:hover:bg-[#EAF3DE] data-[state=active]:text-[#27500A] transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
             {canRecordUniversityPayment ? '3. ' : ''}Agent Payment Done ({filteredPayoffs.filter(p => p.status === 'SETTLED').length})
           </TabsTrigger>
           <TabsTrigger
             value="all"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#042C53] data-[state=active]:bg-transparent data-[state=active]:shadow-none px-1 pb-3 text-sm font-semibold text-[#6B7280] data-[state=active]:text-[#042C53] transition-all flex items-center gap-1.5 whitespace-nowrap"
+            className="rounded-t-lg rounded-b-none border-b-2 border-transparent -mb-px data-[state=active]:border-[#042C53] data-[state=active]:bg-[#E6F1FB] data-[state=active]:shadow-none px-4 py-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F3F4F6] data-[state=active]:hover:bg-[#E6F1FB] data-[state=active]:text-[#042C53] transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
             All Payoffs & History ({filteredPayoffs.length})
           </TabsTrigger>

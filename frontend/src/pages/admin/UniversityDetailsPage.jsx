@@ -359,25 +359,33 @@ const UniversityDetailsPage = () => {
       </Card>
 
       {/* Sections */}
-      <div className="flex items-center gap-1 border-b border-[#E5E7EB] overflow-x-auto">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setTab(tab.key)}
-            className={cn(
-              'flex items-center gap-2 py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap',
-              activeTab === tab.key
-                ? 'border-[#0C447C] text-[#0C447C]'
-                : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60'
-            )}
-          >
-            {tab.label}
-            {tab.count !== undefined && (
-              <span className="px-1.5 py-0.5 text-[10px] font-mono rounded-full bg-slate-100 text-slate-700 font-semibold">{tab.count}</span>
-            )}
-          </button>
-        ))}
+      <div className="flex items-center gap-1 border-b border-[#D1D5DB] overflow-x-auto" role="tablist">
+        {tabs.map((tab) => {
+          const selected = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setTab(tab.key)}
+              className={cn(
+                'flex items-center gap-2 py-3 px-4 -mb-px text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap rounded-t-lg',
+                selected
+                  ? 'border-[#0C447C] text-[#0C447C] bg-[#E6F1FB]'
+                  : 'border-transparent text-[#374151] hover:text-[#111827] hover:bg-[#F3F4F6]'
+              )}
+            >
+              {tab.label}
+              {tab.count !== undefined && (
+                <span className={cn(
+                  'px-1.5 py-0.5 text-[11px] font-mono rounded-full font-semibold',
+                  selected ? 'bg-[#0C447C] text-white' : 'bg-[#E5E7EB] text-[#374151]'
+                )}>{tab.count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Programs, news and scholarships, fees and brochures (loaded once, shown by tab) */}

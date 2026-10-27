@@ -470,6 +470,13 @@ exports.uploadVerificationDocument = async (req, res) => {
     // Add to verificationDocuments
     const docId = uuidv4();
     const docs = Array.isArray(user.verificationDocuments) ? [...user.verificationDocuments] : [];
+    // Re-uploading a rejected document replaces it
+    const replacesId = req.body.replaces;
+    const replaced = replacesId ? docs.find(d => (d.id === replacesId || d._id === replacesId) && d.status === 'rejected') : null;
+    if (replaced) {
+      await deleteObject(replaced.fileUrl);
+      docs.splice(docs.indexOf(replaced), 1);
+    }
     docs.push({
       id: docId,
       _id: docId,

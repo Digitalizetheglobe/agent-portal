@@ -27,6 +27,7 @@ const ComplianceStatus = () => {
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState(null);
   const [docType, setDocType] = useState('');
+  const [replacesId, setReplacesId] = useState(null);
 
   const documents = user?.verificationDocuments || [];
   const isVerified = user?.isVerified;
@@ -89,11 +90,12 @@ const ComplianceStatus = () => {
 
     setIsUploading(true);
     try {
-      const updatedUser = await uploadVerificationDocument(file, docType);
+      const updatedUser = await uploadVerificationDocument(file, docType, replacesId);
       updateUser(updatedUser);
       toast.success('Document uploaded successfully. It is now pending review.');
       setFile(null);
       setDocType('');
+      setReplacesId(null);
       setShowUpload(false);
     } catch (error) {
       console.error('Upload error:', error);
@@ -117,8 +119,9 @@ const ComplianceStatus = () => {
     }
   };
 
-  const handleReupload = (type) => {
-    setDocType(type);
+  const handleReupload = (doc) => {
+    setDocType(doc.docType);
+    setReplacesId(doc.status === 'rejected' ? (doc._id || doc.id) : null);
     setShowUpload(true);
     // Scroll to upload section if needed, but it's usually visible
   };
@@ -257,11 +260,14 @@ const ComplianceStatus = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {documents.map((doc, index) => (
                 <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-4 h-4 text-muted-foreground" />
-                    <div>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
                       <p className="text-sm font-medium">{doc.docType}</p>
                       <p className="text-xs text-muted-foreground line-clamp-1">{doc.fileName}</p>
+                      {doc.status === 'rejected' && doc.remarks && (
+                        <p className="text-xs text-red-600 mt-0.5">Rejected: {doc.remarks}</p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -276,7 +282,7 @@ const ComplianceStatus = () => {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-white"
-                        onClick={() => handleReupload(doc.docType)}
+                        onClick={() => handleReupload(doc)}
                         disabled={locked}
                         title="Re-upload"
                       >
@@ -311,6 +317,7 @@ const ComplianceStatus = () => {
               className="w-full border-dashed"
               onClick={() => {
                 setDocType('');
+                setReplacesId(null);
                 setShowUpload(true);
               }}
             >
@@ -320,8 +327,8 @@ const ComplianceStatus = () => {
           ) : (
             <div className="p-4 border rounded-lg bg-muted/20 space-y-4 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold">Upload Document</h4>
-                <Button variant="ghost" size="sm" onClick={() => setShowUpload(false)}>
+                <h4 className="text-sm font-semibold">{replacesId ? 'Replace Rejected Document' : 'Upload Document'}</h4>
+                <Button variant="ghost" size="sm" onClick={() => { setShowUpload(false); setReplacesId(null); }}>
                   <X className="w-4 h-4" />
                 </Button>
               </div>

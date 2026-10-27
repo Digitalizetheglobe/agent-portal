@@ -208,10 +208,11 @@ export const agentAPI = {
   createAdmin: (data) => api.post('/agents/admin', data),
   update: (id, data) => api.put(`/agents/${id}`, data),
   delete: (id) => api.delete(`/agents/${id}`),
-  uploadVerificationDocument: (file, docType) => {
+  uploadVerificationDocument: (file, docType, replaces) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('docType', docType);
+    if (replaces) formData.append('replaces', replaces);
     return api.post('/agents/me/documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });

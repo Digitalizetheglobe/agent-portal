@@ -141,7 +141,7 @@ const DOC_ALIASES = {
  * With approvedOnly, a document only counts once staff approved it.
  */
 const missingRequiredDocs = (agentType, documents = [], { approvedOnly = false } = {}) => {
-  const docs = (Array.isArray(documents) ? documents : []).filter(d => !approvedOnly || d.status === 'approved');
+  const docs = (Array.isArray(documents) ? documents : []).filter(d => d.status !== 'rejected' && (!approvedOnly || d.status === 'approved'));
   if (agentType === 'company') {
     const companyAccepted = [
       'Company Profile',

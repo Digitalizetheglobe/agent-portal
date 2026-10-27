@@ -135,7 +135,7 @@ export const getDocChecklist = (agent) =>
 
 // Vijay rule (transcript [12:23]): Uploading ANY ONE of Company Profile, Business Reg, or Passport is sufficient
 export const hasSufficientDocs = (agent) => {
-  const docs = agent?.verificationDocuments || [];
+  const docs = (agent?.verificationDocuments || []).filter((d) => d.status !== 'rejected');
   if (agent?.agentType === 'individual') {
     return docs.some((d) => ['Passport', 'Identity'].includes(d.docType));
   }
@@ -153,9 +153,12 @@ export const HISTORY_LABELS = {
   'declaration-signed': 'Declaration signed',
   'contract-issued': 'Contract issued',
   'contract-renewal-issued': 'Contract renewal issued',
+  'contract-replaced': 'Contract replaced',
   'contract-signed': 'Signed contract uploaded',
+  'contract-signed-replaced': 'Signed contract replaced',
   'certificate-issued': 'E-Certificate issued, agent activated',
   'certificate-reissued': 'E-Certificate re-issued',
+  'certificate-replaced': 'E-Certificate replaced',
   'request-correction': 'Changes requested',
   approve: 'Application approved',
   reject: 'Application rejected',

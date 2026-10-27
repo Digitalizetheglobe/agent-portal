@@ -359,9 +359,9 @@ export const DataProvider = ({ children }) => {
     }
   };
 
-  const uploadVerificationDocument = async (file, docType) => {
+  const uploadVerificationDocument = async (file, docType, replaces) => {
     try {
-      const response = await agentAPI.uploadVerificationDocument(file, docType);
+      const response = await agentAPI.uploadVerificationDocument(file, docType, replaces);
       // Return updated user data
       return response.data;
     } catch (error) {

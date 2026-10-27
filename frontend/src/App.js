@@ -31,6 +31,7 @@ const AgentReportPage = lazy(() => import("./pages/admin/AgentReportPage"));
 const AgentDetailPage = lazy(() => import("./pages/admin/AgentDetailPage"));
 const UniversitiesPage = lazy(() => import("./pages/admin/UniversitiesPage"));
 const UniversityDetailsPage = lazy(() => import("./pages/admin/UniversityDetailsPage"));
+const ProgramDetailsPage = lazy(() => import("./pages/admin/ProgramDetailsPage"));
 const CoursesPage = lazy(() => import("./pages/admin/CoursesPage"));
 const ApplicationsPage = lazy(() => import("./pages/admin/ApplicationsPage"));
 const ApplicationDetailsPage = lazy(() => import("./pages/admin/ApplicationDetailsPage"));
@@ -74,6 +75,7 @@ function App() {
                   <Route path="universities" element={<UniversitiesPage />} />
                   <Route path="universities/:universityId" element={<UniversityDetailsPage />} />
                   <Route path="courses" element={<CoursesPage />} />
+                  <Route path="courses/:programId" element={<ProgramDetailsPage />} />
                   <Route path="invoices" element={<AdminInvoicesPage />} />
                   <Route path="payoffs" element={<AdminPayoffsPage />} />
                   {/* Verification now lives inside the Students page; keep old links working */}

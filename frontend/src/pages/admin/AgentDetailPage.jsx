@@ -219,7 +219,11 @@ const AgentDetailPage = () => {
     }
     try {
       await verifyAgent(agent.id, { documentId: doc.id || doc._id, documentStatus, remarks });
-      toast.success(`Document ${documentStatus}`, { description: doc.docType });
+      toast.success(`Document ${documentStatus}`, {
+        description: documentStatus === 'rejected'
+          ? `${doc.docType}. Use "Request changes" so the agent can upload a replacement.`
+          : doc.docType
+      });
     } catch {
       // error toast already shown
     }
@@ -323,72 +327,40 @@ const AgentDetailPage = () => {
       )}
 
       {/* ── Navigation Tabs: Students Inside Agents (Vijay requirement) ── */}
-      <div className="flex items-center gap-1.5 border-b border-[#E5E7EB] mb-6 overflow-x-auto">
-        <button
-          onClick={() => setTab('students')}
-          className={cn(
-            "flex items-center gap-2 py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
-            activeTab === 'students'
-              ? "border-[#0C447C] text-[#0C447C] bg-white rounded-t-lg"
-              : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
-          )}
-        >
-          <GraduationCap className="w-4 h-4" />
-          <span>Students</span>
-          <span className="px-1.5 py-0.5 text-[10px] font-mono rounded-full bg-slate-100 text-slate-700 font-semibold">
-            {agentStudents.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setTab('invoices')}
-          className={cn(
-            "flex items-center gap-2 py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
-            activeTab === 'invoices'
-              ? "border-[#0C447C] text-[#0C447C] bg-white rounded-t-lg"
-              : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
-          )}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Invoices</span>
-          <span className="px-1.5 py-0.5 text-[10px] font-mono rounded-full bg-slate-100 text-slate-700 font-semibold">
-            {agentInvoices.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setTab('visa')}
-          className={cn(
-            "flex items-center gap-2 py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
-            activeTab === 'visa'
-              ? "border-[#0C447C] text-[#0C447C] bg-white rounded-t-lg"
-              : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
-          )}
-        >
-          <Compass className="w-4 h-4" />
-          <span>Visa Tracking</span>
-          <span className="px-1.5 py-0.5 text-[10px] font-mono rounded-full bg-indigo-50 text-indigo-700 font-semibold">
-            {agentStudents.filter(isBeyondApplication).length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setTab('profile')}
-          className={cn(
-            "flex items-center gap-2 py-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
-            activeTab === 'profile'
-              ? "border-[#0C447C] text-[#0C447C] bg-white rounded-t-lg"
-              : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
-          )}
-        >
-          <UserCheck className="w-4 h-4" />
-          <span>Profile & Verification</span>
-          {docs.length > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-mono rounded-full bg-emerald-50 text-emerald-700 font-semibold">
-              {docs.length} docs
-            </span>
-          )}
-        </button>
+      <div className="flex items-center gap-1 border-b border-[#D1D5DB] mb-6 overflow-x-auto" role="tablist">
+        {[
+          { key: 'students', label: 'Students', Icon: GraduationCap, count: agentStudents.length },
+          { key: 'invoices', label: 'Invoices', Icon: FileText, count: agentInvoices.length },
+          { key: 'visa', label: 'Visa Tracking', Icon: Compass, count: agentStudents.filter(isBeyondApplication).length },
+          { key: 'profile', label: 'Profile & Verification', Icon: UserCheck, count: docs.length || null, suffix: ' docs' },
+        ].map(({ key, label, Icon, count, suffix = '' }) => {
+          const selected = activeTab === key;
+          return (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setTab(key)}
+              className={cn(
+                "flex items-center gap-2 py-3 px-4 -mb-px text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap",
+                selected
+                  ? "border-[#0C447C] text-[#0C447C] bg-[#E6F1FB] rounded-t-lg"
+                  : "border-transparent text-[#374151] hover:text-[#111827] hover:bg-[#F3F4F6] rounded-t-lg"
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{label}</span>
+              {count !== null && (
+                <span className={cn(
+                  "px-1.5 py-0.5 text-[11px] font-mono rounded-full font-semibold",
+                  selected ? "bg-[#0C447C] text-white" : "bg-[#E5E7EB] text-[#374151]"
+                )}>
+                  {count}{suffix}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── TAB 1: STUDENTS ── */}
@@ -836,11 +808,13 @@ const AgentDetailPage = () => {
                           </Button>
                         </div>
                       </div>
-                      {canReviewDocs && inReview && doc.status === 'pending' && (
+                      {canReviewDocs && inReview && doc.status !== 'rejected' && (
                         <div className="flex gap-2 mt-2">
-                          <Button variant="outline" size="sm" className="flex-1 h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => reviewDocument(doc, 'approved')}>
-                            <Check className="w-3.5 h-3.5 mr-1" /> Approve
-                          </Button>
+                          {doc.status === 'pending' && (
+                            <Button variant="outline" size="sm" className="flex-1 h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => reviewDocument(doc, 'approved')}>
+                              <Check className="w-3.5 h-3.5 mr-1" /> Approve
+                            </Button>
+                          )}
                           <Button variant="outline" size="sm" className="flex-1 h-7 text-xs border-red-200 text-red-600 hover:bg-red-50" onClick={() => reviewDocument(doc, 'rejected')}>
                             <X className="w-3.5 h-3.5 mr-1" /> Reject
                           </Button>

@@ -250,7 +250,8 @@ class ApplicationService {
       status,
       studentId,
       agentId,
-      universityId
+      universityId,
+      courseId
     } = query;
 
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -280,6 +281,7 @@ class ApplicationService {
 
     if (studentId) where.studentId = studentId;
     if (universityId) where.universityId = universityId;
+    if (courseId) where.courseId = courseId;
 
     // 3. Search filter
     if (search && search.trim()) {
