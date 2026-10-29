@@ -17,8 +17,8 @@ const StudentRegistrationModal = ({ open, onOpenChange }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[650px] p-0 overflow-y-auto border-none shadow-2xl">
-        <DialogHeader className="p-6 border-b border-gray-100 bg-white">
+      <DialogContent className="max-w-[640px] w-[95vw] p-0 gap-0 flex flex-col max-h-[90vh] overflow-hidden border-none shadow-2xl">
+        <DialogHeader className="px-8 py-6 border-b border-gray-100 bg-white shrink-0 space-y-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[#042C53]/5 flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-[#042C53]" />
@@ -30,7 +30,7 @@ const StudentRegistrationModal = ({ open, onOpenChange }) => {
           </div>
         </DialogHeader>
 
-        <div className="p-6 bg-[#F9FAFB] max-h-[75vh] overflow-y-auto custom-scrollbar">
+        <div className="px-8 py-7 bg-[#F9FAFB] flex-1 overflow-y-auto custom-scrollbar">
           <DynamicStudentForm onSuccess={handleSuccess} />
         </div>
       </DialogContent>

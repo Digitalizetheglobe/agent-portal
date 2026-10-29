@@ -4,7 +4,7 @@ const applicationService = require('./applicationService');
 const { scopeWhereToAgents } = require('../utils/agentScope');
 const { scopeWhereToUniversityAccess, assertCanAccessUniversity } = require('../utils/universityAccess');
 
-const { parseCommissionRate } = require('../utils/commission');
+const { parseCommissionRate, parseFixedAmount } = require('../utils/commission');
 const { parseFees } = require('../utils/universityContent');
 const { sequelize } = require('../config/db');
 const { notifyAgents } = require('../controllers/notificationController');
@@ -219,7 +219,10 @@ class UniversityService {
 
     // Needs attention: no commission rate yet (an invoice cannot be approved without it)
     if (commission === 'missing') {
-      where.commissionRate = null;
+      where[Op.or] = [
+        { commissionType: 'percentage', commissionRate: null },
+        { commissionType: 'fixed', commissionFixedAmount: null }
+      ];
     }
 
     // 4. Search filter across the university's information: name, code, location, contact, website,
@@ -291,7 +294,7 @@ class UniversityService {
     // Totals over the whole catalog (not just this page) for the cards at the top
     const everyUniversity = !withDetails ? [] : await University.findAll({
       where: scopeWhereToUniversityAccess({}, currentUser),
-      attributes: ['status', 'country', 'commissionRate'],
+      attributes: ['status', 'country', 'commissionRate', 'commissionType', 'commissionFixedAmount'],
       raw: true
     });
     const stats = !withDetails ? null : {
@@ -299,7 +302,7 @@ class UniversityService {
       active: everyUniversity.filter(u => u.status === 'active').length,
       inactive: everyUniversity.filter(u => u.status === 'inactive').length,
       countries: new Set(everyUniversity.map(u => (u.country || '').trim().toLowerCase()).filter(Boolean)).size,
-      missingCommission: everyUniversity.filter(u => u.status === 'active' && (u.commissionRate === null || u.commissionRate === undefined)).length
+      missingCommission: everyUniversity.filter(u => u.status === 'active' && (u.commissionType === 'fixed' ? u.commissionFixedAmount == null : u.commissionRate == null)).length
     };
 
     return {
@@ -361,12 +364,33 @@ class UniversityService {
       contactEmail,
       description,
       commissionRate,
+      commissionType,
+      commissionFixedAmount,
       fees
     } = updateData;
 
     // Fee structure: a new list replaces the old one
     if (fees !== undefined) {
       university.fees = parseFees(fees);
+    }
+
+    // How the commission is paid
+    if (commissionType !== undefined) {
+      if (!['percentage', 'fixed'].includes(commissionType)) {
+        const err = new Error("Commission type must be 'percentage' or 'fixed'");
+        err.statusCode = 400;
+        throw err;
+      }
+      university.commissionType = commissionType;
+    }
+    if (commissionFixedAmount !== undefined) {
+      const parsedFixed = parseFixedAmount(commissionFixedAmount);
+      if (parsedFixed.error) {
+        const err = new Error(parsedFixed.error);
+        err.statusCode = 400;
+        throw err;
+      }
+      university.commissionFixedAmount = parsedFixed.value;
     }
 
     // Commission percentage: null / empty clears it

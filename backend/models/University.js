@@ -60,6 +60,17 @@ const University = sequelize.define('University', {
     type: DataTypes.DECIMAL(5, 2),
     allowNull: true
   },
+  // How the commission is paid: 'percentage' (commissionRate of the tuition) or 'fixed'
+  // (commissionFixedAmount for each student, in the invoice currency)
+  commissionType: {
+    type: DataTypes.STRING(12),
+    allowNull: false,
+    defaultValue: 'percentage'
+  },
+  commissionFixedAmount: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true
+  },
   // Fee structure the student pays besides tuition: [{ id, label, amount, currency, note }]
   fees: {
     type: DataTypes.JSONB,
@@ -88,6 +99,9 @@ University.prototype.toJSON = function() {
   values._id = values.id;
   if (values.commissionRate !== null && values.commissionRate !== undefined) {
     values.commissionRate = parseFloat(values.commissionRate);
+  }
+  if (values.commissionFixedAmount !== null && values.commissionFixedAmount !== undefined) {
+    values.commissionFixedAmount = parseFloat(values.commissionFixedAmount);
   }
   return values;
 };

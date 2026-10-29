@@ -350,7 +350,7 @@ const AdminDashboard = () => {
         <div className="mb-2">
           <h1 className="text-2xl font-semibold text-[#111827] font-['Outfit'] tracking-tight">Operations Overview</h1>
           <p className="text-sm font-medium text-slate-500 mt-1">
-            {today.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {roleLabel} · {view.subtitle}
+            {today.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {roleLabel}{view.subtitle !== roleLabel ? ` · ${view.subtitle}` : ''}
           </p>
         </div>
 

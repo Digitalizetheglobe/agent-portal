@@ -338,7 +338,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
           return renderFormField({ ...field, type: 'course' });
         }
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -357,7 +357,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'email':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -376,7 +376,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'course':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                 {field.label} {field.required && <span className="text-red-500">*</span>}
@@ -432,7 +432,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'university':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                 {field.label} {field.required && <span className="text-red-500">*</span>}
@@ -479,7 +479,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'paragraph':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -498,7 +498,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'select':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -525,7 +525,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'country':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -543,7 +543,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'qualification':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -561,7 +561,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'phone':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -580,7 +580,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'radio':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -604,7 +604,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       case 'date':
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -639,7 +639,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
 
       default:
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="space-y-2">
             <Label htmlFor={field.id} className="text-xs font-bold text-gray-700 uppercase tracking-wider">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
@@ -658,10 +658,10 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" data-testid="dynamic-student-form">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" data-testid="dynamic-student-form">
       {/* If Admin, render Assigned Agent selector */}
       {isAdmin() && !isEditMode && (
-        <div className="space-y-1.5 pb-2 border-b border-gray-100">
+        <div className="space-y-2 pb-6 border-b border-gray-200">
           <Label htmlFor="agentId" className="text-xs font-bold text-gray-700 uppercase tracking-wider">
             Assigned Agent
           </Label>
@@ -686,25 +686,30 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
         .map(field => renderFormField(field))}
 
       {!isEditMode && (
-        <div className="space-y-2 pt-2 border-t border-gray-100">
-          <Label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Documents</Label>
-          {DOCUMENT_SLOTS.map(slot => (
-            <div key={slot.category} className="flex items-center justify-between gap-3">
-              <span className="text-sm text-gray-700 w-36 shrink-0">{slot.label}</span>
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                onChange={(e) => setFiles(prev => ({ ...prev, [slot.category]: e.target.files?.[0] || null }))}
-                className="text-xs w-full"
-              />
-            </div>
-          ))}
+        <div className="space-y-3 pt-2 border-t border-gray-200">
+          <div>
+            <Label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Documents</Label>
+            <p className="text-xs text-gray-500 mt-1">Optional now. PDF, JPG, PNG or Word, up to 10 MB each.</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white divide-y divide-gray-100">
+            {DOCUMENT_SLOTS.map(slot => (
+              <div key={slot.category} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3">
+                <span className="text-sm font-medium text-gray-800 sm:w-36 shrink-0">{slot.label}</span>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  onChange={(e) => setFiles(prev => ({ ...prev, [slot.category]: e.target.files?.[0] || null }))}
+                  className="text-xs text-gray-500 w-full min-w-0 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-[#042C53]/10 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#042C53] hover:file:bg-[#042C53]/20"
+                />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       <Button
         type="submit"
-        className="w-full bg-[#042C53] hover:bg-[#0C447C] h-11 text-sm font-bold mt-4 shadow-sm"
+        className="w-full bg-[#042C53] hover:bg-[#0C447C] h-12 text-sm font-bold shadow-sm"
         disabled={isSubmitting}
         data-testid="dynamic-student-submit-btn"
       >

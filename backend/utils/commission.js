@@ -17,6 +17,16 @@ const parseCommissionRate = (raw) => {
   return { value: round2(rate) };
 };
 
+// Parses an admin-supplied fixed commission (an amount paid for each student).
+const parseFixedAmount = (raw) => {
+  if (raw === undefined || raw === null || raw === '') return { value: null };
+  const amount = parseFloat(raw);
+  if (isNaN(amount) || !isFinite(amount) || amount <= 0 || amount > 99999999) {
+    return { error: 'Fixed commission must be an amount greater than 0' };
+  }
+  return { value: round2(amount) };
+};
+
 /**
  * Commission for a set of applications, using each application's university rate.
  * Returns { lines, total, tuitionTotal, blendedRate, missing }:
@@ -29,7 +39,7 @@ const computeCommission = async (applications, { transaction } = {}) => {
   const universities = universityIds.length
     ? await University.findAll({
       where: { id: { [Op.in]: universityIds } },
-      attributes: ['id', 'name', 'commissionRate'],
+      attributes: ['id', 'name', 'commissionRate', 'commissionType', 'commissionFixedAmount'],
       transaction
     })
     : [];
@@ -41,13 +51,26 @@ const computeCommission = async (applications, { transaction } = {}) => {
 
   const lines = applications.map((app) => {
     const university = byId.get(String(app.universityId));
-    const rate = university && university.commissionRate !== null && university.commissionRate !== undefined
+    const tuition = parseFloat(app.tuitionFee) || 0;
+    const isFixed = university && university.commissionType === 'fixed';
+    let rate = university && university.commissionRate !== null && university.commissionRate !== undefined
       ? parseFloat(university.commissionRate)
       : null;
-    const tuition = parseFloat(app.tuitionFee) || 0;
+    let gross = 0;
+    if (isFixed) {
+      // A fixed commission is the same amount for every student. The rate kept with it is the
+      // equivalent percentage of this student's tuition, so everything that reads a rate keeps working.
+      const fixed = parseFloat(university.commissionFixedAmount);
+      if (fixed > 0) {
+        gross = round2(fixed);
+        rate = tuition > 0 ? Math.min(999.99, Math.max(0.01, round2((gross / tuition) * 100))) : 0.01;
+      } else {
+        rate = null;
+      }
+    } else if (rate > 0) {
+      gross = round2(tuition * (rate / 100));
+    }
     if (!(rate > 0)) missing.add(university ? university.name : 'Unknown university');
-
-    const gross = rate > 0 ? round2(tuition * (rate / 100)) : 0;
     total += gross;
     tuitionTotal += tuition;
     return {
@@ -82,4 +105,4 @@ const assertRatesSet = (commission) => {
   }
 };
 
-module.exports = { parseCommissionRate, computeCommission, assertRatesSet, round2 };
+module.exports = { parseCommissionRate, parseFixedAmount, computeCommission, assertRatesSet, round2 };
