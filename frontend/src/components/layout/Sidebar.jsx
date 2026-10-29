@@ -16,6 +16,7 @@ import {
   BookOpen,
   FileCheck,
   CreditCard,
+  Percent,
   ScrollText
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -46,6 +47,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       title: 'Info', links: [
         { to: '/admin/universities', icon: Building2, label: 'Universities' },
         { to: '/admin/courses', icon: BookOpen, label: 'Programs' },
+        { to: '/admin/commission', icon: Percent, label: 'Commission' },
       ]
     },
     {
@@ -86,6 +88,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       title: 'Info', links: [
         { to: '/agent/universities', icon: Building2, label: 'Universities' },
         { to: '/agent/programs', icon: BookOpen, label: 'Programs' },
+        { to: '/agent/commission', icon: Percent, label: 'Commission' },
       ]
     },
     {

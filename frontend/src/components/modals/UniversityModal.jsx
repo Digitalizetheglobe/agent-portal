@@ -35,7 +35,6 @@ const initialFormState = {
   contactEmail: '',
   status: 'active',
   description: '',
-  commissionRate: '',
   fees: []
 };
 
@@ -62,7 +61,6 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
         contactEmail: university.contactEmail || '',
         status: university.status || 'active',
         description: university.description || '',
-        commissionRate: university.commissionRate != null ? String(university.commissionRate) : '',
         fees: Array.isArray(university.fees)
           ? university.fees.map((fee) => ({ id: fee.id, label: fee.label || '', amount: String(fee.amount ?? ''), currency: fee.currency || 'USD', note: fee.note || '' }))
           : []
@@ -116,13 +114,6 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
       }
     }
 
-    if (formData.commissionRate !== '') {
-      const rate = parseFloat(formData.commissionRate);
-      if (isNaN(rate) || rate <= 0 || rate > 100) {
-        newErrors.commissionRate = 'Commission must be a percentage above 0 and at most 100';
-      }
-    }
-
     formData.fees.forEach((fee, index) => {
       if (!fee.label.trim()) newErrors.fees = `Fee ${index + 1}: a name is required`;
       else if (fee.amount === '' || isNaN(parseFloat(fee.amount)) || parseFloat(fee.amount) < 0) newErrors.fees = `Fee ${index + 1} (${fee.label}): enter an amount, 0 or more`;
@@ -146,11 +137,8 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
         city: formData.city.trim() || null,
         website: formData.website.trim() || null,
         logoUrl: formData.logoUrl.trim() || null,
-        contactPerson: formData.contactPerson.trim() || null,
-        contactEmail: formData.contactEmail.trim() ? formData.contactEmail.trim().toLowerCase() : null,
         status: formData.status,
         description: formData.description.trim() || null,
-        commissionRate: formData.commissionRate === '' ? null : parseFloat(formData.commissionRate),
         fees: formData.fees.map((fee) => ({
           id: fee.id,
           label: fee.label.trim(),
@@ -328,51 +316,6 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
               </div>
             </div>
 
-            {/* Contact Details */}
-            <div className="pt-3 border-t border-gray-200">
-              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Contact Person</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-gray-700">Full Name</Label>
-                  <Input
-                    value={formData.contactPerson}
-                    onChange={(e) => handleChange('contactPerson', e.target.value)}
-                    placeholder="e.g. Dr. Jane Watson"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-gray-700">Email Address</Label>
-                  <Input
-                    type="email"
-                    value={formData.contactEmail}
-                    onChange={(e) => handleChange('contactEmail', e.target.value)}
-                    placeholder="admissions@university.edu"
-                    className={errors.contactEmail ? 'border-red-500' : ''}
-                  />
-                  {errors.contactEmail && <p className="text-[11px] text-red-500">{errors.contactEmail}</p>}
-                </div>
-              </div>
-            </div>
-
-            {/* Commission */}
-            <div className="pt-3 border-t border-gray-200 space-y-1.5">
-              <Label className="text-xs font-semibold text-gray-700">Agent Commission (%)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                value={formData.commissionRate}
-                onChange={(e) => handleChange('commissionRate', e.target.value)}
-                placeholder="e.g. 10"
-                className={errors.commissionRate ? 'border-red-500' : ''}
-              />
-              {errors.commissionRate && <p className="text-[11px] text-red-500">{errors.commissionRate}</p>}
-              <p className="text-[11px] text-gray-500">
-                Percentage of the tuition fee paid to the agent for each admission to this university.
-                Invoices cannot be raised for a university until this is set.
-              </p>
-            </div>
 
             {/* Fee structure */}
             <div className="pt-3 border-t border-gray-200 space-y-2">

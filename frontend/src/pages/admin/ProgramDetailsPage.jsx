@@ -19,7 +19,7 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { hasStaffRole } from '../../utils/staffRoles';
 import { courseAPI, applicationAPI, formatApiError } from '../../utils/api';
-import { readFee, earningsFor } from '../../utils/programFee';
+import { readFee } from '../../utils/programFee';
 import { cn } from '../../lib/utils';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -341,11 +341,6 @@ const ProgramDetailsPage = () => {
             <CardContent className="p-6 space-y-3">
               <p className="text-xs text-gray-500">Tuition (what the student pays)</p>
               <p className="text-3xl font-bold text-[#111827] font-['Outfit']">{fee ? fee.text : 'On request'}</p>
-              <p className="text-xs text-gray-500">
-                {universities.some((u) => u.commissionRate != null)
-                  ? 'Commission per university is shown on the Universities tab.'
-                  : 'Commission is set on each university.'}
-              </p>
             </CardContent>
           </Card>
         </div>
@@ -366,8 +361,6 @@ const ProgramDetailsPage = () => {
                   <TableRow className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                     <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">University</TableHead>
                     <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Location</TableHead>
-                    <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Commission</TableHead>
-                    <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-right">Agent earns per student</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -383,12 +376,6 @@ const ProgramDetailsPage = () => {
                         <span className="inline-flex items-center gap-1">
                           <MapPin size={12} className="text-gray-400" /> {[u.city, u.country].filter(Boolean).join(', ') || '-'}
                         </span>
-                      </TableCell>
-                      <TableCell className="px-6 py-3.5 text-xs font-semibold text-gray-800">
-                        {u.commissionRate != null ? `${u.commissionRate}%` : '-'}
-                      </TableCell>
-                      <TableCell className="px-6 py-3.5 text-right text-xs font-semibold text-[#27500A]">
-                        {earningsFor(fee, u.commissionRate) || '-'}
                       </TableCell>
                     </TableRow>
                   ))}

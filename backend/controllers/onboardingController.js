@@ -167,12 +167,17 @@ exports.registerWithInvite = async (req, res) => {
       return res.status(400).json({ success: false, detail: weakPassword });
     }
 
-    const errors = validateApplication(application, { mode: 'register' });
-    if (!declarationAccepted || declarationAccepted === 'false') {
-      errors.push('You must accept the declaration');
+    // Login first: the agent can create just the login (name, email, phone, password) and fill in the
+    // application afterwards, signed in. A full application sent with the registration is still checked.
+    const withApplication = Boolean(application.agentType);
+    const errors = withApplication ? validateApplication(application, { mode: 'register' }) : [];
+    if (withApplication) {
+      if (!declarationAccepted || declarationAccepted === 'false') {
+        errors.push('You must accept the declaration');
+      }
+      if (!declarationName || !String(declarationName).trim()) errors.push('Declaration signature name is required');
+      if (!declarationIdNumber || !String(declarationIdNumber).trim()) errors.push('Declaration ID number is required');
     }
-    if (!declarationName || !String(declarationName).trim()) errors.push('Declaration signature name is required');
-    if (!declarationIdNumber || !String(declarationIdNumber).trim()) errors.push('Declaration ID number is required');
     if (errors.length) {
       return res.status(400).json({ success: false, detail: errors.join('. ') });
     }
@@ -199,11 +204,14 @@ exports.registerWithInvite = async (req, res) => {
         isVerified: false,
         verificationStatus: 'pending',
         ...application,
-        declarationName: String(declarationName).trim(),
-        declarationIdNumber: String(declarationIdNumber).trim(),
-        declarationAcceptedAt: new Date(),
+        ...(withApplication ? {
+          declarationName: String(declarationName).trim(),
+          declarationIdNumber: String(declarationIdNumber).trim(),
+          declarationAcceptedAt: new Date()
+        } : {}),
         accountManagerId: invite.accountManagerId,
-        verificationDocuments: []
+        verificationDocuments: [],
+        onboardingHistory: [{ action: 'registered', byName: String(name).trim(), at: new Date() }]
       }, { transaction: t });
 
       invite.usedAt = new Date();

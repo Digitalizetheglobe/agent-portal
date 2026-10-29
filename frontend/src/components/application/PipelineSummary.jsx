@@ -2,9 +2,9 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { cn } from '../../lib/utils';
-import { DISPLAY_STAGE_INFO, getDisplayStage, isPipelineActive } from '../../utils/pipeline';
+import { DISPLAY_STAGE_INFO, PIPELINE_STAGES, getDisplayStage, isPipelineActive } from '../../utils/pipeline';
 
-const ORDER = ['Application', 'Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration', 'FeesPaid', 'Visa100'];
+const ORDER = PIPELINE_STAGES;
 
 /**
  * How many applications are in each visa pipeline stage. Each live application counts in exactly one
@@ -31,7 +31,7 @@ const PipelineSummary = ({ applications = [], to }) => {
         </div>
       </CardHeader>
       <CardContent className="px-6 pb-6 pt-0">
-        <ul className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-3">
+        <ul className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
           {ORDER.map((key) => (
             <li key={key} className="rounded-lg border border-[#E5E7EB] p-3 text-center">
               <p className="text-2xl font-semibold text-[#111827] tabular-nums">{counts[key]}</p>

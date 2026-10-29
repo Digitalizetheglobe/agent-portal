@@ -344,8 +344,8 @@ const startServer = async () => {
       console.log(`✅ Chat channels: ${meta.rowCount || 0} older message(s) of agents without an Account Manager moved to General Support`);
     }
 
-    // New visa pipeline stages (Medical Examination, Fees Paid). The type does not exist yet on a fresh database.
-    for (const value of ['Medical', 'FeesPaid']) {
+    // New visa pipeline stages. The type does not exist yet on a fresh database.
+    for (const value of ['Medical', 'FeesPaid', 'Eligibility', 'OfferLetter', 'Payment', 'Visa5', 'Visa80', 'VisaApproval', 'SEV', 'Departure']) {
       try {
         await sequelize.query(`ALTER TYPE "enum_Applications_pipelineStage" ADD VALUE IF NOT EXISTS '${value}'`);
       } catch (e) { /* fresh database: sync creates the type with every value */ }
@@ -376,7 +376,8 @@ const startServer = async () => {
         arrivalFlightNumber: DataTypes.STRING,
         arrivalTime: DataTypes.STRING,
         arrivalAirport: DataTypes.STRING,
-        arrivalTicket: DataTypes.JSONB
+        arrivalTicket: DataTypes.JSONB,
+        arrivalServices: DataTypes.JSONB
       })) {
         if (!applicationColumns[name]) {
           await qi.addColumn('Applications', name, { type, allowNull: true });
@@ -394,6 +395,16 @@ const startServer = async () => {
       if (!columns.allowedUniversityIds) {
         await qi.addColumn('Users', 'allowedUniversityIds', { type: DataTypes.JSONB, allowNull: false, defaultValue: [] });
         console.log('✅ Added Users.allowedUniversityIds');
+      }
+      for (const name of ['firstLoginAt', 'lastLoginAt']) {
+        if (!columns[name]) {
+          await qi.addColumn('Users', name, { type: DataTypes.DATE, allowNull: true });
+          console.log(`✅ Added Users.${name}`);
+        }
+      }
+      if (!columns.bankIban) {
+        await qi.addColumn('Users', 'bankIban', { type: DataTypes.STRING, allowNull: true });
+        console.log('✅ Added Users.bankIban');
       }
       if (!columns.country) {
         await qi.addColumn('Users', 'country', { type: DataTypes.STRING, allowNull: true });

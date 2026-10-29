@@ -62,6 +62,8 @@ const StudentsPage = () => {
   // Which agent registered the student ('all' = everyone); ?agent=<id> pre-selects it
   const [agentFilter, setAgentFilter] = useState(searchParams.get('agent') || 'all');
   const [countryFilter, setCountryFilter] = useState('all');
+  // 'newest' keeps the order from the server; the others sort the master list
+  const [sortMode, setSortMode] = useState('newest');
   const [universityFilter, setUniversityFilter] = useState('all');
   const [docFilter, setDocFilter] = useState('all');
   const [verificationFilter, setVerificationFilter] = useState('all');
@@ -262,9 +264,16 @@ const StudentsPage = () => {
       .sort((x, y) => x.label.localeCompare(y.label));
   }, [students, agents]);
 
+  const getAgentName = (agentId) => {
+    if (!agentId) return 'Admin / Direct';
+    if (typeof agentId === 'object' && agentId !== null) return agentId.name || 'Admin';
+    const agent = agents.find(a => a.id === agentId || a._id === agentId);
+    return agent?.name || 'Unknown Agent';
+  };
+
   // Derived Data & Filtering
   const baseFilteredStudents = useMemo(() => {
-    return students.filter(s => {
+    const matches = students.filter(s => {
       if (agentFilter === 'direct' && getAgentIdOf(s)) return false;
       if (agentFilter !== 'all' && agentFilter !== 'direct' && String(getAgentIdOf(s)) !== String(agentFilter)) return false;
       const name = getStudentName(s).toLowerCase();
@@ -286,7 +295,15 @@ const StudentsPage = () => {
 
       return true;
     });
-  }, [students, agentFilter, searchQuery, countryFilter, universityFilter, docFilter, verificationFilter, getDocStatus, getUniversityName]);
+    if (sortMode === 'newest') return matches;
+    const keyOf = {
+      name: (s) => getStudentName(s),
+      agent: (s) => getAgentName(s.agentId),
+      country: (s) => s.country || (s.customFields || {}).country || '',
+    }[sortMode];
+    return [...matches].sort((a, b) => String(keyOf(a)).localeCompare(String(keyOf(b)), undefined, { sensitivity: 'base' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, agentFilter, searchQuery, countryFilter, universityFilter, docFilter, verificationFilter, sortMode, getDocStatus, getUniversityName]);
 
   const filteredStudents = baseFilteredStudents;
 
@@ -351,13 +368,6 @@ const StudentsPage = () => {
     if (cf[key]) return cf[key];
 
     return 'N/A';
-  };
-
-  const getAgentName = (agentId) => {
-    if (!agentId) return 'Admin / Direct';
-    if (typeof agentId === 'object' && agentId !== null) return agentId.name || 'Admin';
-    const agent = agents.find(a => a.id === agentId || a._id === agentId);
-    return agent?.name || 'Unknown Agent';
   };
 
   const getInitials = (name) => {
@@ -527,6 +537,17 @@ const StudentsPage = () => {
               {universities?.map(u => (
                 <option key={u.id || u._id} value={u.id || u._id}>{u.name}</option>
               ))}
+            </select>
+            <select
+              className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[130px] flex-1 sm:flex-none outline-none"
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value)}
+              aria-label="Sort students"
+            >
+              <option value="newest">Newest first</option>
+              <option value="name">Name A-Z</option>
+              <option value="agent">Agent A-Z</option>
+              <option value="country">Country A-Z</option>
             </select>
             <select
               className="text-xs font-semibold px-3 py-2 rounded-lg border border-[#D1D5DB] bg-white min-w-[130px] flex-1 sm:flex-none outline-none"

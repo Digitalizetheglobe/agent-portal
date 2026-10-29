@@ -3,18 +3,21 @@
 //   waiting for the university to pay QStudy and for Accounts to pay the agent) -> Paid & Recorded.
 // Every invoice is in exactly one stage, so moving one on lowers one count and raises the next.
 
-export const INVOICE_STAGES = ['Submitted', 'Processing', 'Paid', 'Rejected'];
+export const INVOICE_STAGES = ['Submitted', 'Processing', 'UniversityPaid', 'Paid', 'Amendment'];
 
 export const INVOICE_STAGE_INFO = {
-  Submitted: { label: 'Submitted', style: 'bg-[#E6F1FB] text-[#0C447C]' },
-  Processing: { label: 'Processing', style: 'bg-[#FAEEDA] text-[#633806]' },
-  Paid: { label: 'Paid & Recorded', style: 'bg-[#EAF3DE] text-[#27500A]' },
-  Rejected: { label: 'Rejected', style: 'bg-[#FCEBEB] text-[#791F1F]' },
+  Submitted: { label: 'Invoice submitted', style: 'bg-[#E6F1FB] text-[#0C447C]' },
+  Processing: { label: 'Invoice processing', style: 'bg-[#FAEEDA] text-[#633806]' },
+  UniversityPaid: { label: 'University payment received', style: 'bg-[#EEEDFE] text-[#3C3489]' },
+  Paid: { label: 'Invoice paid', style: 'bg-[#EAF3DE] text-[#27500A]' },
+  Amendment: { label: 'Needs amendment', style: 'bg-[#FAEEDA] text-[#633806]' },
 };
 
-export const getInvoiceStage = (invoice) => {
+// `payoff` is the invoice's payoff, when known: university payment received is read from it
+export const getInvoiceStage = (invoice, payoff) => {
   if (invoice?.status === 'Paid') return 'Paid';
-  if (invoice?.financeReviewStatus === 'Rejected' || invoice?.status === 'Rejected') return 'Rejected';
+  if (['Rejected', 'CorrectionRequired'].includes(invoice?.financeReviewStatus) || invoice?.status === 'Rejected') return 'Amendment';
+  if (invoice?.financeReviewStatus === 'Approved' && payoff?.universityPaid) return 'UniversityPaid';
   if (invoice?.financeReviewStatus === 'Approved') return 'Processing';
   return 'Submitted';
 };

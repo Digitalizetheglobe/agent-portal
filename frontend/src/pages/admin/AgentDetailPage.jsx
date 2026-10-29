@@ -55,6 +55,7 @@ import {
 } from '../../utils/studentProgress';
 import {
   PIPELINE_STAGES,
+  IN_VISA_STAGES,
   PIPELINE_STAGE_LABELS,
   PIPELINE_STAGE_HEADINGS,
   DISPLAY_STAGE_INFO
@@ -376,9 +377,9 @@ const AgentDetailPage = () => {
             <div className="bg-white rounded-xl p-4 border border-[#E5E7EB] shadow-sm">
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">In Visa Process</p>
               <p className="text-2xl font-bold text-[#534AB7] mt-1 font-['Outfit']">
-                {agentStudents.filter(s => ['Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration'].includes(s.pipelineStage)).length}
+                {agentStudents.filter(s => IN_VISA_STAGES.includes(s.pipelineStage)).length}
               </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">15% through Registration</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Eligibility through Registration</p>
             </div>
             <div className="bg-white rounded-xl p-4 border border-[#E5E7EB] shadow-sm">
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Fees Paid</p>
@@ -642,7 +643,7 @@ const AgentDetailPage = () => {
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
               EMGS Visa Progression Funnel (Vijay Sequential Stages)
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
               {PIPELINE_STAGES.map((stage, idx) => {
                 const count = visaCounts[stage] || 0;
                 const isSelected = visaStageFilter === stage;
@@ -854,6 +855,11 @@ const AgentDetailPage = () => {
             {(agent.onboardingHistory || []).length > 0 && (
               <Card className="border-[#E5E7EB] shadow-none overflow-hidden bg-white">
                 <SectionHeader title="Review Trail" />
+                <div className="px-4 pt-3 text-[11px] text-[#6B7280] space-y-0.5">
+                  <p>Account created: {agent.createdAt ? new Date(agent.createdAt).toLocaleString() : '-'}</p>
+                  <p>First login: {agent.firstLoginAt ? new Date(agent.firstLoginAt).toLocaleString() : '-'}</p>
+                  <p>Last login: {agent.lastLoginAt ? new Date(agent.lastLoginAt).toLocaleString() : '-'}</p>
+                </div>
                 <ol className="divide-y divide-[#F3F4F6] px-4">
                   {[...agent.onboardingHistory].reverse().map((h, i) => (
                     <li key={i} className="py-2.5 text-xs">

@@ -18,3 +18,10 @@ root.render(
     <App />
   </React.StrictMode>,
 );
+
+// Make the portal installable. Only in the production build, so development stays uncached.
+if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+  });
+}

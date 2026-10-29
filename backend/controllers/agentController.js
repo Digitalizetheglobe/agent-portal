@@ -488,6 +488,12 @@ exports.uploadVerificationDocument = async (req, res) => {
     });
 
     user.verificationDocuments = docs;
+    if (user.role === 'agent') {
+      user.onboardingHistory = [
+        ...(Array.isArray(user.onboardingHistory) ? user.onboardingHistory : []),
+        { action: 'document-uploaded', by: user.id, byName: user.name, remarks: `${docType || 'Other'}: ${req.file.originalname}`, at: new Date() }
+      ];
+    }
     await user.save();
 
     res.status(200).json(user.toJSON());

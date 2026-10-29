@@ -60,6 +60,10 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Keep the login dates as proof of when the agent first and last signed in
+    const now = new Date();
+    await user.update({ lastLoginAt: now, firstLoginAt: user.firstLoginAt || now }, { fields: ['lastLoginAt', 'firstLoginAt'] });
+
     // Generate tokens
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);

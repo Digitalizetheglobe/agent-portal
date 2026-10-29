@@ -123,8 +123,9 @@ const StudentDetailsPage = () => {
   const requiredDocs = useMemo(() => {
     const DEFAULT_DOC_CATEGORIES = [
       { label: 'Passport', value: 'Passport', mandatory: false },
-      { label: 'Academic Transcripts', value: 'Transcript', mandatory: false },
-      { label: 'Language Test', value: 'LanguageTest', mandatory: false }
+      { label: 'Photo', value: 'Photo', mandatory: false },
+      { label: 'Results', value: 'Results', mandatory: false },
+      { label: 'Other documents', value: 'Other', mandatory: false }
     ];
     return DEFAULT_DOC_CATEGORIES;
   }, []);

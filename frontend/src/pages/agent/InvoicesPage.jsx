@@ -162,31 +162,32 @@ const InvoicesPage = () => {
   const getStage = (inv) => {
     const review = inv.financeReviewStatus || 'PendingReview';
     const payoff = payoffFor(inv);
-    if (review === 'CorrectionRequired') {
-      return { key: 'action', label: 'Needs your action', hint: 'Finance asked for a change', tone: 'bg-amber-50 text-amber-800 border-amber-300' };
-    }
-    if (review === 'Rejected') {
-      return { key: 'rejected', label: 'Rejected', hint: 'No commission will be paid', tone: 'bg-red-50 text-red-700 border-red-200' };
+    // A problem invoice is never "rejected" to the agent: it needs an amendment, with a note
+    if (review === 'CorrectionRequired' || review === 'Rejected') {
+      return { key: 'amendment', label: 'Needs amendment', hint: 'See the note from Finance', tone: 'bg-amber-50 text-amber-800 border-amber-300' };
     }
     if (review === 'Approved') {
       if (payoff?.status === 'SETTLED') {
-        return { key: 'paid', label: 'Paid', hint: payoff.settledAt ? `Paid on ${formatFinancialDate(payoff.settledAt)}` : 'Money sent to you', tone: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+        return { key: 'paid', label: 'Invoice paid', hint: payoff.settledAt ? `Paid on ${formatFinancialDate(payoff.settledAt)}` : 'Money sent to you', tone: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
       }
-      return { key: 'approved', label: 'Approved', hint: 'Waiting for bank payment', tone: 'bg-blue-50 text-blue-800 border-blue-200' };
+      if (payoff?.universityPaid) {
+        return { key: 'university', label: 'University payment received', hint: 'Your commission is being paid', tone: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
+      }
+      return { key: 'processing', label: 'Invoice processing', hint: 'Waiting for the university payment', tone: 'bg-blue-50 text-blue-800 border-blue-200' };
     }
-    return { key: 'review', label: 'In review', hint: 'Finance is checking it', tone: 'bg-gray-50 text-gray-700 border-gray-200' };
+    return { key: 'submitted', label: 'Invoice submitted', hint: 'Received by QStudy', tone: 'bg-gray-50 text-gray-700 border-gray-200' };
   };
 
   const FILTERS = [
     { key: 'all', label: 'All' },
-    { key: 'action', label: 'Needs your action' },
-    { key: 'review', label: 'In review' },
-    { key: 'approved', label: 'Approved' },
-    { key: 'paid', label: 'Paid' },
-    { key: 'rejected', label: 'Rejected' },
+    { key: 'submitted', label: 'Invoice submitted' },
+    { key: 'processing', label: 'Invoice processing' },
+    { key: 'university', label: 'University payment received' },
+    { key: 'paid', label: 'Invoice paid' },
+    { key: 'amendment', label: 'Needs amendment' },
   ];
   const stageCounts = useMemo(() => {
-    const counts = { all: invoices.length, action: 0, review: 0, approved: 0, paid: 0, rejected: 0 };
+    const counts = { all: invoices.length, submitted: 0, processing: 0, university: 0, paid: 0, amendment: 0 };
     invoices.forEach((inv) => { counts[getStage(inv).key] += 1; });
     return counts;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,10 +196,10 @@ const InvoicesPage = () => {
   const visibleInvoices = filteredInvoices.filter((inv) => filter === 'all' || getStage(inv).key === filter);
 
   const summaryCards = [
-    { filter: 'action', title: 'Needs your action', value: stageCounts.action, hint: stageCounts.action ? 'Finance is waiting for your reply' : 'Nothing to do', tone: stageCounts.action ? 'border-amber-300 bg-amber-50' : 'border-[#E5E7EB] bg-white', valueTone: stageCounts.action ? 'text-amber-800' : 'text-[#111827]' },
-    { filter: 'review', title: 'Being reviewed', value: stageCounts.review, hint: 'Finance is checking these', tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#111827]' },
-    { filter: 'approved', title: 'Waiting for payment', value: formatCurrency(stats.pendingPayoutAmount), hint: `${stats.pendingPayoutCount} approved, bank transfer pending`, tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#0C447C]' },
-    { filter: 'paid', title: 'Paid to you', value: formatCurrency(stats.settledPayoutAmount), hint: `${stats.settledPayoutCount} paid by bank transfer`, tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#27500A]' },
+    { filter: 'amendment', title: 'Needs amendment', value: stageCounts.amendment, hint: stageCounts.amendment ? 'Finance left a note for you' : 'Nothing to amend', tone: stageCounts.amendment ? 'border-amber-300 bg-amber-50' : 'border-[#E5E7EB] bg-white', valueTone: stageCounts.amendment ? 'text-amber-800' : 'text-[#111827]' },
+    { filter: 'submitted', title: 'Invoice submitted', value: stageCounts.submitted, hint: 'Received by QStudy', tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#111827]' },
+    { filter: 'processing', title: 'Invoice processing', value: stageCounts.processing + stageCounts.university, hint: `${stageCounts.university} with university payment received`, tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#0C447C]' },
+    { filter: 'paid', title: 'Invoice paid', value: formatCurrency(stats.settledPayoutAmount), hint: `${stats.settledPayoutCount} paid by bank transfer`, tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#27500A]' },
   ];
 
   const InvoiceList = ({ list }) => (
@@ -365,7 +366,7 @@ const InvoicesPage = () => {
               Approved: ['bg-emerald-50 border-emerald-200 text-emerald-900', payoff?.status === 'SETTLED'
                 ? `Approved and paid. ${money(payoff.netAmount ?? payoff.grossCommission)} was transferred to you.`
                 : 'Approved by Finance. Your commission will be paid by bank transfer, and you can follow it on the Payoffs page.'],
-              Rejected: ['bg-red-50 border-red-200 text-red-900', 'Finance rejected this invoice. No commission will be paid for it. The reason is below.']
+              Rejected: ['bg-amber-50 border-amber-300 text-amber-950', 'This invoice needs an amendment. Read the note from Finance below.']
             };
             const [tone, summary] = summaries[review] || summaries.PendingReview;
             const studentNames = getStudentNames(inv);
@@ -517,8 +518,8 @@ const InvoicesPage = () => {
                   {/* Rejection reason */}
                   {review === 'Rejected' && (
                     <div>
-                      <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Reason for rejection</h3>
-                      <div className="rounded-xl border border-red-200 bg-red-50/40 px-4 py-3 text-xs text-gray-800 space-y-1">
+                      <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Note from Finance</h3>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3 text-xs text-gray-800 space-y-1">
                         <p className="font-medium">{inv.financeRejectionReason || 'The invoice did not meet the requirements.'}</p>
                         {inv.financeReviewNotes && <p className="text-gray-600">{inv.financeReviewNotes}</p>}
                       </div>

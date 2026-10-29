@@ -7,14 +7,13 @@ import {
   GraduationCap,
   Clock,
   MapPin,
-  Percent,
   CheckCircle2,
   AlertCircle,
   ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { courseAPI, formatApiError } from '../../utils/api';
-import { readFee, earningsFor } from '../../utils/programFee';
+import { readFee } from '../../utils/programFee';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -92,7 +91,6 @@ const AgentProgramDetailPage = () => {
   const universities = program?.universities || [];
   const selectedUniversity = universities.find((u) => u.id === universityId) || null;
   const fee = useMemo(() => readFee(program?.tuitionFee), [program]);
-  const earn = earningsFor(fee, selectedUniversity?.commissionRate);
   const { about, requirements, awardingBody } = useMemo(() => splitDescription(program?.description), [program]);
 
   const back = (
@@ -230,17 +228,6 @@ const AgentProgramDetailPage = () => {
                 <p className="text-xs text-gray-500">Tuition</p>
                 <p className="text-3xl font-bold text-[#111827] font-['Outfit'] mt-1">{fee ? fee.text : 'On request'}</p>
               </div>
-
-              {earn ? (
-                <div className="flex items-center justify-between rounded-xl bg-[#EAF3DE] px-4 py-3">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-[#27500A]"><Percent size={14} /> You earn</span>
-                  <span className="text-lg font-bold text-[#27500A]">{earn}</span>
-                </div>
-              ) : (
-                <p className="text-xs text-gray-500 rounded-xl bg-[#F9FAFB] px-4 py-3">
-                  {fee?.amount === null && fee ? 'The price is a range, so the commission is worked out when you apply.' : 'Your commission is shown once the university and price are known.'}
-                </p>
-              )}
 
               {universities.length > 1 && (
                 <div className="space-y-1.5">

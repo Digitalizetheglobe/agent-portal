@@ -13,8 +13,8 @@ const { createNotification } = require('../controllers/notificationController');
 // The Head of Admission (and super admin) moves a student through the visa pipeline and checks the
 // proof of fee payment. Agents upload the proof and watch the progress.
 //
-//   Application -> Visa 15% -> Visa 35% -> Visa 70% -> Arrival -> Medical Examination
-//   -> Registration -> Fees Paid -> Visa 100%
+//   Application -> Eligibility -> Offer Letter -> Payment -> Visa 5% -> 15% -> 35% -> 70% -> 80% -> Visa Approval (EVAL)
+//   -> SEV -> Departure Briefing -> Arrival -> Health Check -> University Registration -> Tuition Fees Payment -> Visa 100%
 //   at Registration: agent uploads proof -> Head of Admission accepts or rejects it
 //   Fees Paid needs the proof accepted; Visa 100% (final endorsement) unlocks the commission invoice
 
@@ -74,7 +74,7 @@ class VisaPipelineService {
   /**
    * Move an application one stage forward, or one stage back (with a reason).
    */
-  async updateStage(id, { stage, remarks, arrivalPerson, arrivalDate, arrivalFlightNumber, arrivalTime, arrivalAirport } = {}, currentUser) {
+  async updateStage(id, { stage, remarks, arrivalPerson, arrivalDate, arrivalFlightNumber, arrivalTime, arrivalAirport, arrivalServices } = {}, currentUser) {
     requireHeadOfAdmission(currentUser);
 
     if (!STAGES.includes(stage)) {
@@ -129,6 +129,13 @@ class VisaPipelineService {
       application.arrivalFlightNumber = flightNumber;
       application.arrivalAirport = airport;
       application.arrivalTime = time || null;
+      if (arrivalServices && typeof arrivalServices === 'object') {
+        application.arrivalServices = {
+          airportPickup: Boolean(arrivalServices.airportPickup),
+          transportation: Boolean(arrivalServices.transportation),
+          accommodation: Boolean(arrivalServices.accommodation)
+        };
+      }
     }
 
     // Fees Paid is only reached once the Head of Admission has accepted the proof of payment

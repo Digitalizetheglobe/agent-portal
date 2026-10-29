@@ -13,7 +13,6 @@ import {
   FileText,
   Award,
   Megaphone,
-  Percent,
   LayoutGrid,
   List,
   ArrowUpRight
@@ -149,7 +148,7 @@ const AgentUniversitiesPage = () => {
             Partner Universities
           </h1>
           <p className="text-xs text-gray-500 mt-1 font-medium">
-            Pick where to send your student. See the programs, what you earn and the brochures, then apply.
+            Pick where to send your student. See the programs and the brochures, then apply.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-600">
@@ -258,7 +257,6 @@ const AgentUniversitiesPage = () => {
                 <TableHead className="text-[10px] text-[#6B7280] font-bold px-5 py-3 uppercase tracking-wider whitespace-nowrap">University</TableHead>
                 <TableHead className="text-[10px] text-[#6B7280] font-bold px-5 py-3 uppercase tracking-wider whitespace-nowrap">Location</TableHead>
                 <TableHead className="text-[10px] text-[#6B7280] font-bold px-5 py-3 uppercase tracking-wider text-center whitespace-nowrap">Programs</TableHead>
-                <TableHead className="text-[10px] text-[#6B7280] font-bold px-5 py-3 uppercase tracking-wider text-center whitespace-nowrap">You earn</TableHead>
                 <TableHead className="text-[10px] text-[#6B7280] font-bold px-5 py-3 uppercase tracking-wider text-center whitespace-nowrap">Brochures</TableHead>
                 <TableHead className="text-[10px] text-[#6B7280] font-bold px-5 py-3 uppercase tracking-wider whitespace-nowrap">Good to know</TableHead>
                 <TableHead className="text-[10px] text-[#6B7280] font-bold px-5 py-3 uppercase tracking-wider text-right whitespace-nowrap">Action</TableHead>
@@ -288,9 +286,6 @@ const AgentUniversitiesPage = () => {
                     </span>
                   </TableCell>
                   <TableCell className="px-5 py-3 text-center text-sm font-bold text-[#042C53] tabular-nums">{uni.programCount ?? 0}</TableCell>
-                  <TableCell className="px-5 py-3 text-center text-sm font-bold tabular-nums whitespace-nowrap">
-                    {uni.commissionRate != null ? <span className="text-[#27500A]">{uni.commissionRate}%</span> : <span className="text-gray-300">—</span>}
-                  </TableCell>
                   <TableCell className="px-5 py-3 text-center text-sm font-semibold text-gray-700 tabular-nums">{(uni.brochures || []).length}</TableCell>
                   <TableCell className="px-5 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
@@ -339,7 +334,6 @@ const AgentUniversitiesPage = () => {
               { label: uni.city || uni.country, icon: MapPin },
               { label: uni.code ? `Code: ${uni.code}` : uni.country, icon: Building2 },
               { label: `${uni.programCount ?? 0} ${uni.programCount === 1 ? 'program' : 'programs'}`, icon: GraduationCap },
-              { label: uni.commissionRate != null ? `You earn ${uni.commissionRate}%` : 'Rate on request', icon: Percent, tone: uni.commissionRate != null ? 'good' : 'muted' },
               { label: `${brochureCount} ${brochureCount === 1 ? 'brochure' : 'brochures'}`, icon: FileText },
               { label: uni.scholarshipCount > 0 ? `${uni.scholarshipCount} ${uni.scholarshipCount === 1 ? 'scholarship' : 'scholarships'}` : `${newsCount > 0 ? newsCount : 0} news`, icon: uni.scholarshipCount > 0 ? Award : Megaphone, tone: uni.scholarshipCount > 0 ? 'good' : undefined },
             ];

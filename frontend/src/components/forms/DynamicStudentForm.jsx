@@ -37,16 +37,24 @@ import { isCountryMatch } from '../../lib/countries';
 const DEFAULT_FORM_FIELDS = [
   { id: 'name', label: 'Full Name', type: 'text', required: true, order: 1, placeholder: 'e.g. John Doe' },
   { id: 'email', label: 'Email Address', type: 'email', required: true, order: 2, placeholder: 'e.g. john@example.com' },
-  { id: 'phone', label: 'Phone Number', type: 'phone', required: false, order: 3, placeholder: '+1 234 567 8900' },
-  { id: 'country', label: 'Country of Interest', type: 'country', required: false, order: 4 },
-  { id: 'universityId', label: 'Target University', type: 'university', required: true, order: 5 },
-  { id: 'courseInterested', label: 'Target Course', type: 'course', required: false, order: 6 },
-  { id: 'education', label: 'Highest Qualification', type: 'qualification', required: false, order: 7 },
+  { id: 'phone', label: 'Phone Number', type: 'phone', required: true, order: 3, placeholder: '+1 234 567 8900' },
+  { id: 'universityId', label: 'University', type: 'university', required: true, order: 5 },
+  { id: 'courseInterested', label: 'Course', type: 'course', required: true, order: 6 },
+  { id: 'education', label: 'Highest Qualification', type: 'qualification', required: true, order: 7 },
   { id: 'notes', label: 'Internal Notes', type: 'paragraph', required: false, order: 8, placeholder: 'Any background notes or remarks...' }
 ];
 
+// Only these four documents are uploaded at registration. Only confirmed applications are registered.
+const DOCUMENT_SLOTS = [
+  { category: 'Passport', label: 'Passport' },
+  { category: 'Photo', label: 'Photo' },
+  { category: 'Results', label: 'Results' },
+  { category: 'Other', label: 'Other documents' },
+];
+
 const DynamicStudentForm = ({ studentData, onSuccess }) => {
-  const { addStudent, updateStudent, agents, universities, fetchUniversities, courses, fetchCourses } = useData();
+  const [files, setFiles] = useState({});
+  const { addStudent, updateStudent, uploadStudentDocument, agents, universities, fetchUniversities, courses, fetchCourses } = useData();
   const { user, isAdmin } = useAuth();
   const [formSchema, setFormSchema] = useState(null);
   const isEditMode = !!studentData;
@@ -104,7 +112,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
           break;
         case 'date':
           fieldSchema = field.required
-            ? z.date({ required_error: `${field.label} is required` })
+            ? z.date({ error: `${field.label} is required` })
             : z.date().optional();
           break;
         case 'paragraph':
@@ -292,8 +300,23 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
         await updateStudent(studentData.id || studentData._id, studentPayload);
         toast.success('Student updated successfully');
       } else {
-        await addStudent(studentPayload);
+        studentPayload.country = 'Malaysia';
+        const created = await addStudent(studentPayload);
+        const newId = created?.id || created?._id || created?.student?.id;
+        const picked = DOCUMENT_SLOTS.filter(slot => files[slot.category]);
+        const failed = [];
+        if (newId) {
+          for (const slot of picked) {
+            try {
+              await uploadStudentDocument(newId, files[slot.category], slot.category);
+            } catch (_) {
+              failed.push(slot.label);
+            }
+          }
+        }
         toast.success('Student registered successfully');
+        if (failed.length) toast.error(`Could not upload: ${failed.join(', ')}`, { description: 'Upload them from the student page.' });
+        setFiles({});
       }
 
       if (onSuccess) {
@@ -661,6 +684,23 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
       {activeFields
         .sort((a, b) => (a.order || 0) - (b.order || 0))
         .map(field => renderFormField(field))}
+
+      {!isEditMode && (
+        <div className="space-y-2 pt-2 border-t border-gray-100">
+          <Label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Documents</Label>
+          {DOCUMENT_SLOTS.map(slot => (
+            <div key={slot.category} className="flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-700 w-36 shrink-0">{slot.label}</span>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={(e) => setFiles(prev => ({ ...prev, [slot.category]: e.target.files?.[0] || null }))}
+                className="text-xs w-full"
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       <Button
         type="submit"

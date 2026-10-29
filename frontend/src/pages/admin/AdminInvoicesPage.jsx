@@ -122,7 +122,7 @@ const AdminInvoicesPage = () => {
       return { key: 'rejected', label: 'Rejected', hint: 'No commission payable', tone: 'bg-red-50 text-red-700 border-red-200' };
     }
     if (review === 'CorrectionRequired') {
-      return { key: 'correction', label: 'Waiting for agent', hint: 'Agent must fix and resubmit', tone: 'bg-amber-50 text-amber-800 border-amber-300' };
+      return { key: 'correction', label: 'Needs amendment', hint: 'Agent must amend and resubmit', tone: 'bg-amber-50 text-amber-800 border-amber-300' };
     }
     if (review === 'UnderReview') {
       return { key: 'under', label: 'Under review', hint: 'Audit in progress', tone: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
@@ -163,7 +163,7 @@ const AdminInvoicesPage = () => {
     { key: 'all', label: 'All', count: counts.all },
     { key: 'needs_review', label: 'Needs review', count: counts.needs_review },
     { key: 'under', label: 'Under review', count: counts.under },
-    { key: 'correction', label: 'Waiting for agent', count: counts.correction },
+    { key: 'correction', label: 'Needs amendment', count: counts.correction },
     { key: 'approved', label: 'Approved', count: counts.approved },
     { key: 'paid', label: 'Paid', count: counts.paid },
     { key: 'rejected', label: 'Rejected', count: counts.rejected },
@@ -173,7 +173,7 @@ const AdminInvoicesPage = () => {
   // The first thing anyone wants to know, before any detail
   const facts = [
     { label: 'Needs review', value: counts.needs_review, hint: counts.needs_review ? 'waiting for a decision' : 'all caught up', tab: 'needs_review', tone: counts.needs_review ? 'warn' : 'plain' },
-    { label: 'With the agent', value: counts.correction, hint: 'asked to fix something', tab: 'correction', tone: 'plain' },
+    { label: 'With the agent', value: counts.correction, hint: 'amendment note sent', tab: 'correction', tone: 'plain' },
     { label: 'Approved, not paid', value: formatCurrency(counts.approvedAmount), hint: `${counts.approved} ${counts.approved === 1 ? 'invoice' : 'invoices'}`, tab: 'approved', tone: 'plain' },
     { label: 'Paid to agents', value: counts.paid, hint: counts.paid === 1 ? 'invoice settled' : 'invoices settled', tab: 'paid', tone: 'good' },
   ];

@@ -222,7 +222,7 @@ const FinanceReviewModal = ({
     if (!id) return;
 
     if (!correctionReason.trim()) {
-      setErrorMsg('Correction reason / remarks is required.');
+      setErrorMsg('The amendment note is required.');
       return;
     }
 
@@ -233,7 +233,7 @@ const FinanceReviewModal = ({
         remarks: correctionReason.trim(),
         notes: reviewNotes.trim() || undefined
       });
-      toast.success('Correction request sent to agency');
+      toast.success('Amendment note sent to the agent');
       setInvoice(res.data);
       setActiveAction(null);
       await loadInvoiceData(id);
@@ -242,7 +242,7 @@ const FinanceReviewModal = ({
       console.error('Error requesting correction:', err);
       const msg = formatApiError(err);
       setErrorMsg(msg);
-      toast.error('Failed to request correction', { description: msg });
+      toast.error('Failed to send the amendment note', { description: msg });
     } finally {
       setActionLoading(false);
     }
@@ -294,8 +294,8 @@ const FinanceReviewModal = ({
     CorrectionRequired: {
       tone: 'bg-amber-50 border-amber-300 text-amber-950',
       icon: AlertTriangle,
-      title: 'Waiting for the agent',
-      text: 'You asked the agent to fix something. Nothing to do until they reply.'
+      title: 'Needs amendment',
+      text: 'You asked the agent to amend this invoice. Nothing to do until they reply.'
     },
     Approved: {
       tone: 'bg-emerald-50 border-emerald-300 text-emerald-900',
@@ -372,7 +372,7 @@ const FinanceReviewModal = ({
 
           {/* What finance asked / why rejected */}
           {reviewStatus === 'CorrectionRequired' && (
-            <Section title="What you asked the agent to fix">
+            <Section title="Amendment note sent to the agent">
               <p className="bg-white p-3 rounded-xl border border-amber-200 text-xs text-gray-800 whitespace-pre-wrap leading-relaxed">
                 {invoice?.financeReviewNotes || invoice?.financeRejectionReason || 'No details were recorded.'}
               </p>
@@ -608,7 +608,7 @@ const FinanceReviewModal = ({
                   Back
                 </Button>
               </div>
-              <p className="text-xs text-red-900">Rejecting is final. The agent will not be paid for this invoice. If something can be fixed, ask for a correction instead.</p>
+              <p className="text-xs text-red-900">Rejecting is final. The agent will not be paid for this invoice. If something can be fixed, mark it as needing amendment instead.</p>
               <div className="space-y-1.5">
                 <Label htmlFor="rejectReason" className="text-xs font-bold text-red-950">
                   Reason (the agent will see this) <span className="text-red-600">*</span>
@@ -650,7 +650,7 @@ const FinanceReviewModal = ({
             <div className="p-5 bg-amber-50 border-2 border-amber-300 rounded-xl space-y-3.5">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" /> Ask the agent to fix something
+                  <AlertTriangle className="w-4 h-4 text-amber-600" /> Needs amendment: tell the agent what to change
                 </h3>
                 <Button variant="ghost" size="sm" onClick={() => setActiveAction(null)} className="text-xs h-7 px-2 text-gray-600">
                   Back
@@ -746,7 +746,7 @@ const FinanceReviewModal = ({
                   onClick={() => setActiveAction('correction')}
                   className="text-xs h-9 text-amber-700 border-amber-300 hover:bg-amber-50 font-bold"
                 >
-                  Ask for correction
+                  Needs amendment
                 </Button>
                 <Button
                   type="button"

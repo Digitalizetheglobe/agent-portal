@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { getDisplayStage, getDisplayStageInfo, isPipelineActive } from '../../utils/pipeline';
+import { getDisplayStage, getDisplayStageInfo, isPipelineActive, IN_VISA_STAGES } from '../../utils/pipeline';
 import {
   FileCheck,
   Plus,
@@ -207,7 +207,7 @@ const ApplicationsPage = () => {
         [APPLICATION_STATUS.UNDER_REVIEW, APPLICATION_STATUS.SUBMITTED].includes(a.status)
       ).length,
       inVisaProcess: applications.filter(a =>
-        isPipelineActive(a) && ['Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration'].includes(getDisplayStage(a))
+        isPipelineActive(a) && IN_VISA_STAGES.includes(getDisplayStage(a))
       ).length,
       feesPaid: applications.filter(a => isPipelineActive(a) && ['FeesPaid', 'Visa100'].includes(getDisplayStage(a))).length
     };

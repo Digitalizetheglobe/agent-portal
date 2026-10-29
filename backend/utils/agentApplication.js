@@ -25,7 +25,9 @@ const FIELDS = {
   bankBeneficiaryName: { label: 'Beneficiary name', required: 'always' },
   bankName: { label: 'Bank name', required: 'always' },
   bankAccountNumber: { label: 'Account number', required: 'always' },
-  bankSwiftCode: { label: 'SWIFT code', required: 'always' },
+  // SWIFT code and IBAN are optional: not every bank has them
+  bankSwiftCode: { label: 'SWIFT code', required: false },
+  bankIban: { label: 'IBAN', required: false },
   bankAddress: { label: 'Bank address', required: 'always' }
 };
 
@@ -49,6 +51,7 @@ const isRequired = (field, agentType) => {
 
 const FORMAT_RULES = {
   bankSwiftCode: [/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/, 'SWIFT code must be 8 or 11 letters/digits'],
+  bankIban: [/^[A-Za-z]{2}[0-9]{2}[A-Za-z0-9 ]{9,32}$/, 'IBAN must start with a 2-letter country code and 2 check digits'],
   bankAccountNumber: [/^[A-Za-z0-9][A-Za-z0-9 -]{3,33}$/, 'Account number must be 4-34 characters (letters, digits, spaces, hyphens)'],
   website: [/^(https?:\/\/)?[^\s.]+\.[^\s]{2,}$/i, 'Website must be a valid address']
 };
@@ -159,7 +162,7 @@ const missingRequiredDocs = (agentType, documents = [], { approvedOnly = false }
 };
 
 // Bank details are hidden from staff who have no business with payouts.
-const BANK_KEYS = ['bankBeneficiaryName', 'bankName', 'bankAccountNumber', 'bankSwiftCode', 'bankAddress'];
+const BANK_KEYS = ['bankBeneficiaryName', 'bankName', 'bankAccountNumber', 'bankSwiftCode', 'bankIban', 'bankAddress'];
 const canSeeBankDetails = (viewer) => {
   if (!viewer) return false;
   if (viewer.role === 'agent') return true; // controllers already limit agents to their own record

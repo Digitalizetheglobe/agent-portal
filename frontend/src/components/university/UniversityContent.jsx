@@ -27,7 +27,7 @@ const sectionTitle = 'text-base font-bold text-gray-900 font-[\'Outfit\'] flex i
 const cardClass = 'border-[#E5E7EB] bg-white shadow-none';
 
 /**
- * Fee structure, courses with what the student pays and what the agent earns, brochures,
+ * Fee structure, courses with what the student pays and brochures,
  * and news / scholarship updates. Everyone can read; only `canManage` (Head of Admission) can change.
  * `show` picks the section to display: 'programs', 'news', 'fees' (fees and brochures), 'all', or null for none
  * (the data stays loaded, so switching tabs on the page is instant).
@@ -38,7 +38,7 @@ const UniversityContent = ({ university, canManage, onChanged, show = 'all' }) =
   const fees = Array.isArray(university.fees) ? university.fees : [];
   const brochures = Array.isArray(university.brochures) ? university.brochures : [];
 
-  const [courseData, setCourseData] = useState({ commissionRate: null, courses: [] });
+  const [courseData, setCourseData] = useState({ courses: [] });
   const [updates, setUpdates] = useState([]);
   const [form, setForm] = useState(null); // null = closed, else { id?, ...fields }
   const [saving, setSaving] = useState(false);
@@ -145,7 +145,7 @@ const UniversityContent = ({ university, canManage, onChanged, show = 'all' }) =
     }
   };
 
-  const { courses, commissionRate } = courseData;
+  const { courses } = courseData;
   const levels = useMemo(() => [...new Set(courses.map((c) => c.level).filter(Boolean))].sort(), [courses]);
   const filteredCourses = useMemo(() => {
     const q = programSearch.trim().toLowerCase();
@@ -297,14 +297,13 @@ const UniversityContent = ({ university, canManage, onChanged, show = 'all' }) =
       </Card>
       )}
 
-      {/* Programs, tuition and commission */}
+      {/* Programs and tuition */}
       {visible('programs') && (
       <Card className={cardClass}>
         <CardHeader className="border-b border-gray-100 px-6 py-4">
           <CardTitle className={sectionTitle}><GraduationCap size={18} className="text-[#042C53]" /> Programs ({courses.length})</CardTitle>
           <CardDescription className="text-xs text-gray-500 mt-0.5">
-            Tuition is what the student pays.{' '}
-            {commissionRate > 0 ? `Commission is ${commissionRate}% of tuition.` : 'No commission rate is set for this university yet.'}
+            Tuition is what the student pays.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -336,7 +335,6 @@ const UniversityContent = ({ university, canManage, onChanged, show = 'all' }) =
                   <TableHead>Faculty</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Tuition (student pays)</TableHead>
-                  <TableHead>Commission</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -347,7 +345,6 @@ const UniversityContent = ({ university, canManage, onChanged, show = 'all' }) =
                     <TableCell className="text-gray-600">{course.department || '-'}</TableCell>
                     <TableCell className="text-gray-600">{course.duration || '-'}</TableCell>
                     <TableCell>{tuitionLabel(course.tuitionFee)}</TableCell>
-                    <TableCell>{course.commissionAmount != null ? money(course.commissionAmount) : '-'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

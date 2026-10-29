@@ -98,6 +98,9 @@ const User = sequelize.define('User', {
     allowNull: false,
     defaultValue: 'draft'
   },
+  // Login dates, kept as proof of when the agent first and last signed in
+  firstLoginAt: { type: DataTypes.DATE, allowNull: true },
+  lastLoginAt: { type: DataTypes.DATE, allowNull: true },
   onboardingSubmittedAt: { type: DataTypes.DATE, allowNull: true },
   // "Account Manager": recommended the application
   onboardingRecommendedBy: { type: DataTypes.UUID, allowNull: true },
@@ -160,6 +163,7 @@ const User = sequelize.define('User', {
   bankName: { type: DataTypes.STRING, allowNull: true },
   bankAccountNumber: { type: DataTypes.STRING, allowNull: true },
   bankSwiftCode: { type: DataTypes.STRING, allowNull: true },
+  bankIban: { type: DataTypes.STRING, allowNull: true },
   bankAddress: { type: DataTypes.TEXT, allowNull: true },
   // Declaration signed on the application
   declarationName: { type: DataTypes.STRING, allowNull: true },

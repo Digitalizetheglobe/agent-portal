@@ -3,10 +3,11 @@ import { cn } from '../../lib/utils';
 import { INVOICE_STAGES, INVOICE_STAGE_INFO, countInvoicesByStage } from '../../utils/invoiceStage';
 
 const HINTS = {
-  Submitted: 'Being reviewed',
-  Processing: 'Approved, waiting for payment',
+  Submitted: 'Received by QStudy',
+  Processing: 'Waiting for the university payment',
+  UniversityPaid: 'Commission is being paid',
   Paid: 'Agent paid',
-  Rejected: 'Not payable',
+  Amendment: 'See the note',
 };
 
 /**
@@ -17,7 +18,7 @@ const InvoiceStageSummary = ({ invoices = [] }) => {
   const counts = useMemo(() => countInvoicesByStage(invoices), [invoices]);
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-testid="invoice-stage-summary">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4" data-testid="invoice-stage-summary">
       {INVOICE_STAGES.map((stage) => (
         <div key={stage} className="rounded-xl border border-[#E5E7EB] bg-white p-4">
           <span className={cn('inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider', INVOICE_STAGE_INFO[stage].style)}>

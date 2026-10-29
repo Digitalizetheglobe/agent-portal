@@ -1,21 +1,34 @@
 // The student progress pipeline from the client workflow:
-//   Application -> Visa 15% -> Visa 35% -> Visa 70% -> Arrival -> Medical Examination
-//   -> Registration -> Fees Paid -> Visa 100%
+//   Application -> Eligibility -> Offer Letter -> Payment -> Visa 5% -> 15% -> 35% -> 70% -> 80%
+//   -> Visa Approval (EVAL) -> SEV -> Departure Briefing -> Arrival -> Health Check -> Registration
+//   -> Tuition Fees Payment -> Visa 100% (final endorsement) -> invoice
 // The Head of Admission moves an application through it. Each application is in one stage at a time.
 // Visa 100% (the final endorsement) comes after the fees are paid and unlocks the commission invoice.
 
-const STAGES = ['Application', 'Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration', 'FeesPaid', 'Visa100'];
+const STAGES = [
+  'Application', 'Eligibility', 'OfferLetter', 'Payment',
+  'Visa5', 'Visa15', 'Visa35', 'Visa70', 'Visa80',
+  'VisaApproval', 'SEV', 'Departure', 'Arrival', 'Medical', 'Registration', 'FeesPaid', 'Visa100'
+];
 
 const STAGE_LABELS = {
-  Application: 'Application',
+  Application: 'Application Submitted',
+  Eligibility: 'Eligibility Issued',
+  OfferLetter: 'Offer Letter',
+  Payment: 'Payment',
+  Visa5: 'Visa Processing Started (5%)',
   Visa15: 'Visa 15%',
   Visa35: 'Visa 35%',
   Visa70: 'Visa 70%',
-  Arrival: 'Arrival',
-  Medical: 'Medical Examination',
-  Registration: 'Registration',
-  FeesPaid: 'Fees Paid',
-  Visa100: 'Visa 100%'
+  Visa80: 'Visa 80%',
+  VisaApproval: 'Visa Approval (EVAL)',
+  SEV: 'SEV (Single Entry Visa)',
+  Departure: 'Departure Briefing & Travel Arrangements',
+  Arrival: 'Student Arrival',
+  Medical: 'Health Check',
+  Registration: 'University Registration',
+  FeesPaid: 'Tuition Fees Payment',
+  Visa100: 'Final Endorsement (Visa 100%)'
 };
 
 // Applications that are not live cannot move through the pipeline

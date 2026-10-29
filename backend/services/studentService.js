@@ -69,7 +69,8 @@ class StudentService {
     if (name) studentData.name = name.trim();
     if (email) studentData.email = email.toLowerCase().trim();
     if (phone) studentData.phone = phone.trim();
-    if (country) studentData.country = country.trim();
+    // Every student studies in Malaysia
+    studentData.country = country ? country.trim() : 'Malaysia';
     if (education) studentData.education = education.trim();
     if (courseInterested) studentData.courseInterested = courseInterested.trim();
     if (notes) studentData.notes = notes;

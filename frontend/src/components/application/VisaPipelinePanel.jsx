@@ -48,6 +48,7 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
   const [arrivalFlightNumber, setArrivalFlightNumber] = useState('');
   const [arrivalTime, setArrivalTime] = useState('');
   const [arrivalAirport, setArrivalAirport] = useState('');
+  const [arrivalServices, setArrivalServices] = useState({ airportPickup: false, transportation: false, accommodation: false });
   const ticketInput = useRef(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -95,6 +96,7 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
     setArrivalFlightNumber(application.arrivalFlightNumber || '');
     setArrivalTime(application.arrivalTime || '');
     setArrivalAirport(application.arrivalAirport || '');
+    setArrivalServices({ airportPickup: false, transportation: false, accommodation: false, ...(application.arrivalServices || {}) });
     setMoveDialog({ direction, stage: direction === 'forward' ? nextStage : prevStage });
   };
 
@@ -115,6 +117,7 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
       payload.arrivalFlightNumber = arrivalFlightNumber.trim();
       payload.arrivalAirport = arrivalAirport.trim();
       if (arrivalTime) payload.arrivalTime = arrivalTime;
+      payload.arrivalServices = arrivalServices;
     }
     const ok = await run(
       () => applicationAPI.updatePipeline(application.id, payload),
@@ -259,6 +262,11 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
             {application.arrivalFlightNumber ? ` · Flight ${application.arrivalFlightNumber}` : ''}
             {application.arrivalAirport ? ` · ${application.arrivalAirport}` : ''}
             {application.arrivalTime ? ` · ${application.arrivalTime}` : ''}
+            {(() => {
+              const labels = { airportPickup: 'Airport pickup', transportation: 'Transportation', accommodation: 'Accommodation' };
+              const arranged = Object.keys(labels).filter((k) => application.arrivalServices?.[k]).map((k) => labels[k]);
+              return arranged.length ? ` · ${arranged.join(', ')}` : '';
+            })()}
           </p>
         )}
 
@@ -416,6 +424,21 @@ const VisaPipelinePanel = ({ application, onChange, children }) => {
                 <div className="space-y-1.5">
                   <Label htmlFor="arrivalAirport">Arrival airport</Label>
                   <Input id="arrivalAirport" value={arrivalAirport} onChange={(e) => setArrivalAirport(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Arrival package</Label>
+                  <div className="flex flex-wrap gap-4 text-sm">
+                    {[['airportPickup', 'Airport pickup'], ['transportation', 'Transportation'], ['accommodation', 'Accommodation']].map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(arrivalServices[key])}
+                          onChange={(e) => setArrivalServices((prev) => ({ ...prev, [key]: e.target.checked }))}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </>
             )}

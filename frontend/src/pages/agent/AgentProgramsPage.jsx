@@ -24,7 +24,7 @@ import {
 } from '../../components/ui/select';
 import UniversityLogo from '../../components/university/UniversityLogo';
 import { courseAPI, universityAPI, formatApiError } from '../../utils/api';
-import { readFee, earningsFor } from '../../utils/programFee';
+import { readFee } from '../../utils/programFee';
 import { toast } from 'sonner';
 
 const LEVELS = ['Undergraduate', 'Postgraduate', 'Diploma', 'Doctorate', 'Certificate'];
@@ -113,7 +113,7 @@ const AgentProgramsPage = () => {
         <div>
           <h1 className="text-2xl font-bold text-[#111827] font-['Outfit'] tracking-tight">Programs</h1>
           <p className="text-xs text-gray-500 mt-1 font-medium">
-            Find the right program for your student, see the price and what you earn, then apply.
+            Find the right program for your student, see the price, then apply.
           </p>
         </div>
         <div className="text-xs text-gray-600 bg-white border border-gray-200 px-3.5 py-2 rounded-lg font-medium w-fit">
@@ -185,7 +185,6 @@ const AgentProgramsPage = () => {
         <div className="space-y-4">
           {programs.map((program) => {
             const fee = readFee(program.tuitionFee);
-            const earn = earningsFor(fee, program.university?.commissionRate);
             const extra = (program.universityIds || []).length - 1;
             return (
               <div
@@ -249,7 +248,6 @@ const AgentProgramsPage = () => {
                   <div>
                     <p className="text-xs text-gray-500">Tuition</p>
                     <p className="text-2xl font-bold text-[#111827] font-['Outfit'] mt-0.5 whitespace-nowrap">{fee ? fee.text : 'On request'}</p>
-                    {earn && <p className="text-xs font-semibold text-[#27500A] mt-1 whitespace-nowrap">You earn {earn}</p>}
                   </div>
                   <Button
                     variant="outline"

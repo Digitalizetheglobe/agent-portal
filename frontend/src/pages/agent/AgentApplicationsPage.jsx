@@ -52,7 +52,7 @@ import {
   APPLICATION_STATUS_LIST,
   APPLICATION_STATUS_LABELS
 } from '../../constants/status';
-import { getDisplayStage, getDisplayStageInfo, isPipelineActive } from '../../utils/pipeline';
+import { getDisplayStage, getDisplayStageInfo, isPipelineActive, IN_VISA_STAGES } from '../../utils/pipeline';
 import { getStatusBadgeStyle } from '../admin/ApplicationsPage';
 import { toast } from 'sonner';
 
@@ -184,7 +184,7 @@ const AgentApplicationsPage = () => {
         [APPLICATION_STATUS.UNDER_REVIEW, APPLICATION_STATUS.SUBMITTED].includes(a.status)
       ).length,
       inVisaProcess: applications.filter(a =>
-        isPipelineActive(a) && ['Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration'].includes(getDisplayStage(a))
+        isPipelineActive(a) && IN_VISA_STAGES.includes(getDisplayStage(a))
       ).length,
       feesPaid: applications.filter(a => ['FeesPaid', 'Visa100'].includes(getDisplayStage(a))).length
     };

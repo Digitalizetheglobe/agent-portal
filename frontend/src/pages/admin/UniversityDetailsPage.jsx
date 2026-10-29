@@ -175,13 +175,6 @@ const UniversityDetailsPage = () => {
 
   // The first thing anyone wants to know, before any detail
   const facts = [
-    {
-      label: staffView ? 'Commission' : 'You earn',
-      icon: Percent,
-      value: missingRate ? 'Not set' : `${university.commissionRate}%`,
-      hint: missingRate ? (staffView ? 'invoices are blocked' : 'ask your manager') : 'of tuition',
-      tone: missingRate ? 'warn' : 'good'
-    },
     { label: 'Programs', icon: GraduationCap, value: university.programCount ?? 0, hint: 'active programs', tab: 'programs' },
     { label: 'News & scholarships', icon: Megaphone, value: university.updateCount ?? 0, hint: university.scholarshipCount ? `${university.scholarshipCount} scholarship${university.scholarshipCount === 1 ? '' : 's'}` : 'latest updates', tab: 'news' },
     { label: 'Brochures', icon: FileText, value: brochures.length, hint: 'to download', tab: 'fees' },
@@ -192,7 +185,7 @@ const UniversityDetailsPage = () => {
     { key: 'programs', label: 'Programs', count: university.programCount ?? 0 },
     { key: 'news', label: 'News & scholarships', count: university.updateCount ?? 0 },
     { key: 'fees', label: 'Fees & brochures', count: fees.length + brochures.length },
-    { key: 'about', label: 'About & contact' },
+    { key: 'about', label: 'About' },
     { key: 'applications', label: staffView ? 'Applications' : 'My applications', count: applications.length },
   ];
   const requestedTab = searchParams.get('tab');
@@ -265,11 +258,11 @@ const UniversityDetailsPage = () => {
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#FAC775] bg-[#FAEEDA] px-4 py-3 text-xs text-[#633806]">
           <span className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>No commission rate is set, so invoices for this university cannot be approved.</span>
+            <span>No commission rate is set, so invoices for this university cannot be approved. Rates are managed on the Commission page.</span>
           </span>
           {canManage && (
-            <Button size="sm" variant="outline" className="h-8 text-xs border-[#633806]/30 text-[#633806]" onClick={() => setEditModalOpen(true)}>
-              Set the rate
+            <Button size="sm" variant="outline" className="h-8 text-xs border-[#633806]/30 text-[#633806]" onClick={() => navigate('/admin/commission')}>
+              Open Commission
             </Button>
           )}
         </div>
@@ -312,11 +305,6 @@ const UniversityDetailsPage = () => {
                   >
                     <Globe size={13} /> {university.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                     <ExternalLink size={10} />
-                  </a>
-                )}
-                {university.contactEmail && (
-                  <a href={`mailto:${university.contactEmail}`} className="hover:text-[#042C53] flex items-center gap-1 font-medium">
-                    <Mail size={13} /> {university.contactEmail}
                   </a>
                 )}
               </div>
@@ -409,10 +397,6 @@ const UniversityDetailsPage = () => {
                   <div><FactLabel>City</FactLabel><span className="font-semibold text-gray-900 mt-0.5 block">{university.city || 'N/A'}</span></div>
                   <div><FactLabel>Code</FactLabel><span className="font-mono font-bold text-gray-900 mt-0.5 block">{university.code || 'N/A'}</span></div>
                   <div>
-                    <FactLabel>Agent commission</FactLabel>
-                    <span className="font-semibold text-gray-900 mt-0.5 block">{missingRate ? 'Not set' : `${university.commissionRate}% of tuition`}</span>
-                  </div>
-                  <div>
                     <FactLabel>Added to the portal</FactLabel>
                     <span className="font-semibold text-gray-900 mt-0.5 block">
                       {new Date(university.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -426,24 +410,10 @@ const UniversityDetailsPage = () => {
           <Card className="border-[#E5E7EB] bg-white shadow-none h-fit">
             <CardHeader className="border-b border-gray-100 px-6 py-4">
               <CardTitle className="text-sm font-bold text-gray-900 font-['Outfit'] flex items-center gap-2">
-                <User size={16} className="text-[#042C53]" /> Admissions contact
+                <Globe size={16} className="text-[#042C53]" /> Website
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
-              <div>
-                <FactLabel>Contact person</FactLabel>
-                <p className="text-sm font-semibold text-gray-900 mt-1">{university.contactPerson || 'Admissions Office'}</p>
-              </div>
-              <div>
-                <FactLabel>Email</FactLabel>
-                {university.contactEmail ? (
-                  <a href={`mailto:${university.contactEmail}`} className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1.5 mt-1 break-all">
-                    <Mail size={12} className="shrink-0" /> {university.contactEmail}
-                  </a>
-                ) : (
-                  <p className="text-xs text-gray-400 mt-1">Not provided</p>
-                )}
-              </div>
               {university.website && (
                 <div>
                   <FactLabel>Official website</FactLabel>

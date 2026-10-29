@@ -255,22 +255,6 @@ const UniversitiesPage = () => {
             <p className="text-[10px] font-medium text-[#27500A] mt-1">accepting applications</p>
           </CardContent>
         </Card>
-        <button
-          type="button"
-          onClick={() => setCommissionFilter((v) => (v === 'missing' ? 'all' : 'missing'))}
-          className={`text-left rounded-xl border transition-colors ${
-            commissionFilter === 'missing' ? 'border-[#633806] ring-1 ring-[#633806] bg-[#FAEEDA]/50' : 'border-[#E5E7EB] bg-white hover:border-[#FAC775]'
-          }`}
-          title="Show only universities with no commission rate"
-        >
-          <div className="p-4">
-            <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">No commission rate</p>
-            <p className={`text-2xl font-semibold mt-1 ${stats.missingCommission ? 'text-[#633806]' : 'text-[#27500A]'}`}>{stats.missingCommission}</p>
-            <p className={`text-[10px] font-medium mt-1 ${stats.missingCommission ? 'text-[#633806]' : 'text-gray-500'}`}>
-              {stats.missingCommission ? 'invoices are blocked until set' : 'all active universities have one'}
-            </p>
-          </div>
-        </button>
         <Card className="border-[#E5E7EB] bg-white shadow-none">
           <CardContent className="p-4">
             <p className="text-[11px] font-medium text-[#6B7280] uppercase tracking-wider">Inactive</p>
@@ -352,7 +336,6 @@ const UniversitiesPage = () => {
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Location</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-center">Programs</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-center">Applications</TableHead>
-              <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider">Commission</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-center">Status</TableHead>
               <TableHead className="text-[10px] text-[#6B7280] font-bold px-6 py-3 uppercase tracking-wider text-right">Actions</TableHead>
             </TableRow>
@@ -440,24 +423,6 @@ const UniversitiesPage = () => {
                     {uni.applicationCount ?? 0}
                   </TableCell>
 
-                  {/* Commission: a missing rate blocks invoice approval, so it stands out */}
-                  <TableCell className="px-6 py-4">
-                    {uni.commissionRate != null ? (
-                      <span className="text-sm font-bold text-gray-900 tabular-nums whitespace-nowrap">{uni.commissionRate}%</span>
-                    ) : canManage ? (
-                      <button
-                        type="button"
-                        onClick={() => { setSelectedUniversity(uni); setModalOpen(true); }}
-                        className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-[#633806] bg-[#FAEEDA] hover:bg-[#FAC775]/60 px-2.5 py-1 rounded-md"
-                      >
-                        <AlertTriangle size={12} /> Set rate
-                      </button>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-[#633806]">
-                        <AlertTriangle size={12} /> Not set
-                      </span>
-                    )}
-                  </TableCell>
 
                   {/* Status */}
                   <TableCell className="px-6 py-4 text-center">

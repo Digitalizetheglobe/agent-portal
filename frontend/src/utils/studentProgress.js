@@ -1,11 +1,11 @@
-import { DISPLAY_STAGE_INFO } from './pipeline';
+import { DISPLAY_STAGE_INFO, PIPELINE_STAGES, IN_VISA_STAGES } from './pipeline';
 
 // A student has no status of their own. Their progress is taken from their applications: the furthest
 // visa stage among the live ones (the server sends it as `pipelineStage`, plus `feesPaid`), or
 // "NoApplication" when they have none.
 
 // Order of the journey shown as a stepper
-export const STUDENT_JOURNEY = ['Application', 'Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration', 'FeesPaid', 'Visa100'];
+export const STUDENT_JOURNEY = PIPELINE_STAGES;
 
 const NO_APPLICATION = { label: 'No application', style: 'bg-[#F3F4F6] text-[#4B5563]' };
 
@@ -24,12 +24,12 @@ export const getStudentJourneyIndex = (student) => STUDENT_JOURNEY.indexOf(stude
 export const STUDENT_FUNNEL = [
   { key: 'NoApplication', label: 'No application', hint: 'Add an application', color: '#9CA3AF' },
   { key: 'Application', label: 'Application', hint: 'Waiting for QStudy review', color: '#378ADD' },
-  { key: 'InVisa', label: 'In visa process', hint: 'Visa 15% to Registration', color: '#7F77DD' },
+  { key: 'InVisa', label: 'In visa process', hint: 'Eligibility to University Registration', color: '#7F77DD' },
   { key: 'FeesPaid', label: 'Fees paid', hint: 'Fees confirmed, awaiting Visa 100%', color: '#EF9F27' },
   { key: 'Visa100', label: 'Visa 100%', hint: 'Ready for commission invoicing', color: '#1D9E75' },
 ];
 
-const IN_VISA = ['Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration'];
+const IN_VISA = IN_VISA_STAGES;
 
 export const getFunnelKey = (student) => {
   const stage = student?.pipelineStage || 'NoApplication';

@@ -41,6 +41,7 @@ const AgentProgramDetailPage = lazy(() => import("./pages/agent/AgentProgramDeta
 const AgentApplicationsPage = lazy(() => import("./pages/agent/AgentApplicationsPage"));
 const SettingsPage = lazy(() => import("./pages/shared/SettingsPage"));
 const NotificationsPage = lazy(() => import("./pages/shared/NotificationsPage"));
+const CommissionsPage = lazy(() => import("./pages/shared/CommissionsPage"));
 
 // Layouts
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -74,6 +75,7 @@ function App() {
                   <Route path="applications/:applicationId" element={<ApplicationDetailsPage />} />
                   <Route path="universities" element={<UniversitiesPage />} />
                   <Route path="universities/:universityId" element={<UniversityDetailsPage />} />
+                  <Route path="commission" element={<CommissionsPage />} />
                   <Route path="courses" element={<CoursesPage />} />
                   <Route path="courses/:programId" element={<ProgramDetailsPage />} />
                   <Route path="invoices" element={<AdminInvoicesPage />} />
@@ -98,6 +100,7 @@ function App() {
                   <Route path="applications" element={<AgentApplicationsPage />} />
                   <Route path="applications/:applicationId" element={<ApplicationDetailsPage />} />
                   <Route path="universities" element={<AgentUniversitiesPage />} />
+                  <Route path="commission" element={<CommissionsPage />} />
                   <Route path="programs" element={<AgentProgramsPage />} />
                   <Route path="programs/:programId" element={<AgentProgramDetailPage />} />
                   <Route path="universities/:universityId" element={<UniversityDetailsPage />} />

@@ -96,7 +96,11 @@ const Application = sequelize.define('Application', {
   // Visa progress pipeline (separate from the admission status above). The Head of Admission moves
   // the student through it; an agent can invoice once the stage is Visa100 and the fees are accepted.
   pipelineStage: {
-    type: DataTypes.ENUM('Application', 'Visa15', 'Visa35', 'Visa70', 'Arrival', 'Medical', 'Registration', 'FeesPaid', 'Visa100'),
+    type: DataTypes.ENUM(
+      'Application', 'Eligibility', 'OfferLetter', 'Payment',
+      'Visa5', 'Visa15', 'Visa35', 'Visa70', 'Visa80',
+      'VisaApproval', 'SEV', 'Departure', 'Arrival', 'Medical', 'Registration', 'FeesPaid', 'Visa100'
+    ),
     allowNull: false,
     defaultValue: 'Application'
   },
@@ -124,6 +128,11 @@ const Application = sequelize.define('Application', {
   },
   arrivalAirport: {
     type: DataTypes.STRING,
+    allowNull: true
+  },
+  // Arrival package QStudy arranges: { airportPickup, transportation, accommodation } (booleans)
+  arrivalServices: {
+    type: DataTypes.JSONB,
     allowNull: true
   },
   // Flight ticket / arrival confirmation: { id, fileUrl, fileName, contentType, uploadedAt, uploadedBy }

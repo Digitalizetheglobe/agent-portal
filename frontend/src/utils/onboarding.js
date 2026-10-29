@@ -145,6 +145,8 @@ export const hasSufficientDocs = (agent) => {
 };
 
 export const HISTORY_LABELS = {
+  registered: 'Account created (login)',
+  'document-uploaded': 'Document uploaded',
   submitted: 'Application submitted',
   resubmitted: 'Application resubmitted',
   'start-review': 'Review started',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   AlertCircle,
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
-import { onboardingAPI, agentAPI, formatApiError } from '../utils/api';
+import { onboardingAPI, agentAPI, authAPI, formatApiError } from '../utils/api';
 import { Button } from '../components/ui/button';
 import { COUNTRIES } from '../utils/countries';
 import { cn } from '../lib/utils';
@@ -42,7 +42,8 @@ const DOC_TYPES = [
   'Other'
 ];
 
-const STEPS = ['Agency', 'Contact', 'Bank', 'Documents'];
+// The login is created first (step 0); everything after it is saved to the signed-in account
+const STEPS = ['Login', 'Agency', 'Contact', 'Bank', 'Documents'];
 
 const RegisterPage = () => {
   const { token } = useParams();
@@ -56,7 +57,7 @@ const RegisterPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [error, setError] = useState('');
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
 
   // Step 1 and 2: agency, contact and login details
   const [formStep1, setFormStep1] = useState({
@@ -86,11 +87,15 @@ const RegisterPage = () => {
     bankName: '',
     bankAccountNumber: '',
     bankSwiftCode: '',
+    bankIban: '',
     bankAddress: '',
     declarationName: '',
     declarationIdNumber: '',
     declarationAccepted: false,
   });
+
+  // The last ID copied into the declaration, so a value the agent typed themselves is never overwritten
+  const autoDeclarationId = useRef('');
 
   // Step 4: document upload
   const [uploadedDocs, setUploadedDocs] = useState([]);
@@ -131,6 +136,45 @@ const RegisterPage = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Step 0: create the login. The rest of the application is saved to this account afterwards.
+  const handleCreateLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!formStep1.phone.trim() || !/^\+?[0-9]{10,}$/.test(formStep1.phone.replace(/[\s-]/g, ''))) {
+      setError('A valid phone number with at least 10 digits is required.');
+      return;
+    }
+    if (!formStep1.email.trim() || !/\S+@\S+\.\S+/.test(formStep1.email)) {
+      setError('A valid official email address is required.');
+      return;
+    }
+    if (formStep1.password.length < 10 || !/[A-Za-z]/.test(formStep1.password) || !/\d/.test(formStep1.password)) {
+      setError('Password must be at least 10 characters and include at least one letter and one number.');
+      return;
+    }
+    if (formStep1.password !== formStep1.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await onboardingAPI.register(token, {
+        name: formStep1.contactPerson.trim(),
+        email: formStep1.email,
+        phone: formStep1.phone,
+        password: formStep1.password,
+      });
+      startSession(res.data);
+      toast.success('Login created', { description: 'Now complete your agency profile.' });
+      goTo(1);
+    } catch (err) {
+      setError(formatApiError(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Step 1 -> 2: the browser checks the required fields, so only cross-field rules live here
   const handleNextStep1 = (e) => {
     e.preventDefault();
@@ -154,23 +198,6 @@ const RegisterPage = () => {
       setError('Contact person name is required.');
       return;
     }
-    if (!formStep1.phone.trim() || !/^\+?[0-9]{10,}$/.test(formStep1.phone.replace(/[\s-]/g, ''))) {
-      setError('A valid phone number with at least 10 digits is required.');
-      return;
-    }
-    if (!formStep1.email.trim() || !/\S+@\S+\.\S+/.test(formStep1.email)) {
-      setError('A valid official email address is required.');
-      return;
-    }
-    if (formStep1.password.length < 10 || !/[A-Za-z]/.test(formStep1.password) || !/\d/.test(formStep1.password)) {
-      setError('Password must be at least 10 characters and include at least one letter and one number.');
-      return;
-    }
-    if (formStep1.password !== formStep1.confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
     // Prefill the bank beneficiary name if empty
     if (!formStep2.bankBeneficiaryName) {
       setFormStep2(f => ({
@@ -178,16 +205,26 @@ const RegisterPage = () => {
         bankBeneficiaryName: formStep1.agencyName || formStep1.contactPerson,
       }));
     }
+    // An individual agent's ID / passport number is also the declaration's ID number
+    if (formStep1.agentType !== 'company') {
+      const id = formStep1.businessRegistrationNumber.trim();
+      setFormStep2(f => (
+        !f.declarationIdNumber || f.declarationIdNumber === autoDeclarationId.current
+          ? { ...f, declarationIdNumber: id }
+          : f
+      ));
+      autoDeclarationId.current = id;
+    }
     goTo(3);
   };
 
-  // Step 3: create the account
+  // Step 3: save the application to the account
   const handleSubmitStep3 = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (!formStep2.bankName.trim() || !formStep2.bankAccountNumber.trim() || !formStep2.bankSwiftCode.trim()) {
-      setError('Please complete all bank details (Bank Name, Account Number, and SWIFT Code).');
+    if (!formStep2.bankName.trim() || !formStep2.bankAccountNumber.trim()) {
+      setError('Please complete the bank details (Bank Name and Account Number). SWIFT code and IBAN are optional.');
       return;
     }
     if (formStep2.isRelativeOfEmployee && !formStep2.relativeName.trim()) {
@@ -205,19 +242,21 @@ const RegisterPage = () => {
 
     setSubmitting(true);
     try {
-      const { confirmPassword, ...accountData } = formStep1;
-      const payload = {
-        name: formStep1.contactPerson || formStep1.agencyName,
-        email: formStep1.email,
-        phone: formStep1.phone,
-        password: formStep1.password,
-        ...accountData,
-        ...formStep2,
-      };
-
-      const res = await onboardingAPI.register(token, payload);
-      startSession(res.data);
-      toast.success('Account created', {
+      // Saved to the signed-in account: the application fields, then the declaration
+      const { password, confirmPassword, email, phone, contactPerson, ...applicationData } = formStep1;
+      const payload = { ...applicationData, contactPerson, ...formStep2 };
+      // The shared input holds the company reg. number or, for individuals, the NRIC / passport number
+      if (!isCompany) {
+        payload.idNumber = formStep1.businessRegistrationNumber;
+        payload.businessRegistrationNumber = '';
+      }
+      await authAPI.updateProfile(payload);
+      await agentAPI.acceptDeclaration({
+        declarationName: formStep2.declarationName,
+        declarationIdNumber: formStep2.declarationIdNumber,
+        declarationAccepted: true,
+      });
+      toast.success('Details saved', {
         description: 'Now upload a verification document to finish.',
       });
       goTo(4);
@@ -320,12 +359,12 @@ const RegisterPage = () => {
         {/* Progress */}
         <div className="mb-6 space-y-2">
           <p className="text-sm text-slate-500">
-            Step {currentStep} of {STEPS.length} <span className="text-slate-300 mx-1">/</span>
-            <span className="font-semibold text-slate-900">{STEPS[currentStep - 1]}</span>
+            Step {currentStep + 1} of {STEPS.length} <span className="text-slate-300 mx-1">/</span>
+            <span className="font-semibold text-slate-900">{STEPS[currentStep]}</span>
           </p>
           <div className="flex gap-1.5">
             {STEPS.map((name, i) => (
-              <div key={name} className={cn('h-1.5 flex-1 rounded-full', i < currentStep ? 'bg-[#0C447C]' : 'bg-slate-200')} />
+              <div key={name} className={cn('h-1.5 flex-1 rounded-full', i <= currentStep ? 'bg-[#0C447C]' : 'bg-slate-200')} />
             ))}
           </div>
         </div>
@@ -335,6 +374,93 @@ const RegisterPage = () => {
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
             <p>{error}</p>
           </div>
+        )}
+
+        {/* STEP 0: CREATE THE LOGIN */}
+        {currentStep === 0 && (
+          <form onSubmit={handleCreateLogin} className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm space-y-8">
+            <section className="space-y-5">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Create your login</h2>
+                <p className="text-xs text-slate-500 mt-1">You will then complete your agency profile and upload your documents.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <Field label="Your full name" id="contactPerson" required className="sm:col-span-2">
+                  <input
+                    id="contactPerson"
+                    required
+                    className={inputClass}
+                    value={formStep1.contactPerson}
+                    onChange={setS1('contactPerson')}
+                    placeholder="Full name"
+                  />
+                </Field>
+                <Field label="Email" id="email" required>
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    className={inputClass}
+                    value={formStep1.email}
+                    onChange={setS1('email')}
+                    disabled={!!invite.email}
+                  />
+                </Field>
+                <Field label="Phone" id="phone" required>
+                  <input
+                    id="phone"
+                    required
+                    className={inputClass}
+                    value={formStep1.phone}
+                    onChange={setS1('phone')}
+                    placeholder="+60 12-345 6789"
+                  />
+                </Field>
+              </div>
+            </section>
+
+            <section className="space-y-5">
+              <h2 className="text-sm font-semibold text-slate-900">Create your password</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <Field label="Password" id="password" required hint="At least 10 characters, with a letter and a number">
+                  <div className="relative">
+                    <input
+                      id="password"
+                      required
+                      type={showPassword ? 'text' : 'password'}
+                      className={inputClass}
+                      value={formStep1.password}
+                      onChange={setS1('password')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(s => !s)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </Field>
+                <Field label="Confirm password" id="confirmPassword" required>
+                  <input
+                    id="confirmPassword"
+                    required
+                    type={showPassword ? 'text' : 'password'}
+                    className={inputClass}
+                    value={formStep1.confirmPassword}
+                    onChange={setS1('confirmPassword')}
+                  />
+                </Field>
+              </div>
+            </section>
+
+            <div className="pt-2 flex justify-end">
+              <Button type="submit" className={primaryBtn} disabled={submitting}>
+                {submitting ? 'Creating login...' : 'Create login'} <ArrowRight className="w-4 h-4 ml-1.5" />
+              </Button>
+            </div>
+          </form>
         )}
 
         {/* STEP 1: AGENCY */}
@@ -464,7 +590,7 @@ const RegisterPage = () => {
           </form>
         )}
 
-        {/* STEP 2: CONTACT AND LOGIN */}
+        {/* STEP 2: CONTACT */}
         {currentStep === 2 && (
           <form onSubmit={handleNextStep2} className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm space-y-8">
             <section className="space-y-5">
@@ -492,27 +618,6 @@ const RegisterPage = () => {
                     />
                   </Field>
                 )}
-                <Field label="Email" id="email" required>
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    className={inputClass}
-                    value={formStep1.email}
-                    onChange={setS1('email')}
-                    disabled={!!invite.email}
-                  />
-                </Field>
-                <Field label="Phone" id="phone" required>
-                  <input
-                    id="phone"
-                    required
-                    className={inputClass}
-                    value={formStep1.phone}
-                    onChange={setS1('phone')}
-                    placeholder="+60 12-345 6789"
-                  />
-                </Field>
               </div>
             </section>
 
@@ -543,42 +648,6 @@ const RegisterPage = () => {
                 </div>
               </section>
             )}
-
-            <section className="space-y-5">
-              <h2 className="text-sm font-semibold text-slate-900">Create your password</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <Field label="Password" id="password" required hint="At least 10 characters, with a letter and a number">
-                  <div className="relative">
-                    <input
-                      id="password"
-                      required
-                      type={showPassword ? 'text' : 'password'}
-                      className={inputClass}
-                      value={formStep1.password}
-                      onChange={setS1('password')}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(s => !s)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </Field>
-                <Field label="Confirm password" id="confirmPassword" required>
-                  <input
-                    id="confirmPassword"
-                    required
-                    type={showPassword ? 'text' : 'password'}
-                    className={inputClass}
-                    value={formStep1.confirmPassword}
-                    onChange={setS1('confirmPassword')}
-                  />
-                </Field>
-              </div>
-            </section>
 
             <div className="pt-2 flex items-center justify-between">
               <Button type="button" variant="outline" onClick={() => goTo(1)}>
@@ -619,7 +688,7 @@ const RegisterPage = () => {
                     placeholder="e.g. Maybank"
                   />
                 </Field>
-                <Field label="Account number / IBAN" id="bankAccountNumber" required>
+                <Field label="Account number" id="bankAccountNumber" required>
                   <input
                     id="bankAccountNumber"
                     required
@@ -628,14 +697,22 @@ const RegisterPage = () => {
                     onChange={setS2('bankAccountNumber')}
                   />
                 </Field>
-                <Field label="SWIFT code" id="bankSwiftCode" required hint="8 or 11 characters">
+                <Field label="SWIFT code (optional)" id="bankSwiftCode" hint="8 or 11 characters">
                   <input
                     id="bankSwiftCode"
-                    required
                     className={inputClass}
                     value={formStep2.bankSwiftCode}
                     onChange={setS2('bankSwiftCode')}
                     placeholder="e.g. MBBEMYKL"
+                  />
+                </Field>
+                <Field label="IBAN (optional)" id="bankIban">
+                  <input
+                    id="bankIban"
+                    className={inputClass}
+                    value={formStep2.bankIban}
+                    onChange={setS2('bankIban')}
+                    placeholder="If your bank has one"
                   />
                 </Field>
                 <Field label="Bank branch address" id="bankAddress" className="sm:col-span-2" required>
@@ -693,7 +770,7 @@ const RegisterPage = () => {
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">Declaration</h2>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  I declare that the information given is true and complete, and I agree to QStudy's sub-agent terms and code of ethics.
+                  I declare that all information provided is true and valid, and I agree to QStudy's sub-agent terms and code of ethics.
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
