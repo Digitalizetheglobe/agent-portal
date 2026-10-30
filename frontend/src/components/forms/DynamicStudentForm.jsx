@@ -49,11 +49,12 @@ const DOCUMENT_SLOTS = [
   { category: 'Passport', label: 'Passport' },
   { category: 'Photo', label: 'Photo' },
   { category: 'Results', label: 'Results' },
-  { category: 'Other', label: 'Other documents' },
 ];
 
 const DynamicStudentForm = ({ studentData, onSuccess }) => {
   const [files, setFiles] = useState({});
+  // 'Other documents' can hold several files, each with a name: [{ file, name }]
+  const [otherFiles, setOtherFiles] = useState([]);
   const { addStudent, updateStudent, uploadStudentDocument, agents, universities, fetchUniversities, courses, fetchCourses } = useData();
   const { user, isAdmin } = useAuth();
   const [formSchema, setFormSchema] = useState(null);
@@ -306,6 +307,13 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
         const picked = DOCUMENT_SLOTS.filter(slot => files[slot.category]);
         const failed = [];
         if (newId) {
+          for (const item of otherFiles.filter(o => o.file)) {
+            try {
+              await uploadStudentDocument(newId, item.file, 'Other', item.name.trim() || item.file.name);
+            } catch (_) {
+              failed.push(item.name.trim() || item.file.name);
+            }
+          }
           for (const slot of picked) {
             try {
               await uploadStudentDocument(newId, files[slot.category], slot.category);
@@ -314,9 +322,11 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
             }
           }
         }
-        toast.success('Student registered successfully');
+        toast.success(created?.applicationWarning ? 'Student registered' : 'Student registered and application submitted');
+        if (created?.applicationWarning) toast.warning(created.applicationWarning);
         if (failed.length) toast.error(`Could not upload: ${failed.join(', ')}`, { description: 'Upload them from the student page.' });
         setFiles({});
+        setOtherFiles([]);
       }
 
       if (onSuccess) {
@@ -399,7 +409,7 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
                 error ? 'border-red-500' : 'border-gray-200'
               )}
             >
-              <option value="">Select Target Course</option>
+              <option value="">Select Course</option>
               {fieldValue && !filteredCourses.some(c => c.name === fieldValue) && (
                 <option value={fieldValue}>{fieldValue} (Current)</option>
               )}
@@ -457,8 +467,8 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
             >
               <option value="">
                 {watchedCountry && watchedCountry.trim()
-                  ? `Select Target University in ${watchedCountry}`
-                  : 'Select Target University'}
+                  ? `Select University in ${watchedCountry}`
+                  : 'Select University'}
               </option>
               {filteredUniversities.map(u => (
                 <option key={u.id || u._id} value={u.id || u._id}>
@@ -703,6 +713,30 @@ const DynamicStudentForm = ({ studentData, onSuccess }) => {
                 />
               </div>
             ))}
+            <div className="px-4 py-3 space-y-2">
+              <span className="text-sm font-medium text-gray-800 block">Other documents</span>
+              {otherFiles.map((item, i) => (
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <Input
+                    value={item.name}
+                    onChange={(e) => setOtherFiles(prev => prev.map((o, j) => j === i ? { ...o, name: e.target.value } : o))}
+                    placeholder="Name, e.g. English test"
+                    maxLength={100}
+                    className="sm:w-48 h-9 text-xs"
+                  />
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={(e) => setOtherFiles(prev => prev.map((o, j) => j === i ? { ...o, file: e.target.files?.[0] || null } : o))}
+                    className="text-xs text-gray-500 flex-1 min-w-0 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-[#042C53]/10 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#042C53] hover:file:bg-[#042C53]/20"
+                  />
+                  <button type="button" className="text-xs font-semibold text-red-600 hover:underline" onClick={() => setOtherFiles(prev => prev.filter((_, j) => j !== i))}>Remove</button>
+                </div>
+              ))}
+              <button type="button" className="text-xs font-semibold text-[#042C53] hover:underline" onClick={() => setOtherFiles(prev => [...prev, { file: null, name: '' }])}>
+                + Add a document
+              </button>
+            </div>
           </div>
         </div>
       )}

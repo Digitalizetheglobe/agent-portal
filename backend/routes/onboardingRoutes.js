@@ -10,7 +10,7 @@ const {
 const { protect, restrictToSuperAdminOr } = require('../middleware/auth');
 
 // Staff: manage invites (declared before the public /:token routes)
-const canInvite = restrictToSuperAdminOr('account_manager', 'head_recruitment');
+const canInvite = restrictToSuperAdminOr('account_manager');
 router.post('/invites', protect, canInvite, createInvite);
 router.get('/invites', protect, canInvite, getInvites);
 router.patch('/invites/:id/revoke', protect, canInvite, revokeInvite);

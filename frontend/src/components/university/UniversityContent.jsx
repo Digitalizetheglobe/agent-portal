@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Coins, FileText, Megaphone, Plus, Trash2, Pencil, Eye, Download, Upload, GraduationCap, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { universityAPI, formatApiError } from '../../utils/api';
+import { useData } from '../../context/DataContext';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
@@ -47,6 +48,10 @@ const UniversityContent = ({ university, canManage, onChanged, show = 'all' }) =
   const fileRef = useRef(null);
   const [programSearch, setProgramSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
+  const { updateUniversity } = useData();
+  const [feeDraft, setFeeDraft] = useState(null); // null = not editing, else the list being edited
+  const [feeError, setFeeError] = useState('');
+  const [savingFees, setSavingFees] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -142,6 +147,41 @@ const UniversityContent = ({ university, canManage, onChanged, show = 'all' }) =
       load();
     } catch (error) {
       toast.error('Could not delete the update', { description: formatApiError(error) });
+    }
+  };
+
+  const startEditingFees = () => {
+    setFeeError('');
+    setFeeDraft(fees.map((fee) => ({ id: fee.id, label: fee.label || '', amount: String(fee.amount ?? ''), currency: fee.currency || 'USD', note: fee.note || '' })));
+  };
+
+  const changeFee = (index, field, value) =>
+    setFeeDraft((prev) => prev.map((fee, i) => (i === index ? { ...fee, [field]: value } : fee)));
+
+  const saveFees = async () => {
+    for (const [index, fee] of feeDraft.entries()) {
+      if (!fee.label.trim()) return setFeeError(`Fee ${index + 1}: a name is required`);
+      if (fee.amount === '' || isNaN(parseFloat(fee.amount)) || parseFloat(fee.amount) < 0) return setFeeError(`Fee ${index + 1} (${fee.label}): enter an amount, 0 or more`);
+      if (!/^[A-Za-z]{3}$/.test(fee.currency.trim())) return setFeeError(`Fee ${index + 1} (${fee.label}): the currency is a 3-letter code such as USD or MYR`);
+    }
+    setFeeError('');
+    setSavingFees(true);
+    try {
+      await updateUniversity(id, {
+        fees: feeDraft.map((fee) => ({
+          id: fee.id,
+          label: fee.label.trim(),
+          amount: parseFloat(fee.amount),
+          currency: fee.currency.trim().toUpperCase(),
+          note: fee.note.trim() || null
+        }))
+      });
+      setFeeDraft(null);
+      onChanged && onChanged();
+    } catch {
+      // updateUniversity already shows the error
+    } finally {
+      setSavingFees(false);
     }
   };
 
@@ -266,12 +306,46 @@ const UniversityContent = ({ university, canManage, onChanged, show = 'all' }) =
       {/* Fees */}
       {visible('fees') && (
       <Card className={cardClass}>
-        <CardHeader className="border-b border-gray-100 px-6 py-4">
-          <CardTitle className={sectionTitle}><Coins size={18} className="text-[#042C53]" /> Fee structure</CardTitle>
-          <CardDescription className="text-xs text-gray-500 mt-0.5">Fees besides tuition. Tuition per course is shown below.</CardDescription>
+        <CardHeader className="border-b border-gray-100 px-6 py-4 flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className={sectionTitle}><Coins size={18} className="text-[#042C53]" /> Fee structure</CardTitle>
+            <CardDescription className="text-xs text-gray-500 mt-0.5">Fees besides tuition. Tuition per course is shown below.</CardDescription>
+          </div>
+          {canManage && !feeDraft && (
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={startEditingFees}>
+              <Pencil size={14} /> Edit fees
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="p-0">
-          {fees.length === 0 ? (
+          {feeDraft ? (
+            <div className="p-6 space-y-3">
+              {feeDraft.map((fee, index) => (
+                <div key={index} className="grid grid-cols-12 gap-2 items-start">
+                  <Input className="col-span-4" placeholder="Name, e.g. Application fee" value={fee.label} onChange={(e) => changeFee(index, 'label', e.target.value)} />
+                  <Input className="col-span-2" type="number" min="0" step="0.01" placeholder="Amount" value={fee.amount} onChange={(e) => changeFee(index, 'amount', e.target.value)} />
+                  <Input className="col-span-2 uppercase" maxLength={3} placeholder="USD" value={fee.currency} onChange={(e) => changeFee(index, 'currency', e.target.value)} />
+                  <Input className="col-span-3" placeholder="Note (optional)" value={fee.note} onChange={(e) => changeFee(index, 'note', e.target.value)} />
+                  <Button type="button" variant="ghost" size="sm" className="col-span-1 h-9 w-9 p-0 text-red-600 hover:bg-red-50" aria-label="Remove fee"
+                    onClick={() => setFeeDraft((prev) => prev.filter((_, i) => i !== index))}>
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              ))}
+              {feeDraft.length === 0 && <p className="text-sm text-gray-500">No fees listed. Add one below.</p>}
+              {feeError && <p className="text-[11px] text-red-500">{feeError}</p>}
+              <div className="flex items-center justify-between pt-2">
+                <Button type="button" variant="outline" size="sm" className="h-8 text-xs gap-1"
+                  onClick={() => setFeeDraft((prev) => [...prev, { id: undefined, label: '', amount: '', currency: 'USD', note: '' }])}>
+                  <Plus size={14} /> Add fee
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setFeeDraft(null)} disabled={savingFees}>Cancel</Button>
+                  <Button size="sm" className="h-8 text-xs" onClick={saveFees} disabled={savingFees}>{savingFees ? 'Saving...' : 'Save'}</Button>
+                </div>
+              </div>
+            </div>
+          ) : fees.length === 0 ? (
             <p className="p-6 text-sm text-gray-500">No fees listed.</p>
           ) : (
             <Table>

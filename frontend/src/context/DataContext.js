@@ -543,9 +543,9 @@ export const DataProvider = ({ children }) => {
   }, []);
 
   // Upload document
-  const uploadStudentDocument = async (studentId, file, category) => {
+  const uploadStudentDocument = async (studentId, file, category, name) => {
     try {
-      const response = await studentAPI.uploadDocument(studentId, file, category);
+      const response = await studentAPI.uploadDocument(studentId, file, category, name);
       await fetchStudents();
       return response.data;
     } catch (error) {

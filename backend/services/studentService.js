@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Student, User, Application } = require('../models');
+const { Student, User, Application, Course, University } = require('../models');
 const { deleteObject } = require('../utils/storage');
 const applicationService = require('./applicationService');
 const { scopeWhereToAgents, assertCanAccessAgent } = require('../utils/agentScope');
@@ -24,6 +24,49 @@ const standardIncludes = [
     attributes: ['id', 'applicationNumber', 'courseName', 'courseLevel', 'intakeTerm', 'status', 'pipelineStage', 'feeStatus', 'isInvoiceEligible']
   }
 ];
+
+// A course is usable for a university if it is listed for it or open to every university
+const offeredBy = (course, universityId) => {
+  const ids = course.toJSON().universityIds;
+  return ids.length === 0 || ids.includes(String(universityId));
+};
+
+// A programme code the way universities write them: the university code, a level letter,
+// the initials of the course name and a number, e.g. "UM-BCS101". Unique within the university.
+const LEVEL_LETTERS = { Foundation: 'F', Certificate: 'C', Diploma: 'D', Undergraduate: 'B', Postgraduate: 'M', Masters: 'M', PhD: 'P', Doctorate: 'P' };
+const generateCourseCode = async (university, name, level) => {
+  const stop = new Set(['of', 'in', 'and', 'the', 'for', 'with', 'to']);
+  const initials = name.split(/[^A-Za-z0-9]+/).filter(w => w && !stop.has(w.toLowerCase()))
+    .map(w => w[0].toUpperCase()).join('').slice(0, 3).padEnd(2, 'X');
+  const prefix = `${university.code ? `${String(university.code).toUpperCase()}-` : ''}${LEVEL_LETTERS[level] || 'B'}${initials}`;
+  const taken = new Set((await Course.findAll({ attributes: ['code'] })).map(c => String(c.code || '').toUpperCase()));
+  for (let n = 101; n < 1000; n += 1) {
+    if (!taken.has(`${prefix}${n}`)) return `${prefix}${n}`;
+  }
+  return `${prefix}${Date.now().toString().slice(-4)}`;
+};
+
+// The university's course for an application: the chosen one if the university offers it, else one with the
+// same name, else a new course (with a generated code) added to the university's catalog
+const resolveCourseForUniversity = async (university, { courseId, courseName }) => {
+  if (courseId) {
+    const chosen = await Course.findByPk(courseId);
+    if (chosen && chosen.status === 'active' && offeredBy(chosen, university.id)) return chosen;
+  }
+  const name = String(courseName || (courseId && (await Course.findByPk(courseId))?.name) || '').trim();
+  if (!name) return null;
+  const sameName = await Course.findAll({ where: { name: { [Op.iLike]: name.replace(/[\\%_]/g, (ch) => `\\${ch}`) }, status: 'active' } });
+  const match = sameName.find(c => offeredBy(c, university.id));
+  if (match) return match;
+  return Course.create({
+    name,
+    code: await generateCourseCode(university, name, 'Undergraduate'),
+    level: 'Undergraduate',
+    universityId: university.id,
+    universityIds: [university.id],
+    status: 'active'
+  });
+};
 
 class StudentService {
   /**
@@ -77,7 +120,35 @@ class StudentService {
 
     const student = await Student.create(studentData);
 
-    return await this.getStudentById(student.id, currentUser);
+    // Only confirmed applications are registered, so the student goes straight into an application
+    // for the chosen university and course (submitted, not left as a draft)
+    let applicationWarning = null;
+    const cf = studentData.customFields;
+    if (cf.universityId) {
+      try {
+        const university = await University.findByPk(cf.universityId);
+        if (!university) {
+          applicationWarning = 'The student was registered, but no application was created because the university was not found.';
+        } else {
+          const course = await resolveCourseForUniversity(university, { courseId: cf.courseId, courseName: courseInterested });
+          if (!course) {
+            applicationWarning = 'The student was registered, but no application was created because no course was given.';
+          } else {
+            const application = await applicationService.createApplication(
+              { studentId: student.id, agentId: effectiveAgentId, universityId: university.id, courseId: course.id },
+              currentUser
+            );
+            await applicationService.updateApplicationStatus(application.id, 'Submitted', 'Submitted at student registration', currentUser);
+          }
+        }
+      } catch (err) {
+        console.error('Auto-create application error:', err);
+        applicationWarning = `The student was registered, but the application could not be created: ${err.message}`;
+      }
+    }
+
+    const created = await this.getStudentById(student.id, currentUser);
+    return applicationWarning ? { ...created, applicationWarning } : created;
   }
 
   /**

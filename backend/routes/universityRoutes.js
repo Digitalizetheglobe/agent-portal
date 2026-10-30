@@ -15,6 +15,9 @@ const {
   addBrochure,
   removeBrochure,
   downloadBrochure,
+  addPhotos,
+  removePhoto,
+  getPhoto,
   listUpdates,
   createUpdate,
   updateUpdate,
@@ -30,6 +33,16 @@ const brochureUpload = multer({
   fileFilter: (req, file, cb) => {
     if (['application/pdf', 'image/jpeg', 'image/png'].includes(file.mimetype)) return cb(null, true);
     cb(new Error('Only PDF, JPG or PNG files are allowed'));
+  }
+});
+
+// Campus photos: images only, up to 5MB each, 10 at a time
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 10 },
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(png|jpe?g|webp)$/.test(file.mimetype)) return cb(null, true);
+    cb(new Error('Only PNG, JPG or WebP images are allowed'));
   }
 });
 
@@ -50,6 +63,7 @@ router.get('/', getUniversities);
 router.get('/:id/applications', getUniversityApplications);
 router.get('/:id/courses', getCourses);
 router.get('/:id/brochures/:brochureId', downloadBrochure);
+router.get('/:id/photos/:photoId', getPhoto);
 router.get('/:id/updates', listUpdates);
 router.get('/:id', getUniversityById);
 
@@ -63,6 +77,8 @@ router.delete('/:id', restrictToSuperAdminOr('head_admission'), deleteUniversity
 // Brochures, news and scholarship updates: published by the Head of Admission, read by everyone
 router.post('/:id/brochures', restrictToSuperAdminOr('head_admission'), brochureUpload.single('file'), addBrochure);
 router.delete('/:id/brochures/:brochureId', restrictToSuperAdminOr('head_admission'), removeBrochure);
+router.post('/:id/photos', restrictToSuperAdminOr('head_admission'), photoUpload.array('files', 10), addPhotos);
+router.delete('/:id/photos/:photoId', restrictToSuperAdminOr('head_admission'), removePhoto);
 router.post('/:id/updates', restrictToSuperAdminOr('head_admission'), createUpdate);
 router.put('/:id/updates/:updateId', restrictToSuperAdminOr('head_admission'), updateUpdate);
 router.delete('/:id/updates/:updateId', restrictToSuperAdminOr('head_admission'), deleteUpdate);

@@ -73,6 +73,8 @@ import AgentReviewDialog from '../../components/modals/AgentReviewDialog';
 import ReviewActionButtons from '../../components/agent/ReviewActionButtons';
 import { getOnboardingStatus, HISTORY_LABELS, IN_REVIEW_STATUSES } from '../../utils/onboarding';
 import { hasFeesPaid, isBeyondApplication } from '../../utils/studentProgress';
+import { useAuth } from '../../context/AuthContext';
+import { hasStaffRole } from '../../utils/staffRoles';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
@@ -115,6 +117,9 @@ const AgentsPage = () => {
     updateAgent,
     fetchAgents
   } = useData();
+
+  const { user } = useAuth();
+  const canCreateAgent = hasStaffRole(user, 'account_manager');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [currentFilter, setCurrentFilter] = useState(searchParams.get('status') || 'all');
@@ -424,16 +429,20 @@ const AgentsPage = () => {
           >
             <Download size={14} className="mr-2" /> Export
           </Button>
-          <Button onClick={() => setInviteOpen(true)} variant="outline" size="sm"
-            className="text-xs font-semibold h-10 px-4 border-slate-200 hover:bg-slate-50 transition-all hover:text-[#042C53] gap-2"
-            data-testid="invite-agent-btn"
-          >
-            <Send size={14} /> Send Invite Link
-          </Button>
-          <Button onClick={handleCreate} size="sm"
-            className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-lg shadow-[#042C53]/10 transition-all active:scale-95 gap-2"
-          >  <Plus className="w-4 h-4" />  Onboard Agent
-          </Button>
+          {canCreateAgent && (
+            <Button onClick={() => setInviteOpen(true)} variant="outline" size="sm"
+              className="text-xs font-semibold h-10 px-4 border-slate-200 hover:bg-slate-50 transition-all hover:text-[#042C53] gap-2"
+              data-testid="invite-agent-btn"
+            >
+              <Send size={14} /> Send Invite Link
+            </Button>
+          )}
+          {canCreateAgent && (
+            <Button onClick={handleCreate} size="sm"
+              className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-lg shadow-[#042C53]/10 transition-all active:scale-95 gap-2"
+            >  <Plus className="w-4 h-4" />  Onboard Agent
+            </Button>
+          )}
         </div>
       </div>
 

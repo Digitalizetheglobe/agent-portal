@@ -48,7 +48,8 @@ router.post('/:id/arrival-ticket', restrictTo('agent', 'admin'), proofUpload.sin
 router.get('/:id/arrival-ticket/file', downloadArrivalTicket);
 
 // Core CRUD routes
-router.post('/', requireActivatedAgent, createApplication);
+// Only agents and the super admin create applications (allowStaff() with no roles blocks staff roles)
+router.post('/', allowStaff(), requireActivatedAgent, createApplication);
 router.get('/', getApplications);
 router.get('/:id', getApplicationById);
 router.put('/:id', allowStaff('head_admission'), updateApplication);

@@ -1091,7 +1091,7 @@ const StudentDetailsPage = () => {
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-[#111827] uppercase">
-                              {doc.category} · {formatFileSize(doc.size)}
+                              {doc.name ? `${doc.name} (${doc.category})` : doc.category} · {formatFileSize(doc.size)}
                             </p>
                             <p className="text-[11px] text-[#6B7280] font-medium mt-0.5 truncate" title={doc.originalFilename}>
                               {doc.originalFilename}

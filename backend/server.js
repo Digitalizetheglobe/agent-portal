@@ -411,6 +411,14 @@ const startServer = async () => {
         await qi.addColumn('Universities', 'commissionFixedAmount', { type: DataTypes.DECIMAL(10, 2), allowNull: true });
         console.log('✅ Added Universities.commissionFixedAmount');
       }
+      if (!universityColumns.otherInfo) {
+        await qi.addColumn('Universities', 'otherInfo', { type: DataTypes.TEXT, allowNull: true });
+        console.log('✅ Added Universities.otherInfo');
+      }
+      if (!universityColumns.photos) {
+        await qi.addColumn('Universities', 'photos', { type: DataTypes.JSONB, allowNull: false, defaultValue: [] });
+        console.log('✅ Added Universities.photos');
+      }
       if (!columns.bankIban) {
         await qi.addColumn('Users', 'bankIban', { type: DataTypes.STRING, allowNull: true });
         console.log('✅ Added Users.bankIban');

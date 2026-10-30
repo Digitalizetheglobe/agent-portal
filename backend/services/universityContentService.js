@@ -13,6 +13,7 @@ const { assertCanAccessUniversity } = require('../utils/universityAccess');
 // Agents can read all of it and change none of it (the routes enforce that).
 
 const MAX_BROCHURES = 20;
+const MAX_PHOTOS = 30;
 const UPDATE_TYPES = ['news', 'scholarship'];
 
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -151,6 +152,74 @@ class UniversityContentService {
     }
     const { data, contentType } = await getObject(brochure.fileUrl);
     return { data, contentType: contentType || brochure.contentType, fileName: brochure.fileName };
+  }
+
+  // ── Photos (About section) ──
+
+  async addPhotos(universityId, files, caption, currentUser) {
+    if (!files || files.length === 0) throw fail('Please choose at least one photo');
+    const university = await loadUniversity(universityId);
+
+    const photos = Array.isArray(university.photos) ? university.photos : [];
+    if (photos.length + files.length > MAX_PHOTOS) throw fail(`A university can have at most ${MAX_PHOTOS} photos`);
+
+    const cleanCaption = typeof caption === 'string' ? caption.trim() : '';
+    if (cleanCaption.length > 150) throw fail('The caption must be at most 150 characters');
+
+    const added = [];
+    for (const file of files) {
+      const path = generateStoragePath(`universities/${university.id}/photos`, file.originalname);
+      const result = await putObject(path, file.buffer, file.mimetype);
+      added.push({
+        id: uuidv4(),
+        caption: cleanCaption,
+        fileName: file.originalname,
+        fileUrl: result.path,
+        contentType: file.mimetype,
+        size: result.size || file.size,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: currentUser.id
+      });
+    }
+
+    // A new array (not an edit in place) so the change is saved
+    university.photos = [...photos, ...added];
+    await university.save();
+    return university.toJSON();
+  }
+
+  async removePhoto(universityId, photoId) {
+    const university = await loadUniversity(universityId);
+    const photos = Array.isArray(university.photos) ? university.photos : [];
+    const photo = photos.find((p) => p.id === photoId);
+    if (!photo) {
+      const err = new Error('Photo not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    try {
+      await deleteObject(photo.fileUrl);
+    } catch (error) {
+      console.error('Photo file could not be deleted:', error.message);
+    }
+    university.photos = photos.filter((p) => p.id !== photoId);
+    await university.save();
+    return university.toJSON();
+  }
+
+  async getPhotoFile(universityId, photoId, currentUser) {
+    const university = await loadUniversity(universityId);
+    assertCanAccessUniversity(currentUser, university);
+    const photos = Array.isArray(university.photos) ? university.photos : [];
+    const photo = photos.find((p) => p.id === photoId);
+    if (!photo) {
+      const err = new Error('Photo not found');
+      err.statusCode = 404;
+      throw err;
+    }
+    const { data, contentType } = await getObject(photo.fileUrl);
+    return { data, contentType: contentType || photo.contentType, fileName: photo.fileName };
   }
 
   // ── News and scholarship updates ──

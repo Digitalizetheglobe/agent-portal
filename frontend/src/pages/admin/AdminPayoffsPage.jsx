@@ -53,7 +53,7 @@ const AdminPayoffsPage = () => {
   const [dueSoonOnly, setDueSoonOnly] = useState(false);
   const [selectedPayoff, setSelectedPayoff] = useState(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
-  
+
   // What each university owes QStudy, and the exception dialog
   const [receivables, setReceivables] = useState([]);
   const [receivablesLoading, setReceivablesLoading] = useState(true);
@@ -354,7 +354,7 @@ const AdminPayoffsPage = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="btn-financial-action text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB]"
+                        className="btn-financial-action text-[#042C53] bg-[#E6F1FB]/60 border-[#C7D2FE] hover:bg-[#E6F1FB] hover:text-[#042C53]"
                         onClick={() => handleOpenView(payoff)}
                       >
                         <Receipt className="w-3.5 h-3.5 mr-1" /> Inspect
@@ -426,9 +426,8 @@ const AdminPayoffsPage = () => {
         <button
           type="button"
           onClick={() => setDueSoonOnly(v => !v)}
-          className={`h-10 px-3 rounded-lg border text-xs font-semibold whitespace-nowrap transition-colors ${
-            dueSoonOnly ? 'border-[#633806] bg-[#FAEEDA] text-[#633806]' : 'border-[#E5E7EB] bg-white text-[#4B5563] hover:bg-[#F9FAFB]'
-          }`}
+          className={`h-10 px-3 rounded-lg border text-xs font-semibold whitespace-nowrap transition-colors ${dueSoonOnly ? 'border-[#633806] bg-[#FAEEDA] text-[#633806]' : 'border-[#E5E7EB] bg-white text-[#4B5563] hover:bg-[#F9FAFB]'
+            }`}
         >
           Due within 7 days ({dueSoonCount})
         </button>
@@ -438,12 +437,12 @@ const AdminPayoffsPage = () => {
       <Tabs defaultValue={canRecordUniversityPayment ? 'awaiting' : 'due'} className="w-full">
         <TabsList className="bg-transparent h-auto p-0 gap-1 border-b border-[#D1D5DB] w-full justify-start rounded-none overflow-x-auto">
           {canRecordUniversityPayment && (
-          <TabsTrigger
-            value="awaiting"
-            className="rounded-t-lg rounded-b-none border-b-2 border-transparent -mb-px data-[state=active]:border-[#633806] data-[state=active]:bg-[#FAEEDA] data-[state=active]:shadow-none px-4 py-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F3F4F6] data-[state=active]:hover:bg-[#FAEEDA] data-[state=active]:text-[#633806] transition-colors flex items-center gap-1.5 whitespace-nowrap"
-          >
-            1. Awaiting University Payment ({receivables.filter(r => !r.done).length})
-          </TabsTrigger>
+            <TabsTrigger
+              value="awaiting"
+              className="rounded-t-lg rounded-b-none border-b-2 border-transparent -mb-px data-[state=active]:border-[#633806] data-[state=active]:bg-[#FAEEDA] data-[state=active]:shadow-none px-4 py-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F3F4F6] data-[state=active]:hover:bg-[#FAEEDA] data-[state=active]:text-[#633806] transition-colors flex items-center gap-1.5 whitespace-nowrap"
+            >
+              1. Awaiting University Payment ({receivables.filter(r => !r.done).length})
+            </TabsTrigger>
           )}
           <TabsTrigger
             value="due"

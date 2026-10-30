@@ -4,7 +4,6 @@ import { useData } from '../../context/DataContext';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -31,11 +30,7 @@ const initialFormState = {
   city: '',
   website: '',
   logoUrl: '',
-  contactPerson: '',
-  contactEmail: '',
-  status: 'active',
-  description: '',
-  fees: []
+  status: 'active'
 };
 
 const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) => {
@@ -57,13 +52,7 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
         city: university.city || '',
         website: university.website || '',
         logoUrl: university.logoUrl || '',
-        contactPerson: university.contactPerson || '',
-        contactEmail: university.contactEmail || '',
-        status: university.status || 'active',
-        description: university.description || '',
-        fees: Array.isArray(university.fees)
-          ? university.fees.map((fee) => ({ id: fee.id, label: fee.label || '', amount: String(fee.amount ?? ''), currency: fee.currency || 'USD', note: fee.note || '' }))
-          : []
+        status: university.status || 'active'
       });
     } else {
       setFormData(initialFormState);
@@ -107,19 +96,6 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
     if (!formData.code.trim()) newErrors.code = 'University code is required';
     if (!formData.country.trim()) newErrors.country = 'Country is required';
 
-    if (formData.contactEmail && formData.contactEmail.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.contactEmail.trim())) {
-        newErrors.contactEmail = 'Invalid contact email format';
-      }
-    }
-
-    formData.fees.forEach((fee, index) => {
-      if (!fee.label.trim()) newErrors.fees = `Fee ${index + 1}: a name is required`;
-      else if (fee.amount === '' || isNaN(parseFloat(fee.amount)) || parseFloat(fee.amount) < 0) newErrors.fees = `Fee ${index + 1} (${fee.label}): enter an amount, 0 or more`;
-      else if (!/^[A-Za-z]{3}$/.test(fee.currency.trim())) newErrors.fees = `Fee ${index + 1} (${fee.label}): the currency is a 3-letter code such as USD or MYR`;
-    });
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -137,15 +113,7 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
         city: formData.city.trim() || null,
         website: formData.website.trim() || null,
         logoUrl: formData.logoUrl.trim() || null,
-        status: formData.status,
-        description: formData.description.trim() || null,
-        fees: formData.fees.map((fee) => ({
-          id: fee.id,
-          label: fee.label.trim(),
-          amount: parseFloat(fee.amount),
-          currency: fee.currency.trim().toUpperCase(),
-          note: fee.note.trim() || null
-        }))
+        status: formData.status
       };
 
       if (isEditing) {
@@ -176,7 +144,7 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
                 {isEditing ? 'Edit University' : 'Add New University'}
               </DialogTitle>
               <DialogDescription className="text-xs text-gray-500 font-medium mt-0.5">
-                {isEditing ? 'Update institution details and contact information' : 'Register a partner university to the portal'}
+                {isEditing ? 'Update institution details' : 'Register a partner university to the portal'}
               </DialogDescription>
             </div>
           </div>
@@ -317,79 +285,6 @@ const UniversityModal = ({ open, onOpenChange, university = null, onSuccess }) =
             </div>
 
 
-            {/* Fee structure */}
-            <div className="pt-3 border-t border-gray-200 space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-gray-700">Fee structure</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setFormData(prev => ({ ...prev, fees: [...prev.fees, { id: undefined, label: '', amount: '', currency: 'USD', note: '' }] }))}
-                >
-                  Add fee
-                </Button>
-              </div>
-              <p className="text-[11px] text-gray-500">
-                What a student pays besides tuition, for example an application or registration fee. Tuition per course is set under Courses.
-              </p>
-              {formData.fees.map((fee, index) => (
-                <div key={index} className="grid grid-cols-12 gap-2 items-start">
-                  <Input
-                    className="col-span-4"
-                    placeholder="Name, e.g. Application fee"
-                    value={fee.label}
-                    onChange={(e) => setFormData(prev => ({ ...prev, fees: prev.fees.map((f, i) => i === index ? { ...f, label: e.target.value } : f) }))}
-                  />
-                  <Input
-                    className="col-span-2"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Amount"
-                    value={fee.amount}
-                    onChange={(e) => setFormData(prev => ({ ...prev, fees: prev.fees.map((f, i) => i === index ? { ...f, amount: e.target.value } : f) }))}
-                  />
-                  <Input
-                    className="col-span-2 uppercase"
-                    maxLength={3}
-                    placeholder="USD"
-                    value={fee.currency}
-                    onChange={(e) => setFormData(prev => ({ ...prev, fees: prev.fees.map((f, i) => i === index ? { ...f, currency: e.target.value } : f) }))}
-                  />
-                  <Input
-                    className="col-span-3"
-                    placeholder="Note (optional)"
-                    value={fee.note}
-                    onChange={(e) => setFormData(prev => ({ ...prev, fees: prev.fees.map((f, i) => i === index ? { ...f, note: e.target.value } : f) }))}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="col-span-1 h-9 text-red-600 hover:bg-red-50"
-                    aria-label="Remove fee"
-                    onClick={() => setFormData(prev => ({ ...prev, fees: prev.fees.filter((_, i) => i !== index) }))}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
-              {errors.fees && <p className="text-[11px] text-red-500">{errors.fees}</p>}
-            </div>
-
-            {/* Description */}
-            <div className="pt-3 border-t border-gray-200 space-y-1.5">
-              <Label className="text-xs font-semibold text-gray-700">About Institution</Label>
-              <Textarea
-                rows={3}
-                value={formData.description}
-                onChange={(e) => handleChange('description', e.target.value)}
-                placeholder="Brief description, admission criteria highlights, or general notes..."
-                className="bg-white"
-              />
-            </div>
           </div>
 
           <DialogFooter className="p-4 border-t border-gray-100 bg-white flex justify-end gap-2">

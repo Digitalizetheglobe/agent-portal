@@ -29,8 +29,6 @@ exports.search = async (req, res) => {
     }
 
     const term = `%${escapeLike(raw)}%`;
-    const number = Number(raw);
-    const isNumber = raw !== '' && Number.isFinite(number);
 
     // Students visible to this person (also used to find applications by student name)
     const studentWhere = { [Op.or]: hasAnyOf(['name', 'email', 'phone', 'country', 'courseInterested'], term) };
@@ -39,11 +37,10 @@ exports.search = async (req, res) => {
 
     const universityWhere = {
       [Op.or]: [
-        ...hasAnyOf(['name', 'code', 'country', 'city', 'contactPerson', 'contactEmail', 'website', 'description'], term),
+        ...hasAnyOf(['name', 'code', 'country', 'city', 'website', 'description'], term),
         // Fee names / notes and brochure titles are searchable too
         sequelize.where(sequelize.cast(sequelize.col('University.fees'), 'text'), { [Op.iLike]: term }),
         sequelize.where(sequelize.cast(sequelize.col('University.brochures'), 'text'), { [Op.iLike]: term }),
-        ...(isNumber ? [{ commissionRate: number }] : [])
       ]
     };
     if (isAgent) universityWhere.status = 'active';
@@ -118,8 +115,7 @@ exports.search = async (req, res) => {
         items: universities.map((u) => ({
           id: u.id,
           title: u.name,
-          subtitle: join(u.code, [u.city, u.country].filter(Boolean).join(', '),
-            u.commissionRate != null ? `${parseFloat(u.commissionRate)}% commission` : null),
+          subtitle: join(u.code, [u.city, u.country].filter(Boolean).join(', ')),
           path: `${base}/universities/${u.id}`
         }))
       },

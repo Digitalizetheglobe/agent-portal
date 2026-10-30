@@ -9,6 +9,8 @@ import {
   Check, Filter, RefreshCw, GraduationCap
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { hasStaffRole } from '../../utils/staffRoles';
 import { toast } from 'sonner';
 import StudentRegistrationModal from '../../components/modals/StudentRegistrationModal';
 import DocumentReviewDialog from '../../components/modals/DocumentReviewDialog';
@@ -33,6 +35,7 @@ const DEFAULT_DOC_CATEGORIES = [
 ];
 
 const StudentsPage = () => {
+  const { user } = useAuth();
   const {
     students,
     agents,
@@ -428,12 +431,14 @@ const StudentsPage = () => {
           >
             <Download size={14} className="mr-2" /> Export
           </button>
-          <button
-            className="flex items-center gap-2 text-xs font-bold h-10 px-5 rounded-lg bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10 transition-all active:scale-95"
-            onClick={() => setShowAddModal(true)}
-          >
-            <Plus size={14} /> Add Student
-          </button>
+          {hasStaffRole(user) && (
+            <button
+              className="flex items-center gap-2 text-xs font-bold h-10 px-5 rounded-lg bg-[#042C53] hover:bg-[#0C447C] text-white shadow-lg shadow-[#042C53]/10 transition-all active:scale-95"
+              onClick={() => setShowAddModal(true)}
+            >
+              <Plus size={14} /> Add Student
+            </button>
+          )}
         </div>
       </div>
 

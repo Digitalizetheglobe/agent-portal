@@ -17,7 +17,8 @@ import {
   FileCheck,
   CreditCard,
   Percent,
-  ScrollText
+  ScrollText,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -59,6 +60,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       title: 'Help', links: [
         // The team list is for the super admin only
         ...(user?.role === 'admin' && !user.staffRole ? [{ to: '/admin/team', icon: UsersRound, label: 'Team' }] : []),
+        { to: '/admin/roles-guide', icon: ShieldCheck, label: 'Roles and Responsibilities' },
         { to: '/admin/chat', icon: MessageCircle, label: 'Live Chat' },
         { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },

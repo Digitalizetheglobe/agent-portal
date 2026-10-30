@@ -275,10 +275,11 @@ export const studentAPI = {
     return api.put(`/students/${id}`, data);
   },
   delete: (id) => api.delete(`/students/${id}`),
-  uploadDocument: (studentId, file, category) => {
+  uploadDocument: (studentId, file, category, name) => {
     const formData = new FormData();
     formData.append('file', file);
     if (category) formData.append('category', category);
+    if (name) formData.append('name', name);
     return api.post(`/students/${studentId}/documents`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
@@ -312,6 +313,14 @@ export const universityAPI = {
   },
   deleteBrochure: (id, brochureId) => api.delete(`/universities/${id}/brochures/${brochureId}`),
   downloadBrochure: (id, brochureId, params = {}) => api.get(`/universities/${id}/brochures/${brochureId}`, { params, responseType: 'blob' }),
+  uploadPhotos: (id, files, caption) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    if (caption) formData.append('caption', caption);
+    return api.post(`/universities/${id}/photos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  deletePhoto: (id, photoId) => api.delete(`/universities/${id}/photos/${photoId}`),
+  getPhoto: (id, photoId) => api.get(`/universities/${id}/photos/${photoId}`, { responseType: 'blob' }),
   getUpdates: (id) => api.get(`/universities/${id}/updates`),
   createUpdate: (id, data) => api.post(`/universities/${id}/updates`, data),
   editUpdate: (id, updateId, data) => api.put(`/universities/${id}/updates/${updateId}`, data),

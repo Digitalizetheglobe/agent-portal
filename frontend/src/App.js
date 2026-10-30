@@ -22,6 +22,7 @@ const AgentPayoffsPage = lazy(() => import("./pages/agent/AgentPayoffsPage"));
 const SupportPage = lazy(() => import("./pages/agent/SupportPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const TeamPage = lazy(() => import("./pages/admin/TeamPage"));
+const RolesGuidePage = lazy(() => import("./pages/admin/RolesGuidePage"));
 const AgentStudentsPage = lazy(() => import("./pages/agent/AgentStudentsPage"));
 
 const AdminInvoicesPage = lazy(() => import("./pages/admin/AdminInvoicesPage"));
@@ -86,6 +87,7 @@ function App() {
                   <Route path="chat" element={<ChatPage />} />
                   <Route path="audit-log" element={<AuditLogPage />} />
                   <Route path="team" element={<TeamPage />} />
+                  <Route path="roles-guide" element={<RolesGuidePage />} />
                   <Route path="settings" element={<SettingsPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                 </Route>

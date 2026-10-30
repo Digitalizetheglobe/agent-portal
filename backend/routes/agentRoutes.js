@@ -62,7 +62,7 @@ router.get('/account-managers', restrictTo('admin'), getAccountManagers);
 router.get('/:id', getAgent);
 
 // Admin only routes
-router.post('/', restrictToSuperAdminOr('account_manager', 'head_recruitment'), createAgent);
+router.post('/', restrictToSuperAdminOr('account_manager'), createAgent);
 router.post('/admin', restrictToSuperAdminOr(), createAdmin);
 router.put('/:id', restrictToSuperAdminOr('account_manager', 'head_recruitment', 'head_admission'), updateAgent);
 router.put('/:id/university-access', restrictToSuperAdminOr(), updateUniversityAccess);

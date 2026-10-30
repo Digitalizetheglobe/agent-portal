@@ -170,10 +170,7 @@ const InvoicesPage = () => {
       if (payoff?.status === 'SETTLED') {
         return { key: 'paid', label: 'Invoice paid', hint: payoff.settledAt ? `Paid on ${formatFinancialDate(payoff.settledAt)}` : 'Money sent to you', tone: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
       }
-      if (payoff?.universityPaid) {
-        return { key: 'university', label: 'University payment received', hint: 'Your commission is being paid', tone: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
-      }
-      return { key: 'processing', label: 'Invoice processing', hint: 'Waiting for the university payment', tone: 'bg-blue-50 text-blue-800 border-blue-200' };
+      return { key: 'processing', label: 'Invoice processing', hint: 'Being processed by QStudy', tone: 'bg-blue-50 text-blue-800 border-blue-200' };
     }
     return { key: 'submitted', label: 'Invoice submitted', hint: 'Received by QStudy', tone: 'bg-gray-50 text-gray-700 border-gray-200' };
   };
@@ -182,12 +179,11 @@ const InvoicesPage = () => {
     { key: 'all', label: 'All' },
     { key: 'submitted', label: 'Invoice submitted' },
     { key: 'processing', label: 'Invoice processing' },
-    { key: 'university', label: 'University payment received' },
     { key: 'paid', label: 'Invoice paid' },
     { key: 'amendment', label: 'Needs amendment' },
   ];
   const stageCounts = useMemo(() => {
-    const counts = { all: invoices.length, submitted: 0, processing: 0, university: 0, paid: 0, amendment: 0 };
+    const counts = { all: invoices.length, submitted: 0, processing: 0, paid: 0, amendment: 0 };
     invoices.forEach((inv) => { counts[getStage(inv).key] += 1; });
     return counts;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -198,7 +194,7 @@ const InvoicesPage = () => {
   const summaryCards = [
     { filter: 'amendment', title: 'Needs amendment', value: stageCounts.amendment, hint: stageCounts.amendment ? 'Finance left a note for you' : 'Nothing to amend', tone: stageCounts.amendment ? 'border-amber-300 bg-amber-50' : 'border-[#E5E7EB] bg-white', valueTone: stageCounts.amendment ? 'text-amber-800' : 'text-[#111827]' },
     { filter: 'submitted', title: 'Invoice submitted', value: stageCounts.submitted, hint: 'Received by QStudy', tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#111827]' },
-    { filter: 'processing', title: 'Invoice processing', value: stageCounts.processing + stageCounts.university, hint: `${stageCounts.university} with university payment received`, tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#0C447C]' },
+    { filter: 'processing', title: 'Invoice processing', value: stageCounts.processing, hint: 'Being processed by QStudy', tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#0C447C]' },
     { filter: 'paid', title: 'Invoice paid', value: formatCurrency(stats.settledPayoutAmount), hint: `${stats.settledPayoutCount} paid by bank transfer`, tone: 'border-[#E5E7EB] bg-white', valueTone: 'text-[#27500A]' },
   ];
 

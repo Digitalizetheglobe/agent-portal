@@ -8,7 +8,7 @@ const {
   updateInvoiceStatus,
   deleteInvoice
 } = require('../controllers/invoiceController');
-const { protect, restrictToStaffRole } = require('../middleware/auth');
+const { protect, restrictToStaffRole, allowStaff } = require('../middleware/auth');
 
 // All invoice routes require authentication
 router.use(protect);
@@ -18,13 +18,14 @@ router.get('/eligible-applications', getEligibleApplications);
 
 // Invoice collection endpoints
 router.route('/')
-  .post(createInvoice)
+  // Only agents and the super admin raise invoices (allowStaff() with no roles blocks staff roles)
+  .post(allowStaff(), createInvoice)
   .get(getInvoices);
 
 // Individual invoice endpoints
 router.route('/:id')
   .get(getInvoice)
-  .delete(deleteInvoice);
+  .delete(allowStaff(), deleteInvoice);
 
 // Admin-only status update
 router.patch('/:id/status', restrictToStaffRole('head_admission'), updateInvoiceStatus);

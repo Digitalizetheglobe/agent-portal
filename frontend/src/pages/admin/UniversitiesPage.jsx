@@ -77,7 +77,6 @@ const UniversitiesPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('');
-  const [commissionFilter, setCommissionFilter] = useState('all');
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, countries: 0, missingCommission: 0 });
   // The API only sees the settled text; requestIdRef drops responses from superseded requests
   const [debouncedSearch, flushSearch] = useDebouncedValue(searchQuery);
@@ -110,7 +109,6 @@ const UniversitiesPage = () => {
       if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
       if (countryFilter && countryFilter !== 'all') params.country = countryFilter;
       if (debouncedCity.trim()) params.city = debouncedCity.trim();
-      if (commissionFilter === 'missing') params.commission = 'missing';
 
       const response = await universityAPI.getAll(params);
       if (requestId !== requestIdRef.current) return;
@@ -137,7 +135,7 @@ const UniversitiesPage = () => {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, countryFilter, debouncedCity, commissionFilter, limit]);
+  }, [debouncedSearch, statusFilter, countryFilter, debouncedCity, limit]);
 
   useEffect(() => {
     loadUniversities(1);
@@ -156,7 +154,6 @@ const UniversitiesPage = () => {
     setCountryFilter('all');
     setCityFilter('');
     flushCity('');
-    setCommissionFilter('all');
   };
 
   // Status toggle handler
@@ -316,7 +313,7 @@ const UniversitiesPage = () => {
               <Button type="submit" size="sm" className="bg-[#042C53] hover:bg-[#0C447C] text-xs h-9 px-4">
                 Filter
               </Button>
-              {(searchQuery || statusFilter !== 'all' || countryFilter !== 'all' || cityFilter || commissionFilter !== 'all') && (
+              {(searchQuery || statusFilter !== 'all' || countryFilter !== 'all' || cityFilter) && (
                 <Button type="button" variant="ghost" size="sm" onClick={handleResetFilters} className="text-xs h-9">
                   Reset
                 </Button>

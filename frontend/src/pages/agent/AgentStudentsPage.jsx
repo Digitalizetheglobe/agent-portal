@@ -27,8 +27,8 @@ const DOC_STATUS_LABELS = {
 
 const DEFAULT_DOC_CATEGORIES = [
   { label: 'Passport', value: 'Passport', mandatory: false },
-  { label: 'Academic Transcripts', value: 'Transcript', mandatory: false },
-  { label: 'English Proficiency', value: 'LanguageTest', mandatory: false }
+  { label: 'Photo', value: 'Photo', mandatory: false },
+  { label: 'Results', value: 'Results', mandatory: false }
 ];
 
 const AgentStudentsPage = () => {
@@ -212,6 +212,9 @@ const AgentStudentsPage = () => {
     return counts;
   }, [myStudents]);
 
+  // Name for the next 'Other' document, so several can be told apart
+  const [otherName, setOtherName] = useState('');
+
   const handleUploadClick = (category) => {
     setUploadCategory(category);
     if (fileInputRef.current) {
@@ -225,8 +228,10 @@ const AgentStudentsPage = () => {
 
     try {
       setIsUploading(true);
-      await uploadStudentDocument(selectedStudentId, file, uploadCategory);
-      toast.success(`${uploadCategory} uploaded successfully`);
+      const isOther = uploadCategory === 'Other';
+      await uploadStudentDocument(selectedStudentId, file, uploadCategory, isOther ? (otherName.trim() || file.name) : undefined);
+      if (isOther) setOtherName('');
+      toast.success(`${isOther ? 'Document' : uploadCategory} uploaded successfully`);
       fetchStudents(); // Refresh data
     } catch (error) {
       toast.error(`Failed to upload ${uploadCategory}`);
@@ -643,8 +648,8 @@ const AgentStudentsPage = () => {
               {/* Documents Section */}
               <div>
                 <div className="flex items-center justify-between mb-6">
-                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Required Documents</h4>
-                  <Badge variant="outline" className="text-[9px] font-bold border-gray-200">{requiredDocs.length} TOTAL</Badge>
+                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Documents</h4>
+                  <Badge variant="outline" className="text-[9px] font-bold border-gray-200">{requiredDocs.length + 1} TOTAL</Badge>
                 </div>
                 <div className="space-y-3">
                   {requiredDocs.map(docType => {
@@ -739,6 +744,37 @@ const AgentStudentsPage = () => {
                       </div>
                     );
                   })}
+
+                  {/* Other documents: any number, each with a name */}
+                  <div className="p-4 border border-gray-100 rounded-2xl bg-[#F9FAFB]">
+                    <p className="text-[13px] font-bold text-[#111827]">Other documents</p>
+                    <div className="mt-2 space-y-1.5">
+                      {(selectedStudent.documents || []).filter(d => (d.category || '').toLowerCase() === 'other').map(d => (
+                        <div key={d.id || d._id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-medium text-gray-800 truncate">{d.name || d.originalFilename || 'Document'}</span>
+                          <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold text-[#042C53] px-2" onClick={() => viewStudentDocument(selectedStudent.id || selectedStudent._id, d.id || d._id)}>View</Button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                      <input
+                        value={otherName}
+                        onChange={(e) => setOtherName(e.target.value)}
+                        placeholder="Name, e.g. English test"
+                        maxLength={100}
+                        className="flex-1 min-w-0 h-8 px-2 text-xs border border-gray-200 rounded-md bg-white"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-[10px] font-bold border-[#042C53] text-[#042C53] hover:bg-[#042C53] hover:text-white"
+                        onClick={() => handleUploadClick('Other')}
+                        disabled={isUploading}
+                      >
+                        <Upload size={12} className="mr-1" /> Add
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

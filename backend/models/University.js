@@ -54,6 +54,11 @@ const University = sequelize.define('University', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  // Anything else agents should know about the university (accommodation, intakes, requirements...)
+  otherInfo: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
   // Commission percentage QStudy pays agents on the tuition fee of an admission to this university.
   // Set by the Head of Admission / super admin. Null = not set yet (invoices cannot be raised).
   commissionRate: {
@@ -79,6 +84,12 @@ const University = sequelize.define('University', {
   },
   // Brochure files: [{ id, title, fileName, fileUrl, contentType, size, uploadedAt, uploadedBy }]
   brochures: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+    defaultValue: []
+  },
+  // Campus photos shown in the About section: [{ id, caption, fileName, fileUrl, contentType, size, uploadedAt, uploadedBy }]
+  photos: {
     type: DataTypes.JSONB,
     allowNull: false,
     defaultValue: []

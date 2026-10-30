@@ -55,7 +55,8 @@ router.use(protect);
 
 // Student routes
 router.get('/', getStudents);
-router.post('/', requireActivatedAgent, createStudent);
+// Only agents and the super admin register students (allowStaff() with no roles blocks staff roles)
+router.post('/', allowStaff(), requireActivatedAgent, createStudent);
 
 // ─── Phase H: Verification queue (MUST be before /:id to avoid capture) ──────
 // GET /api/students/verification/queue  — admin only, enforced in service

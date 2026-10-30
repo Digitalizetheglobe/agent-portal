@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { getDisplayStage, getDisplayStageInfo, isPipelineActive, IN_VISA_STAGES } from '../../utils/pipeline';
+import { getDisplayStage, getDisplayStageInfo, isPipelineActive, IN_VISA_STAGES, PIPELINE_STAGES, PIPELINE_STAGE_LABELS } from '../../utils/pipeline';
 import {
   FileCheck,
   Plus,
@@ -61,6 +61,7 @@ import {
   APPLICATION_STATUS_LIST,
   APPLICATION_STATUS_LABELS
 } from '../../constants/status';
+import { hasStaffRole } from '../../utils/staffRoles';
 import { toast } from 'sonner';
 
 export const getStatusBadgeStyle = (status) => {
@@ -82,7 +83,7 @@ export const getStatusBadgeStyle = (status) => {
 
 const ApplicationsPage = () => {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const { universities, agents, deleteApplication } = useData();
 
   const [applications, setApplications] = useState([]);
@@ -98,6 +99,7 @@ const ApplicationsPage = () => {
   const [debouncedSearch, flushSearch] = useDebouncedValue(searchQuery);
   const requestIdRef = useRef(0);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [stageFilter, setStageFilter] = useState('all');
   const [universityFilter, setUniversityFilter] = useState('all');
   const [agentFilter, setAgentFilter] = useState('all');
 
@@ -121,6 +123,7 @@ const ApplicationsPage = () => {
 
       if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
       if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
+      if (stageFilter && stageFilter !== 'all') params.pipelineStage = stageFilter;
       if (universityFilter && universityFilter !== 'all') params.universityId = universityFilter;
       if (isAdmin() && agentFilter && agentFilter !== 'all') params.agentId = agentFilter;
 
@@ -151,7 +154,7 @@ const ApplicationsPage = () => {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [limit, debouncedSearch, statusFilter, universityFilter, agentFilter, isAdmin]);
+  }, [limit, debouncedSearch, statusFilter, stageFilter, universityFilter, agentFilter, isAdmin]);
 
   useEffect(() => {
     loadApplications(1);
@@ -166,6 +169,7 @@ const ApplicationsPage = () => {
     setSearchQuery('');
     flushSearch('');
     setStatusFilter('all');
+    setStageFilter('all');
     setUniversityFilter('all');
     setAgentFilter('all');
   };
@@ -226,12 +230,14 @@ const ApplicationsPage = () => {
             Review, track, and manage all student university applications across the portal
           </p>
         </div>
-        <Button
-          onClick={handleOpenAdd}
-          className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-sm gap-2"
-        >
-          <Plus className="w-4 h-4" /> New Application
-        </Button>
+        {hasStaffRole(user) && (
+          <Button
+            onClick={handleOpenAdd}
+            className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs font-bold h-10 px-5 rounded-lg shadow-sm gap-2"
+          >
+            <Plus className="w-4 h-4" /> New Application
+          </Button>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -295,6 +301,21 @@ const ApplicationsPage = () => {
                 </SelectContent>
               </Select>
 
+              {/* Stage Filter: where the application is in the visa pipeline */}
+              <Select value={stageFilter} onValueChange={setStageFilter}>
+                <SelectTrigger className="w-full sm:w-[190px] text-xs bg-[#F9FAFB] border-gray-200">
+                  <SelectValue placeholder="Stage" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="all">All Stages</SelectItem>
+                  {PIPELINE_STAGES.map((st) => (
+                    <SelectItem key={st} value={st}>
+                      {PIPELINE_STAGE_LABELS[st]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               {/* University Filter */}
               <Select value={universityFilter} onValueChange={setUniversityFilter}>
                 <SelectTrigger className="w-full sm:w-[170px] text-xs bg-[#F9FAFB] border-gray-200">
@@ -330,7 +351,7 @@ const ApplicationsPage = () => {
               <Button type="submit" size="sm" className="bg-[#042C53] hover:bg-[#0C447C] text-xs h-9 px-4">
                 Filter
               </Button>
-              {(searchQuery || statusFilter !== 'all' || universityFilter !== 'all' || agentFilter !== 'all') && (
+              {(searchQuery || statusFilter !== 'all' || stageFilter !== 'all' || universityFilter !== 'all' || agentFilter !== 'all') && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -403,7 +424,7 @@ const ApplicationsPage = () => {
                       <FileCheck className="w-8 h-8 text-gray-300" />
                       <span className="font-semibold text-gray-700">No applications found</span>
                       <span className="text-gray-400 text-[11px]">
-                        Try adjusting your filters or click "New Application" to submit one.
+                        Try adjusting your filters.
                       </span>
                     </div>
                   </TableCell>

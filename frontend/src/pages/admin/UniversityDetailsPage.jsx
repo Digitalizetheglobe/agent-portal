@@ -24,6 +24,8 @@ import { hasStaffRole } from '../../utils/staffRoles';
 import { useData } from '../../context/DataContext';
 import { universityAPI, formatApiError } from '../../utils/api';
 import { Button } from '../../components/ui/button';
+import { Label } from '../../components/ui/label';
+import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import {
@@ -36,6 +38,7 @@ import {
 } from '../../components/ui/table';
 import UniversityModal from '../../components/modals/UniversityModal';
 import UniversityContent from '../../components/university/UniversityContent';
+import UniversityPhotos from '../../components/university/UniversityPhotos';
 import UniversityLogo from '../../components/university/UniversityLogo';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
@@ -55,7 +58,7 @@ const UniversityDetailsPage = () => {
   const staffView = isAdmin();
   // University information is maintained by the Head of Admission
   const canManage = hasStaffRole(user, 'head_admission');
-  const { updateUniversityStatus } = useData();
+  const { updateUniversity, updateUniversityStatus } = useData();
 
   const [university, setUniversity] = useState(null);
   const [applications, setApplications] = useState([]);
@@ -63,6 +66,9 @@ const UniversityDetailsPage = () => {
   const [loadingApps, setLoadingApps] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [editingAbout, setEditingAbout] = useState(false);
+  const [aboutDraft, setAboutDraft] = useState({ description: '', otherInfo: '' });
+  const [savingAbout, setSavingAbout] = useState(false);
 
   const backPath = staffView ? '/admin/universities' : '/agent/universities';
 
@@ -120,6 +126,27 @@ const UniversityDetailsPage = () => {
       toast.error('Failed to update status', { description: formatApiError(err) });
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const startEditingAbout = () => {
+    setAboutDraft({ description: university.description || '', otherInfo: university.otherInfo || '' });
+    setEditingAbout(true);
+  };
+
+  const saveAbout = async () => {
+    setSavingAbout(true);
+    try {
+      const updated = await updateUniversity(university.id, {
+        description: aboutDraft.description.trim() || null,
+        otherInfo: aboutDraft.otherInfo.trim() || null
+      });
+      setUniversity((prev) => ({ ...prev, ...updated }));
+      setEditingAbout(false);
+    } catch {
+      // updateUniversity already shows the error
+    } finally {
+      setSavingAbout(false);
     }
   };
 
@@ -383,15 +410,57 @@ const UniversityDetailsPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2">
             <Card className="border-[#E5E7EB] bg-white shadow-none h-full">
-              <CardHeader className="border-b border-gray-100 px-6 py-4">
+              <CardHeader className="border-b border-gray-100 px-6 py-4 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-sm font-bold text-gray-900 font-['Outfit'] flex items-center gap-2">
                   <Building2 size={16} className="text-[#042C53]" /> About {university.name}
                 </CardTitle>
+                {canManage && !editingAbout && (
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={startEditingAbout}>
+                    <Edit2 className="w-3.5 h-3.5" /> Edit
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="p-6 space-y-5">
-                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                  {university.description || 'No description has been added for this university yet.'}
-                </p>
+                {editingAbout ? (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-gray-700">About Institution</Label>
+                      <Textarea
+                        rows={5}
+                        value={aboutDraft.description}
+                        onChange={(e) => setAboutDraft((prev) => ({ ...prev, description: e.target.value }))}
+                        placeholder="Brief description, admission criteria highlights, or general notes..."
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-gray-700">Other information</Label>
+                      <Textarea
+                        rows={6}
+                        value={aboutDraft.otherInfo}
+                        onChange={(e) => setAboutDraft((prev) => ({ ...prev, otherInfo: e.target.value }))}
+                        placeholder="Anything else agents should know: intakes, accommodation, entry requirements, scholarships, campus life..."
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setEditingAbout(false)} disabled={savingAbout}>Cancel</Button>
+                      <Button size="sm" className="h-8 text-xs bg-[#042C53] hover:bg-[#0C447C] text-white" onClick={saveAbout} disabled={savingAbout}>
+                        {savingAbout ? 'Saving...' : 'Save'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                      {university.description || 'No description has been added for this university yet.'}
+                    </p>
+                    {university.otherInfo && (
+                      <div className="pt-4 border-t border-gray-100">
+                        <FactLabel>Other information</FactLabel>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mt-1.5">{university.otherInfo}</p>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-gray-100 text-xs">
                   <div><FactLabel>Country</FactLabel><span className="font-semibold text-gray-900 mt-0.5 block">{university.country}</span></div>
                   <div><FactLabel>City</FactLabel><span className="font-semibold text-gray-900 mt-0.5 block">{university.city || 'N/A'}</span></div>
@@ -405,6 +474,10 @@ const UniversityDetailsPage = () => {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          <div className="md:col-span-3">
+            <UniversityPhotos university={university} canManage={canManage} onChanged={fetchUniversityDetails} />
           </div>
 
           <Card className="border-[#E5E7EB] bg-white shadow-none h-fit">

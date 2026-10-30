@@ -104,6 +104,8 @@ exports.uploadDocument = async (req, res) => {
     }
 
     const category = req.body.category || 'Other';
+    // A name the agent gives the file, so several 'Other' uploads can be told apart
+    const docName = typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 100) : '';
     const targetDocId = req.params.docId || req.body.documentId;
 
     // Generate storage path
@@ -119,7 +121,8 @@ exports.uploadDocument = async (req, res) => {
     let existingIndex = -1;
     if (targetDocId) {
       existingIndex = docs.findIndex(d => d.id === targetDocId || d._id === targetDocId);
-    } else {
+    } else if (category.toLowerCase() !== 'other') {
+      // 'Other' can hold many files, so it always adds a new one; the other categories keep a single file
       existingIndex = docs.findIndex(d => (d.category || '').toLowerCase() === category.toLowerCase());
     }
 
@@ -154,6 +157,7 @@ exports.uploadDocument = async (req, res) => {
         ...existingDoc,
         storagePath: result.path,
         originalFilename: req.file.originalname,
+        ...(docName ? { name: docName } : {}),
         contentType: req.file.mimetype,
         size: result.size || req.file.size,
         status: 'Submitted', // NEVER automatically approved
@@ -178,6 +182,7 @@ exports.uploadDocument = async (req, res) => {
       contentType: req.file.mimetype,
       size: result.size || req.file.size,
       category: category,
+      name: docName || null,
       status: 'Submitted',
       uploadedAt: nowIso,
       uploadedBy: req.user.id,

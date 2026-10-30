@@ -4,6 +4,7 @@ const { parseCourseTuitionFee } = require('../utils/tuitionUtils');
 const admissionTrackingService = require('./admissionTrackingService');
 const { scopeWhereToAgents, assertCanAccessAgent } = require('../utils/agentScope');
 const { assertCanAccessUniversity } = require('../utils/universityAccess');
+const { STAGES } = require('../utils/visaPipeline');
 
 // Allowed status enum values
 const ALLOWED_STATUSES = [
@@ -248,6 +249,7 @@ class ApplicationService {
       limit = 20,
       search,
       status,
+      pipelineStage,
       studentId,
       agentId,
       universityId,
@@ -277,6 +279,16 @@ class ApplicationService {
         throw err;
       }
       where.status = status;
+    }
+
+    // The visa pipeline stage the application is at
+    if (pipelineStage) {
+      if (!STAGES.includes(pipelineStage)) {
+        const err = new Error(`Invalid stage filter. Allowed: ${STAGES.join(', ')}`);
+        err.statusCode = 400;
+        throw err;
+      }
+      where.pipelineStage = pipelineStage;
     }
 
     if (studentId) where.studentId = studentId;

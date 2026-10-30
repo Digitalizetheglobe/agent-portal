@@ -23,6 +23,7 @@ const FIELD_LABELS = {
   contactPerson: 'contact person',
   contactEmail: 'contact email',
   description: 'description',
+  otherInfo: 'other information',
   commissionRate: 'commission',
   fees: 'fees'
 };
@@ -91,6 +92,7 @@ class UniversityService {
       contactPerson,
       contactEmail,
       description,
+      otherInfo,
       commissionRate,
       fees
     } = data;
@@ -161,6 +163,7 @@ class UniversityService {
       contactPerson: contactPerson ? contactPerson.trim() : null,
       contactEmail: trimmedEmail,
       description: description ? description.trim() : null,
+      otherInfo: otherInfo ? otherInfo.trim() : null,
       commissionRate: parsedRate.value,
       fees: parsedFees
     });
@@ -225,24 +228,20 @@ class UniversityService {
       ];
     }
 
-    // 4. Search filter across the university's information: name, code, location, contact, website,
-    // description and commission (a number such as 10 also matches a 10% commission)
+    // 4. Search filter across the university's information: name, code, location, website,
+    // and description
     if (search && search.trim()) {
       const text = search.trim();
       const term = `%${text.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
-      const asNumber = Number(text);
       where[Op.or] = [
         { name: { [Op.iLike]: term } },
         { code: { [Op.iLike]: term } },
         { country: { [Op.iLike]: term } },
         { city: { [Op.iLike]: term } },
-        { contactPerson: { [Op.iLike]: term } },
-        { contactEmail: { [Op.iLike]: term } },
         { website: { [Op.iLike]: term } },
         { description: { [Op.iLike]: term } },
         sequelize.where(sequelize.cast(sequelize.col('University.fees'), 'text'), { [Op.iLike]: term }),
-        sequelize.where(sequelize.cast(sequelize.col('University.brochures'), 'text'), { [Op.iLike]: term }),
-        ...(Number.isFinite(asNumber) ? [{ commissionRate: asNumber }] : [])
+        sequelize.where(sequelize.cast(sequelize.col('University.brochures'), 'text'), { [Op.iLike]: term })
       ];
     }
 
@@ -363,6 +362,7 @@ class UniversityService {
       contactPerson,
       contactEmail,
       description,
+      otherInfo,
       commissionRate,
       commissionType,
       commissionFixedAmount,
@@ -462,6 +462,7 @@ class UniversityService {
     if (logoUrl !== undefined) university.logoUrl = logoUrl ? logoUrl.trim() : null;
     if (contactPerson !== undefined) university.contactPerson = contactPerson ? contactPerson.trim() : null;
     if (description !== undefined) university.description = description ? description.trim() : null;
+    if (otherInfo !== undefined) university.otherInfo = otherInfo ? otherInfo.trim() : null;
 
     const changedFields = (university.changed() || []).filter(field => FIELD_LABELS[field]);
     await university.save();

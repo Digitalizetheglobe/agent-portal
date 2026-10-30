@@ -20,6 +20,7 @@ const MIME_TYPES = {
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
   '.gif': 'image/gif',
+  '.webp': 'image/webp',
   '.txt': 'text/plain',
   '.csv': 'text/csv'
 };
@@ -45,6 +46,7 @@ const SIGNATURES = {
   '.jpg': (d) => startsWith(d, [0xff, 0xd8, 0xff]),
   '.jpeg': (d) => startsWith(d, [0xff, 0xd8, 0xff]),
   '.gif': (d) => startsWith(d, [0x47, 0x49, 0x46, 0x38]), // GIF8
+  '.webp': (d) => startsWith(d, [0x52, 0x49, 0x46, 0x46]) && d.subarray(8, 12).toString('ascii') === 'WEBP', // RIFF....WEBP
   '.docx': (d) => startsWith(d, [0x50, 0x4b, 0x03, 0x04]), // zip container
   '.doc': (d) => startsWith(d, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), // OLE2
   '.txt': looksLikeText,

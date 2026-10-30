@@ -45,6 +45,31 @@ exports.downloadBrochure = handle('Download brochure', async (req, res) => {
   res.send(Buffer.from(data));
 });
 
+// @desc    Upload one or more photos for the About section
+// @route   POST /api/universities/:id/photos
+// @access  Private (Head of Admission, super admin)
+exports.addPhotos = handle('Add photos', async (req, res) => {
+  const university = await universityContentService.addPhotos(req.params.id, req.files, req.body.caption, req.user);
+  res.status(201).json(university);
+});
+
+// @desc    Delete a photo
+// @route   DELETE /api/universities/:id/photos/:photoId
+// @access  Private (Head of Admission, super admin)
+exports.removePhoto = handle('Remove photo', async (req, res) => {
+  res.status(200).json(await universityContentService.removePhoto(req.params.id, req.params.photoId));
+});
+
+// @desc    View a photo
+// @route   GET /api/universities/:id/photos/:photoId
+// @access  Private (all)
+exports.getPhoto = handle('Get photo', async (req, res) => {
+  const { data, contentType, fileName } = await universityContentService.getPhotoFile(req.params.id, req.params.photoId, req.user);
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+  res.send(Buffer.from(data));
+});
+
 // @desc    News and scholarship updates of a university
 // @route   GET /api/universities/:id/updates
 // @access  Private (all)

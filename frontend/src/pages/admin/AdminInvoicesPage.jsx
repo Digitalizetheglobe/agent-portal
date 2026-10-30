@@ -262,13 +262,15 @@ const AdminInvoicesPage = () => {
           <h1 className="text-2xl font-bold text-[#111827] font-['Outfit']">Invoices</h1>
           <p className="text-sm text-[#6B7280] mt-0.5">Check agent commission claims and follow them until the agent is paid.</p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setIsRaiseModalOpen(true)}
-          className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs h-9 px-4 gap-1.5 w-fit"
-        >
-          <Plus size={14} /> Raise Invoice
-        </Button>
+        {hasStaffRole(user) && (
+          <Button
+            size="sm"
+            onClick={() => setIsRaiseModalOpen(true)}
+            className="bg-[#042C53] hover:bg-[#0C447C] text-white text-xs h-9 px-4 gap-1.5 w-fit"
+          >
+            <Plus size={14} /> Raise Invoice
+          </Button>
+        )}
       </div>
 
       {/* Things that need attention come before anything else */}

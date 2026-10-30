@@ -202,7 +202,7 @@ const StudentEditPage = () => {
 
     try {
       const selectedUni = universities?.find(u => String(u.id || u._id) === String(formData.universityId));
-      const existingCustomFields = student.customFields instanceof Map 
+      const existingCustomFields = student.customFields instanceof Map
         ? Object.fromEntries(student.customFields)
         : (student.customFields || {});
 
@@ -368,7 +368,7 @@ const StudentEditPage = () => {
                       onValueChange={(val) => handleInputChange('universityId', val)}
                     >
                       <SelectTrigger className="h-11 border-[#E5E7EB]" data-testid="student-university-select">
-                        <SelectValue placeholder={formData.country && formData.country.trim() ? `Select target university in ${formData.country}` : "Select target university"} />
+                        <SelectValue placeholder={formData.country && formData.country.trim() ? `Select university in ${formData.country}` : "Select university"} />
                       </SelectTrigger>
                       <SelectContent>
                         {filteredUniversities?.map(u => (
@@ -404,7 +404,7 @@ const StudentEditPage = () => {
                       onValueChange={(value) => handleInputChange('courseInterested', value)}
                     >
                       <SelectTrigger className="h-11 border-[#E5E7EB]" data-testid="student-course-select">
-                        <SelectValue placeholder="Select target course" />
+                        <SelectValue placeholder="Select course" />
                       </SelectTrigger>
                       <SelectContent>
                         {formData.courseInterested && !filteredCourses.some(c => c.name === formData.courseInterested) && (
