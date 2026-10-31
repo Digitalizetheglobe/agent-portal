@@ -38,10 +38,10 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     },
     {
       title: 'Agents & Admissions', links: [
-        { to: '/admin/agents', icon: Users, label: 'Agents' },
-        { to: '/admin/students', icon: GraduationCap, label: 'Students' },
-        { to: '/admin/applications', icon: FileCheck, label: 'Applications' },
-        { to: '/admin/invoices', icon: FileText, label: 'Invoices' },
+        { to: '/admin/agents', icon: Users, label: 'Agents', staffRoles: ['account_manager', 'head_recruitment', 'head_admission'] },
+        { to: '/admin/students', icon: GraduationCap, label: 'Students', staffRoles: ['account_manager', 'head_admission'] },
+        { to: '/admin/applications', icon: FileCheck, label: 'Applications', staffRoles: ['account_manager', 'head_admission'] },
+        { to: '/admin/invoices', icon: FileText, label: 'Invoices', staffRoles: ['head_admission', 'accounts'] },
       ]
     },
     {
@@ -53,7 +53,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     },
     {
       title: 'Finance', links: [
-        { to: '/admin/payoffs', icon: CreditCard, label: 'Payoffs' },
+        { to: '/admin/payoffs', icon: CreditCard, label: 'Payoffs', staffRoles: ['head_admission', 'accounts'] },
       ]
     },
     {
@@ -107,7 +107,14 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     },
   ];
 
-  const sections = isAdmin() ? adminSections : agentSections;
+  // Links with a staffRoles list show only to the super admin and those staff roles.
+  // This only tidies the menu; the backend still enforces access.
+  const sections = (isAdmin() ? adminSections : agentSections)
+    .map((section) => ({
+      ...section,
+      links: section.links.filter((link) => !link.staffRoles || hasStaffRole(user, ...link.staffRoles)),
+    }))
+    .filter((section) => section.links.length > 0);
 
   // Detail pages (e.g. /admin/students/123) keep their parent item highlighted.
   const isLinkActive = (to) => {
